@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/api/spotify-link",
+        "function": { "functionId": "spotifyLink", "region": "us-central1" }
+      }
+    ]
+  },
+  "functions": {
+    "source": "functions"
+  }
+}
