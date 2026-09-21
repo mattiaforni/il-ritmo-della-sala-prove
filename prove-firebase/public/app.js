@@ -163,19 +163,8 @@ const spotifyHref = (c) => c.spotifyUrl ||
 // ---------- render ----------
 function render() {
   if (!(state.ready.canzoni && state.ready.tasks)) return;
-  renderGlobal();
   renderScaletta();
   renderPersone();
-}
-
-function renderGlobal() {
-  const tot = state.tasks.length;
-  const done = state.tasks.filter(t => t.fatto).length;
-  const p = pct(done, tot);
-  $("#gp-pct").textContent = p + "%";
-  const fill = $("#gp-fill");
-  fill.style.width = p + "%";
-  fill.classList.toggle("done", p === 100 && tot > 0);
 }
 
 function renderScaletta() {
