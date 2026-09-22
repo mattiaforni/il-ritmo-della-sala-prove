@@ -1,6 +1,6 @@
 // ============================================================
 // PROVE — micro task manager delle prove della band
-// Vanilla JS + Firebase (Auth Google + Firestore realtime)
+// Vanilla JS + Firebase Firestore realtime — accesso libero, senza login
 // ============================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -8,10 +8,6 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, orderBy, serverTimestamp, writeBatch, getFirestore
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ---------- config check ----------
 const cfg = window.FIREBASE_CONFIG || {};
@@ -31,8 +27,6 @@ try {
 } catch (e) {
   db = getFirestore(app); // fallback (es. browser senza IndexedDB)
 }
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
 
 // ---------- stato ----------
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
@@ -43,7 +37,6 @@ const state = {
   expanded: new Set(),
   tab: "scaletta",
   user: localStorage.getItem("prove_user") || null,   // nome "di band" per firmare i task
-  account: null,                                       // utente Google autenticato
   ready: { membri: false, canzoni: false, tasks: false },
   subscribed: false
 };
@@ -55,30 +48,10 @@ const colorOf = (nome) => {
   return PALETTE[(i >= 0 ? i : 0) % PALETTE.length];
 };
 
-// ---------- autenticazione ----------
-onAuthStateChanged(auth, (account) => {
-  state.account = account;
-  const loginOv = $("#login-overlay");
-  if (account) {
-    loginOv.classList.add("hidden");
-    subscribe();          // i listener partono solo da autenticati (le regole lo richiedono)
-    ensureUser();
-  } else {
-    loginOv.classList.remove("hidden");
-    $("#overlay").classList.add("hidden");
-  }
-});
-getRedirectResult(auth).catch(() => {});
-
-$("#login-btn").addEventListener("click", async () => {
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    // le PWA installate su iOS a volte bloccano il popup: ripiego sul redirect
-    try { await signInWithRedirect(auth, provider); }
-    catch (e2) { toast("Accesso non riuscito: " + (e2.code || e2.message)); }
-  }
-});
+// ---------- niente login: nascondi gli elementi dell'accesso Google ----------
+// (restano nell'HTML ma non servono più; li togliamo qui così basta cambiare questo file)
+document.getElementById("login-overlay")?.remove();
+document.getElementById("logout-btn")?.remove();
 
 // ---------- listener realtime ----------
 function subscribe() {
@@ -102,9 +75,11 @@ function subscribe() {
   });
 }
 
+subscribe(); // accesso libero: i dati arrivano subito
+
 // ---------- nome di band (per firmare i task) ----------
 function ensureUser() {
-  if (!state.account || !state.ready.membri) return;
+  if (!state.ready.membri) return;
   const overlay = $("#overlay");
   if (state.user && state.membri.some(m => m.nome === state.user)) {
     overlay.classList.add("hidden");
@@ -115,10 +90,6 @@ function ensureUser() {
   $("#member-picker").innerHTML = state.membri.map(m =>
     `<button class="member-pick" data-nome="${esc(m.nome)}" style="background:${colorOf(m.nome)}">${esc(m.nome)}</button>`
   ).join("");
-  // suggerisci il nome dell'account Google
-  const first = (state.account.displayName || "").split(" ")[0];
-  const input = $("#new-member-name");
-  if (first && !input.value) input.value = first;
 }
 function setUser(nome) {
   state.user = nome;
@@ -145,7 +116,6 @@ $("#user-chip").addEventListener("click", () => {
   state.user = null;
   ensureUser();
 });
-$("#logout-btn").addEventListener("click", () => signOut(auth));
 
 // ---------- tabs ----------
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
