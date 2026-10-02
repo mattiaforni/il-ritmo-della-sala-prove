@@ -484,3 +484,44 @@ main { padding: 10px 14px 40px; max-width: 640px; margin: 0 auto; }
 @media (prefers-reduced-motion: reduce) {
   .fill { transition: none; }
 }
+
+/* ---------- proposte, reazioni, link tab ---------- */
+.tab-link {
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--legno-chiaro);
+  color: var(--legno-chiaro);
+  font: 600 11px 'Inter', sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+.song-head.static { cursor: default; }
+.reactions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.react {
+  font: 500 15px 'Inter', sans-serif;
+  color: var(--legno);
+  background: var(--carta);
+  border: 1.5px solid var(--calce-scura);
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.react b { font-weight: 600; }
+.react.on.up { background: var(--verde); border-color: var(--verde); color: var(--carta); }
+.react.on.down { background: var(--cotto); border-color: var(--cotto); color: var(--carta); }
+.react-who { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.react-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.react-lbl { font-size: 14px; margin-right: 2px; }
+.mini-primary { color: var(--cotto); border-color: var(--cotto); font-weight: 600; }

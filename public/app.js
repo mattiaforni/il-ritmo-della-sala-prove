@@ -127,19 +127,33 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 // ---------- helper dati ----------
 const tasksOf = (canzoneId) => state.tasks.filter(t => t.canzoneId === canzoneId);
 const pct = (done, tot) => tot === 0 ? 0 : Math.round(done / tot * 100);
+const titoloCompleto = (c) => c.titolo + (c.artista ? " " + c.artista : "");
 const spotifyHref = (c) => c.spotifyUrl ||
-  ("https://open.spotify.com/search/" + encodeURIComponent(c.titolo + (c.artista ? " " + c.artista : "")));
+  ("https://open.spotify.com/search/" + encodeURIComponent(titoloCompleto(c)));
+const songsterrHref = (c) => "https://www.songsterr.com/?pattern=" + encodeURIComponent(titoloCompleto(c));
+// le canzoni senza campo "stato" (inserite prima di questa versione) sono in scaletta
+const inScaletta = (c) => c.stato !== "proposta";
+const scaletta = () => state.canzoni.filter(inScaletta);
+const proposte = () => state.canzoni.filter(c => !inScaletta(c));
+const linkIcons = (c) => `
+          <a class="spotify-link ${c.spotifyUrl ? "" : "approx"}" href="${esc(spotifyHref(c))}"
+             target="_blank" rel="noopener" data-stop
+             title="${c.spotifyUrl ? "Apri su Spotify" : "Cerca su Spotify"}" aria-label="Spotify">▶</a>
+          <a class="tab-link" href="${esc(songsterrHref(c))}" target="_blank" rel="noopener" data-stop
+             title="Cerca la tab su Songsterr" aria-label="Songsterr">tab</a>`;
 
 // ---------- render ----------
 function render() {
   if (!(state.ready.canzoni && state.ready.tasks)) return;
   renderScaletta();
+  renderProposte();
   renderPersone();
 }
 
 function renderScaletta() {
   const view = $("#view-scaletta");
-  const songsHtml = state.canzoni.map((c, idx) => {
+  const lista = scaletta();
+  const songsHtml = lista.map((c, idx) => {
     const ts = tasksOf(c.id);
     const done = ts.filter(t => t.fatto).length;
     const p = pct(done, ts.length);
@@ -150,23 +164,21 @@ function renderScaletta() {
       <button class="song-head" data-action="toggle" data-id="${c.id}">
         <div class="song-title-row">
           <h2 class="song-title">${esc(c.titolo)}</h2>
-          <a class="spotify-link ${c.spotifyUrl ? "" : "approx"}" href="${esc(spotifyHref(c))}"
-             target="_blank" rel="noopener" data-stop
-             title="${c.spotifyUrl ? "Apri su Spotify" : "Cerca su Spotify"}" aria-label="Apri su Spotify">▶</a>
+          ${linkIcons(c)}
           ${pronta ? `<span class="badge-pronta">★ pronta</span>` : `<span class="song-count">${done}/${ts.length} task</span>`}
         </div>
         ${c.artista ? `<div class="song-artist">${esc(c.artista)}</div>` : ""}
         <div class="bar"><div class="fill ${pronta ? "done" : ""}" style="width:${p}%"></div></div>
       </button>
-      ${open ? songBody(c, ts, idx) : ""}
+      ${open ? songBody(c, ts, idx, lista.length) : ""}
     </article>`;
   }).join("");
 
   view.innerHTML = `
-    ${state.canzoni.length ? songsHtml : `<p class="empty">Nessuna canzone in scaletta.<br>Aggiungi la prima qui sotto 🤘</p>`}
+    ${lista.length ? songsHtml : `<p class="empty">Nessuna canzone in scaletta.<br>Aggiungi la prima qui sotto 🤘</p>`}
     <div class="add-song">
       <h3>+ Aggiungi canzone</h3>
-      <form class="inline-form" data-form="add-song">
+      <form class="inline-form" data-form="add-song" data-stato="scaletta">
         <input type="text" name="titolo" placeholder="Titolo" maxlength="80" required autocomplete="off">
         <input type="text" name="artista" placeholder="Artista (facoltativo)" maxlength="60" autocomplete="off">
         <button class="btn" type="submit">Aggiungi</button>
@@ -174,7 +186,7 @@ function renderScaletta() {
     </div>`;
 }
 
-function songBody(c, ts, idx) {
+function songBody(c, ts, idx, totale) {
   const taskHtml = ts.map(t => `
     <div class="task ${t.fatto ? "fatto" : ""}">
       <button class="task-check" data-action="check" data-id="${t.id}" aria-label="Segna fatto">${t.fatto ? "✓" : ""}</button>
@@ -206,11 +218,59 @@ function songBody(c, ts, idx) {
     </form>
     <div class="song-actions">
       <button class="mini-btn" data-action="up" data-id="${c.id}" ${idx === 0 ? "disabled" : ""}>↑</button>
-      <button class="mini-btn" data-action="down" data-id="${c.id}" ${idx === state.canzoni.length - 1 ? "disabled" : ""}>↓</button>
+      <button class="mini-btn" data-action="down" data-id="${c.id}" ${idx === totale - 1 ? "disabled" : ""}>↓</button>
       <div class="spacer"></div>
       <button class="mini-btn" data-action="del-song" data-id="${c.id}">Elimina canzone</button>
     </div>
   </div>`;
+}
+
+function renderProposte() {
+  const view = $("#view-proposte");
+  const lista = proposte();
+  const cards = lista.map(c => {
+    const r = c.reazioni || {};
+    const su = Object.entries(r).filter(([, v]) => v === "up").map(([n]) => n);
+    const giu = Object.entries(r).filter(([, v]) => v === "down").map(([n]) => n);
+    const mia = state.user ? r[state.user] : null;
+    const chips = (nomi, cls) => nomi.map(n =>
+      `<span class="chip ${cls}" style="background:${colorOf(n)}">${esc(n)}</span>`).join("");
+    return `
+    <article class="song proposta" data-id="${c.id}">
+      <div class="song-head static">
+        <div class="song-title-row">
+          <h2 class="song-title">${esc(c.titolo)}</h2>
+          ${linkIcons(c)}
+        </div>
+        ${c.artista ? `<div class="song-artist">${esc(c.artista)}</div>` : ""}
+        <div class="reactions">
+          <button class="react ${mia === "up" ? "on up" : ""}" data-action="react-up" data-id="${c.id}" aria-label="Mi piace">👍 <b>${su.length}</b></button>
+          <button class="react ${mia === "down" ? "on down" : ""}" data-action="react-down" data-id="${c.id}" aria-label="Non mi convince">👎 <b>${giu.length}</b></button>
+        </div>
+        ${su.length || giu.length ? `
+        <div class="react-who">
+          ${su.length ? `<div class="react-row"><span class="react-lbl">👍</span>${chips(su, "")}</div>` : ""}
+          ${giu.length ? `<div class="react-row"><span class="react-lbl">👎</span>${chips(giu, "")}</div>` : ""}
+        </div>` : `<p class="empty" style="padding:6px 0 0;text-align:left">Nessuna reazione ancora.</p>`}
+        <div class="song-actions">
+          <button class="mini-btn mini-primary" data-action="promote" data-id="${c.id}">↑ Porta in scaletta</button>
+          <div class="spacer"></div>
+          <button class="mini-btn" data-action="del-song" data-id="${c.id}">Elimina</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+
+  view.innerHTML = `
+    ${lista.length ? cards : `<p class="empty">Nessuna proposta.<br>Butta lì un pezzo da provare 🎸</p>`}
+    <div class="add-song">
+      <h3>+ Proponi un pezzo</h3>
+      <form class="inline-form" data-form="add-song" data-stato="proposta">
+        <input type="text" name="titolo" placeholder="Titolo" maxlength="80" required autocomplete="off">
+        <input type="text" name="artista" placeholder="Artista (facoltativo)" maxlength="60" autocomplete="off">
+        <button class="btn" type="submit">Proponi</button>
+      </form>
+    </div>`;
 }
 
 function renderPersone() {
@@ -303,11 +363,27 @@ document.querySelector("main").addEventListener("click", async e => {
     batch.delete(doc(db, "canzoni", id));
     await batch.commit();
   }
+  if (action === "react-up" || action === "react-down") {
+    if (!state.user) { toast("Scegli prima il tuo nome"); return; }
+    const c = state.canzoni.find(x => x.id === id);
+    if (!c) return;
+    const voto = action === "react-up" ? "up" : "down";
+    const reazioni = { ...(c.reazioni || {}) };
+    if (reazioni[state.user] === voto) delete reazioni[state.user]; // secondo tap = ritira
+    else reazioni[state.user] = voto;
+    await updateDoc(doc(db, "canzoni", id), { reazioni });
+  }
+  if (action === "promote") {
+    const maxOrd = scaletta().reduce((m, c) => Math.max(m, c.ordine || 0), 0);
+    await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 });
+    toast("In scaletta! 🤘");
+  }
   if (action === "up" || action === "down") {
-    const idx = state.canzoni.findIndex(c => c.id === id);
+    const lista = scaletta();
+    const idx = lista.findIndex(c => c.id === id);
     const j = action === "up" ? idx - 1 : idx + 1;
-    if (j < 0 || j >= state.canzoni.length) return;
-    const a = state.canzoni[idx], b = state.canzoni[j];
+    if (j < 0 || j >= lista.length) return;
+    const a = lista[idx], b = lista[j];
     const batch = writeBatch(db);
     batch.update(doc(db, "canzoni", a.id), { ordine: b.ordine });
     batch.update(doc(db, "canzoni", b.id), { ordine: a.ordine });
@@ -325,15 +401,18 @@ document.querySelector("main").addEventListener("submit", async e => {
     const titolo = form.titolo.value.trim();
     if (!titolo) return;
     const artista = form.artista.value.trim();
+    const stato = form.dataset.stato === "proposta" ? "proposta" : "scaletta";
     const maxOrd = state.canzoni.reduce((m, c) => Math.max(m, c.ordine || 0), 0);
     const ref = await addDoc(collection(db, "canzoni"), {
-      titolo, artista,
+      titolo, artista, stato,
       ordine: maxOrd + 1,
       spotifyUrl: "",
+      reazioni: {},
+      propostaDa: stato === "proposta" ? (state.user || "") : "",
       creato: serverTimestamp()
     });
     form.reset();
-    toast("Canzone aggiunta 🎸");
+    toast(stato === "proposta" ? "Proposta aggiunta 💡" : "Canzone aggiunta 🎸");
     enrichSpotify(ref.id, titolo, artista); // in background, senza bloccare
   }
 
