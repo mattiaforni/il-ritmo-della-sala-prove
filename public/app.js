@@ -8,6 +8,9 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, orderBy, serverTimestamp, writeBatch, getFirestore
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ---------- config check ----------
 const cfg = window.FIREBASE_CONFIG || {};
@@ -27,6 +30,7 @@ try {
 } catch (e) {
   db = getFirestore(app); // fallback (es. browser senza IndexedDB)
 }
+const storage = getStorage(app);
 
 // ---------- stato ----------
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
@@ -34,10 +38,11 @@ const state = {
   membri: [],
   canzoni: [],
   tasks: [],
+  registrazioni: [],
   expanded: new Set(),
   tab: "scaletta",
   user: localStorage.getItem("prove_user") || null,   // nome "di band" per firmare i task
-  ready: { membri: false, canzoni: false, tasks: false },
+  ready: { membri: false, canzoni: false, tasks: false, registrazioni: false },
   subscribed: false
 };
 
@@ -71,6 +76,11 @@ function subscribe() {
   onSnapshot(query(collection(db, "tasks"), orderBy("creato")), snap => {
     state.tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready.tasks = true;
+    render();
+  });
+  onSnapshot(query(collection(db, "registrazioni"), orderBy("data", "desc")), snap => {
+    state.registrazioni = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    state.ready.registrazioni = true;
     render();
   });
 }
@@ -133,6 +143,28 @@ const spotifyHref = (c) => c.spotifyUrl ||
 const songsterrHref = (c) => "https://www.songsterr.com/?pattern=" + encodeURIComponent(titoloCompleto(c));
 // le canzoni senza campo "stato" (inserite prima di questa versione) sono in scaletta
 const inScaletta = (c) => c.stato !== "proposta";
+const recsOf = (canzoneId) => state.registrazioni.filter(r => r.canzoneId === canzoneId);
+const oggi = () => new Date().toISOString().slice(0, 10);
+const fmtData = (iso) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+};
+const recRow = (r, conCanzone) => {
+  const song = conCanzone ? state.canzoni.find(c => c.id === r.canzoneId) : null;
+  return `
+    <div class="rec" data-id="${r.id}">
+      <div class="rec-head">
+        <div class="rec-main">
+          ${song ? `<span class="ptask-song">${esc(song.titolo)}</span>` : ""}
+          <div class="rec-title">${esc(r.etichetta || r.nomeFile || "Registrazione")}</div>
+          <div class="rec-meta">${fmtData(r.data)}${r.caricatoDa ? " · " + esc(r.caricatoDa) : ""}${r.size ? " · " + (r.size / 1048576).toFixed(1) + " MB" : ""}</div>
+        </div>
+        <button class="task-del" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>
+      </div>
+      <audio controls preload="none" src="${esc(r.url)}"></audio>
+    </div>`;
+};
 const scaletta = () => state.canzoni.filter(inScaletta);
 const proposte = () => state.canzoni.filter(c => !inScaletta(c));
 const linkIcons = (c) => `
@@ -144,9 +176,10 @@ const linkIcons = (c) => `
 
 // ---------- render ----------
 function render() {
-  if (!(state.ready.canzoni && state.ready.tasks)) return;
+  if (!(state.ready.canzoni && state.ready.tasks && state.ready.registrazioni)) return;
   renderScaletta();
   renderProposte();
+  renderAudio();
   renderPersone();
 }
 
@@ -216,6 +249,7 @@ function songBody(c, ts, idx, totale) {
         <button class="btn btn-amber" type="submit">+ Task</button>
       </div>
     </form>
+    ${recsOf(c.id).length ? `<div class="rec-section"><div class="label">Registrazioni</div>${recsOf(c.id).map(r => recRow(r, false)).join("")}</div>` : ""}
     <div class="song-actions">
       <button class="mini-btn" data-action="up" data-id="${c.id}" ${idx === 0 ? "disabled" : ""}>↑</button>
       <button class="mini-btn" data-action="down" data-id="${c.id}" ${idx === totale - 1 ? "disabled" : ""}>↓</button>
@@ -269,6 +303,49 @@ function renderProposte() {
         <input type="text" name="titolo" placeholder="Titolo" maxlength="80" required autocomplete="off">
         <input type="text" name="artista" placeholder="Artista (facoltativo)" maxlength="60" autocomplete="off">
         <button class="btn" type="submit">Proponi</button>
+      </form>
+    </div>`;
+}
+
+function renderAudio() {
+  const view = $("#view-audio");
+  const recs = state.registrazioni;
+  // raggruppa per data (decrescente, già ordinata dal DB)
+  const gruppi = [];
+  recs.forEach(r => {
+    const g = gruppi.find(x => x.data === r.data);
+    g ? g.items.push(r) : gruppi.push({ data: r.data, items: [r] });
+  });
+  const lista = gruppi.map(g => `
+    <section class="rec-group">
+      <h2 class="rec-date">${fmtData(g.data)}</h2>
+      ${g.items.map(r => recRow(r, true)).join("")}
+    </section>`).join("");
+
+  const opzioni = [...scaletta(), ...proposte()].map(c =>
+    `<option value="${c.id}">${esc(c.titolo)}${c.artista ? " — " + esc(c.artista) : ""}</option>`).join("");
+
+  view.innerHTML = `
+    ${recs.length ? lista : `<p class="empty">Nessuna registrazione.<br>Carica l'audio delle prove qui sotto 🎧</p>`}
+    <div class="add-song">
+      <h3>+ Carica registrazione</h3>
+      <form class="upload-form" data-form="upload">
+        <select name="canzoneId" class="select">
+          <option value="">— Canzone (facoltativo) —</option>
+          ${opzioni}
+        </select>
+        <div class="inline-form">
+          <input type="text" name="etichetta" placeholder="Etichetta (es. prova 1 ott, definitiva)" maxlength="60" autocomplete="off">
+          <input type="date" name="data" value="${oggi()}" class="date-input">
+        </div>
+        <div class="inline-form">
+          <label class="file-btn">
+            <input type="file" name="files" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac" multiple>
+            <span class="file-btn-txt">Scegli file audio…</span>
+          </label>
+          <button class="btn btn-amber" type="submit">Carica</button>
+        </div>
+        <div class="upload-progress hidden"><div class="bar"><div class="fill"></div></div><span class="upload-txt"></span></div>
       </form>
     </div>`;
 }
@@ -353,6 +430,12 @@ document.querySelector("main").addEventListener("click", async e => {
     });
     if (fatto) maybeCelebrate(t.canzoneId);
   }
+  if (action === "del-rec") {
+    const r = state.registrazioni.find(x => x.id === id);
+    if (!r || !confirm("Eliminare questa registrazione?")) return;
+    try { await deleteObject(storageRef(storage, r.path)); } catch (e) { /* già sparita: ok */ }
+    await deleteDoc(doc(db, "registrazioni", id));
+  }
   if (action === "del-task") {
     if (confirm("Eliminare questo task?")) await deleteDoc(doc(db, "tasks", id));
   }
@@ -360,6 +443,7 @@ document.querySelector("main").addEventListener("click", async e => {
     if (!confirm("Eliminare la canzone e tutti i suoi task?")) return;
     const batch = writeBatch(db);
     tasksOf(id).forEach(t => batch.delete(doc(db, "tasks", t.id)));
+    recsOf(id).forEach(r => batch.update(doc(db, "registrazioni", r.id), { canzoneId: "" })); // le registrazioni restano, scollegate
     batch.delete(doc(db, "canzoni", id));
     await batch.commit();
   }
@@ -432,6 +516,46 @@ document.querySelector("main").addEventListener("submit", async e => {
     form.querySelectorAll(".assignee-toggle.on").forEach(b => { b.classList.remove("on"); b.style.background = ""; });
   }
 
+  if (kind === "upload") {
+    const files = [...form.files.files];
+    if (!files.length) { toast("Scegli almeno un file"); return; }
+    const canzoneId = form.canzoneId.value;
+    const etichetta = form.etichetta.value.trim();
+    const data = form.data.value || oggi();
+    const prog = form.querySelector(".upload-progress");
+    const fill = prog.querySelector(".fill");
+    const txt = prog.querySelector(".upload-txt");
+    const submit = form.querySelector("button[type=submit]");
+    prog.classList.remove("hidden");
+    submit.disabled = true;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        txt.textContent = files.length > 1 ? `File ${i + 1} di ${files.length}: ${f.name}` : f.name;
+        const url = await uploadAudio(f, p => { fill.style.width = p + "%"; });
+        await addDoc(collection(db, "registrazioni"), {
+          canzoneId, etichetta,
+          nomeFile: f.name,
+          url: url.url, path: url.path,
+          size: f.size,
+          data,
+          caricatoDa: state.user || "",
+          creato: serverTimestamp()
+        });
+      }
+      toast(files.length > 1 ? "Registrazioni caricate 🎧" : "Registrazione caricata 🎧");
+      form.reset();
+      form.data.value = oggi();
+      form.querySelector(".file-btn-txt").textContent = "Scegli file audio…";
+    } catch (e) {
+      toast("Caricamento fallito: " + (e.code || e.message));
+    } finally {
+      submit.disabled = false;
+      prog.classList.add("hidden");
+      fill.style.width = "0%";
+    }
+  }
+
   if (kind === "add-member") {
     const nome = form.nome.value.trim();
     if (!nome || state.membri.some(m => m.nome.toLowerCase() === nome.toLowerCase())) return;
@@ -456,6 +580,36 @@ async function enrichSpotify(songId, titolo, artista) {
     // nessun problema: resta il link di ricerca Spotify come ripiego
   }
 }
+
+// ---------- upload su Firebase Storage ----------
+function uploadAudio(file, onProgress) {
+  const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `registrazioni/${Date.now()}-${safe}`;
+  const r = storageRef(storage, path);
+  const contentType = file.type || "audio/mpeg";
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(r, file, { contentType });
+    task.on("state_changed",
+      s => onProgress(Math.round(s.bytesTransferred / s.totalBytes * 100)),
+      reject,
+      async () => resolve({ url: await getDownloadURL(r), path })
+    );
+  });
+}
+
+// un solo audio in riproduzione alla volta
+document.addEventListener("play", e => {
+  if (e.target.tagName !== "AUDIO") return;
+  document.querySelectorAll("audio").forEach(a => { if (a !== e.target) a.pause(); });
+}, true);
+
+// mostra il nome dei file scelti nel bottone
+document.querySelector("main").addEventListener("change", e => {
+  if (e.target.type !== "file") return;
+  const n = e.target.files.length;
+  const lbl = e.target.closest(".file-btn")?.querySelector(".file-btn-txt");
+  if (lbl) lbl.textContent = n === 0 ? "Scegli file audio…" : n === 1 ? e.target.files[0].name : `${n} file selezionati`;
+});
 
 // ---------- gamification leggera ----------
 function maybeCelebrate(canzoneId) {
