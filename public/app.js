@@ -115,7 +115,7 @@ const state = {
   pendingFiles: [],
   upload: { active: false, pct: 0, txt: "" },
   playId: null,
-  spIcon: "icons/spotify.svg",
+  spIcon: "icons/spotify.png",
   sigle: {},
   deniedShown: false
 };
@@ -214,7 +214,7 @@ function linksHtml(c) {
     <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
   </div>`;
 }
-// icona Spotify: prima .svg, poi .png, infine un'icona di ripiego
+// icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
 document.addEventListener("error", e => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.classList.contains("ico-sp")) return;
