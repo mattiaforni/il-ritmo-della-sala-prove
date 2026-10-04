@@ -29,6 +29,16 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
   "<ellipse cx='6.9' cy='17.9' rx='3' ry='2.3' transform='rotate(-18 6.9 17.9)'/>" +
   "<ellipse cx='15.7' cy='15.6' rx='3' ry='2.3' transform='rotate(-18 15.7 15.6)'/></svg>");
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const STRUMENTI = [
+  { key: "chitarra1", nome: "Chitarra 1" },
+  { key: "chitarra2", nome: "Chitarra 2" },
+  { key: "basso", nome: "Basso" },
+  { key: "batteria", nome: "Batteria" },
+  { key: "tastiera", nome: "Tastiera" }
+];
+const nomeStrumento = (k) => STRUMENTI.find(s => s.key === k)?.nome || "";
+const SPOTIFY_RE = /https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?track\/[A-Za-z0-9]+/;
+const SONGSTERR_RE = /https:\/\/(?:www\.)?songsterr\.com\/a\/[^\s"'<>]+/;
 
 // ---------- configurazione ----------
 const cfg = window.FIREBASE_CONFIG || {};
@@ -63,10 +73,16 @@ const state = {
   ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false },
   subscribed: false,
   generaleOk: false,
-  tab: store.get("prove_tab") || "scaletta",
+  tab: (store.get("prove_tab") || "scaletta").replace("persone", "personale"),
+  viewPerson: null,           // di chi si guarda la pagina personale (null = la propria)
+  setupOpen: new Set(),
+  recsOpen: new Set(),
+  editSetup: null,            // { song, key } riga di setup in modifica
+  linkEdit: null,             // id della canzone con il modulo dei link aperto
+  enrichTried: new Set(),
   expanded: new Set(),
   votersOpen: new Set(),
-  addOpen: { scaletta: false, proposte: false, persone: false },
+  addOpen: { scaletta: false, proposte: false, personale: false },
   drafts: {},                 // songId → Set di nomi selezionati per il nuovo task
   tipoMov: "spesa",
   movOpen: null,
@@ -166,10 +182,10 @@ function appLink(httpsUrl, pkg) {
 function linksHtml(c) {
   const q = encodeURIComponent(songQuery(c));
   const sp = c.spotifyUrl || `https://open.spotify.com/search/${q}`;
-  const tab = `https://www.songsterr.com/?pattern=${q}`;
+  const tab = c.songsterrUrl || `https://www.songsterr.com/?pattern=${q}`;
   return `<div class="links">
     <a ${appLink(sp, "com.spotify.music")} data-link title="Ascolta su Spotify" aria-label="Ascolta su Spotify"><img class="ico ico-sp" src="${esc(state.spIcon)}" alt=""></a>
-    <a ${appLink(tab, "com.songsterr")} data-link title="Cerca la tablatura su Songsterr" aria-label="Cerca la tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
+    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
   </div>`;
 }
 // icona Spotify: prima .svg, poi .png, infine un'icona di ripiego
@@ -269,6 +285,7 @@ function ensureUser() {
   if (!state.account || !state.ready.membri) return;
   const overlay = $("#overlay");
   const chip = $("#user-chip");
+  updateNavMe();
   if (state.user && state.membri.some(m => m.nome === state.user)) {
     overlay.classList.add("hidden");
     chip.textContent = state.user;
@@ -281,8 +298,18 @@ function ensureUser() {
     `<button class="member-pick" data-nome="${esc(m.nome)}">${iniTag(m.nome)}${esc(m.nome)}</button>`
   ).join("");
 }
+function updateNavMe() {
+  const el = document.getElementById("nav-me");
+  if (!el) return;
+  const known = state.user && state.membri.some(m => m.nome === state.user);
+  el.textContent = known ? siglaOf(state.user) : "—";
+  const col = known ? colorOf(state.user) : "";
+  el.style.background = known && state.tab === "personale" ? col : "";
+  el.style.color = known && state.tab === "personale" && LIGHT_BG.has(col) ? "var(--legno)" : "";
+}
 function setUser(nome) {
   state.user = nome;
+  state.viewPerson = null;
   store.set("prove_user", nome);
   ensureUser();
   render();
@@ -315,6 +342,8 @@ function showTab(name) {
   store.set("prove_tab", name);
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  updateNavMe();
+  window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 showTab(state.tab);
@@ -352,8 +381,9 @@ function render() {
   renderProposte();
   renderAudio();
   renderCassa();
-  renderPersone();
+  renderPersonale();
   restoreInputs(kept);
+  updateNavMe();
   syncPlayer();
 }
 
@@ -400,23 +430,71 @@ function songBody(c, ts, idx, tot, gen) {
     const on = sel.has(m.nome), col = colorOf(m.nome);
     return `<button type="button" class="ini${on ? " on" : ""}${on && LIGHT_BG.has(col) ? " light" : ""}" data-action="pick" data-song="${c.id}" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${on}" style="${on ? `background:${col}` : ""}">${esc(siglaOf(m.nome))}</button>`;
   }).join("");
-  const recs = gen ? [] : recsOf(c.id);
   return `
     <div class="song-body">
       ${ts.length ? tasks : `<p class="empty">Nessun task per ${gen ? "ora" : "questo pezzo"}.</p>`}
       <form class="newtask" data-form="add-task" data-song="${c.id}">
-        <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
-        <div class="opts">${picks}<span class="sp"></span><button class="btn amb" type="submit">Aggiungi</button></div>
+        <div class="inrow">
+          <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
+          <button class="btn amb" type="submit">Aggiungi</button>
+        </div>
+        <div class="picks">${picks}</div>
       </form>
-      ${recs.length ? `<div class="sub">Registrazioni</div>${recs.map(r => recRow(r, "song")).join("")}` : ""}
+      ${gen ? "" : setupBlock(c) + recsBlock(c) + linkBlock(c)}
       ${gen ? "" : `
       <div class="actions">
         <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx === 0 ? "disabled" : ""} aria-label="Sposta su">↑</button>
         <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx === tot - 1 ? "disabled" : ""} aria-label="Sposta giù">↓</button>
+        <button class="btn quiet" data-action="link-edit" data-id="${c.id}">Link</button>
         <span class="sp"></span>
         <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone">✕</button>
       </div>`}
     </div>`;
+}
+const chiSuona = (key) => state.membri.find(m => m.strumento === key)?.nome || null;
+function setupEditor(songId, key, testo, mode) {
+  return `
+    <form class="${mode === "card" ? "setup-edit" : ""}" data-form="setup" data-song="${songId}" data-key="${key}">
+      <textarea name="testo" data-keep="setup-${songId}-${key}" maxlength="400" placeholder="Effetti, preset, suoni, accorgimenti…">${esc(testo || "")}</textarea>
+      <div class="ed"><button type="button" class="btn quiet" data-action="setup-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
+    </form>`;
+}
+function setupBlock(c) {
+  const setup = c.setup || {};
+  const compilati = STRUMENTI.filter(s => (setup[s.key] || "").trim()).length;
+  const open = state.setupOpen.has(c.id);
+  const rows = !open ? "" : STRUMENTI.map(s => {
+    const chi = chiSuona(s.key);
+    const tag = chi ? iniTag(chi) : `<span class="ini none" title="Nessuno">—</span>`;
+    const editing = state.editSetup && state.editSetup.song === c.id && state.editSetup.key === s.key;
+    const testo = (setup[s.key] || "").trim();
+    return `
+      <div class="setup-row" ${editing ? "" : `data-action="setup-edit" data-id="${c.id}" data-key="${s.key}" role="button" tabindex="0"`}>
+        ${tag}
+        <span class="setup-txt"><b>${s.nome}</b>${testo ? esc(testo) : `<span class="empty">da compilare</span>`}</span>
+        ${editing ? setupEditor(c.id, s.key, testo, "card") : ""}
+      </div>`;
+  }).join("");
+  return `<button class="disc" data-action="setup-toggle" data-id="${c.id}" aria-expanded="${open}">Setup <span class="n">${compilati} di ${STRUMENTI.length}</span><span class="chev">${open ? "▾" : "▸"}</span></button>${rows}`;
+}
+function recsBlock(c) {
+  const recs = recsOf(c.id);
+  if (!recs.length) return "";
+  const open = state.recsOpen.has(c.id);
+  return `<button class="disc" data-action="recs-toggle" data-id="${c.id}" aria-expanded="${open}">Registrazioni <span class="n">${recs.length}</span><span class="chev">${open ? "▾" : "▸"}</span></button>
+    ${open ? recs.map(r => recRow(r, "song")).join("") : ""}`;
+}
+function linkBlock(c) {
+  if (state.linkEdit !== c.id) return "";
+  return `
+    <form class="link-form" data-form="links" data-song="${c.id}">
+      <label>Link Spotify della canzone
+        <input class="field" name="spotify" data-keep="link-sp-${c.id}" value="${esc(c.spotifyUrl || "")}" placeholder="https://open.spotify.com/track/…" autocomplete="off" inputmode="url"></label>
+      <label>Link Songsterr della canzone
+        <input class="field" name="songsterr" data-keep="link-ss-${c.id}" value="${esc(c.songsterrUrl || "")}" placeholder="https://www.songsterr.com/a/wsa/…" autocomplete="off" inputmode="url"></label>
+      <p class="hint">Dall'app Spotify o Songsterr: Condividi → Copia link, poi incolla qui. Lascia vuoto per usare la ricerca.</p>
+      <div class="ed"><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva link</button></div>
+    </form>`;
 }
 function addSongBlock(where, label, cta) {
   if (!state.addOpen[where]) {
@@ -647,34 +725,84 @@ function renderCassa() {
     </article>`;
 }
 
-// ---------- persone ----------
-function renderPersone() {
-  const membri = [...state.membri].sort((a, b) => (b.nome === state.user) - (a.nome === state.user));
-  const cards = membri.map(m => {
-    const mine = state.tasks.filter(t => (t.assegnatari || []).includes(m.nome) && state.canzoni.some(c => c.id === t.canzoneId));
-    const done = mine.filter(t => t.fatto).length;
-    const p = pct(done, mine.length);
-    const aperti = mine.filter(t => !t.fatto);
-    const rows = aperti.map(t => {
-      const song = state.canzoni.find(c => c.id === t.canzoneId);
-      const gen = song && isGenerale(song);
-      return `
-        <div class="ptask">
-          <button class="chk" data-action="check" data-id="${t.id}" aria-label="Segna fatto"></button>
-          <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}</span><span class="tt">${esc(t.titolo)}</span></span>
-        </div>`;
-    }).join("");
+// ---------- area personale ----------
+function renderPersonale() {
+  const view = $("#view-personale");
+  if (!state.membri.length) { view.innerHTML = `<p class="empty big">Nessuno ancora.</p>`; return; }
+  const meName = state.user;
+  let nome = state.viewPerson && state.membri.some(m => m.nome === state.viewPerson) ? state.viewPerson : meName;
+  if (!nome || !state.membri.some(m => m.nome === nome)) nome = state.membri[0].nome;
+  const persona = state.membri.find(m => m.nome === nome);
+  const mia = nome === meName;
+  const strumento = persona.strumento || "";
+
+  const whoBar = `<div class="who-bar"><span class="lbl">Pagina di</span>${state.membri.map(m => {
+    const col = colorOf(m.nome);
+    return `<button class="ini${LIGHT_BG.has(col) ? " light" : ""}${m.nome === nome ? " sel" : ""}" style="background:${col}" data-action="view-person" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${m.nome === nome}">${esc(siglaOf(m.nome))}</button>`;
+  }).join("")}</div>`;
+
+  const mine = state.tasks.filter(t => (t.assegnatari || []).includes(nome) && state.canzoni.some(c => c.id === t.canzoneId));
+  const aperti = mine.filter(t => !t.fatto);
+  const daFare = aperti.map(t => {
+    const song = state.canzoni.find(c => c.id === t.canzoneId);
+    const gen = song && isGenerale(song);
     return `
-      <article class="card person">
-        <div class="person-head">${iniTag(m.nome)}<h2 class="person-name">${esc(m.nome)}${m.nome === state.user ? " (tu)" : ""}</h2><span class="person-stat">${done} / ${mine.length}</span></div>
-        <div class="bar"><i class="${p === 100 && mine.length ? "ok" : ""}" style="width:${p}%"></i></div>
-        ${!mine.length ? `<p class="empty">Nessun task assegnato.</p>` : !aperti.length ? `<p class="empty">Tutto fatto ★</p>` : rows}
-      </article>`;
+      <div class="ptask">
+        <button class="chk" data-action="check" data-id="${t.id}" aria-label="Segna fatto"></button>
+        <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}</span><span class="tt">${esc(t.titolo)}</span></span>
+      </div>`;
   }).join("");
-  const add = state.addOpen.persone
-    ? `<form class="inline-form" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
-    : `<button class="addline" data-action="add-open" data-where="persone"><span class="plus">+</span>Aggiungi una persona</button>`;
-  $("#view-persone").innerHTML = (membri.length ? cards : `<p class="empty big">Nessuno ancora.</p>`) + add;
+
+  const daVotare = mia ? proposte().filter(c => !(c.reazioni || {})[nome]) : [];
+  const votiHtml = daVotare.map(c => `
+    <div class="vrow">
+      <span class="t"><b>${esc(c.titolo)}</b><span>${esc(c.artista || "")}</span></span>
+      <button class="vote" data-action="react-up" data-id="${c.id}" aria-label="Mi piace">👍</button>
+      <button class="vote" data-action="react-down" data-id="${c.id}" aria-label="Non mi piace">👎</button>
+    </div>`).join("");
+
+  let setupHtml;
+  if (!strumento) {
+    setupHtml = `<p class="empty">${mia ? "Scegli il tuo strumento qui sopra per vedere e scrivere i tuoi appunti di setup." : `${esc(nome)} non ha ancora scelto uno strumento.`}</p>`;
+  } else {
+    const songs = scaletta();
+    setupHtml = songs.length ? songs.map(c => {
+      const testo = ((c.setup || {})[strumento] || "").trim();
+      const editing = state.editSetup && state.editSetup.song === c.id && state.editSetup.key === strumento;
+      return `
+        <div class="srow" ${editing ? "" : `data-action="setup-edit" data-id="${c.id}" data-key="${strumento}" role="button" tabindex="0"`}>
+          <div class="s">${esc(c.titolo)}</div>
+          ${editing ? setupEditor(c.id, strumento, testo, "page") : `<div class="snote${testo ? "" : " empty"}">${testo ? esc(testo) : "Tocca per aggiungere appunti"}</div>`}
+        </div>`;
+    }).join("") : `<p class="empty">Nessuna canzone in scaletta.</p>`;
+  }
+
+  const strOpts = `<option value="">Nessuno strumento</option>` + STRUMENTI.map(s =>
+    `<option value="${s.key}"${s.key === strumento ? " selected" : ""}>${s.nome}</option>`).join("");
+  const stats = [`${aperti.length} ${aperti.length === 1 ? "task aperto" : "task aperti"}`]
+    .concat(mia && daVotare.length ? [`${daVotare.length} ${daVotare.length === 1 ? "proposta" : "proposte"} da votare`] : []).join(", ");
+
+  const add = state.addOpen.personale
+    ? `<form class="inline-form add-person" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
+    : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">+</span>Aggiungi una persona</button>`;
+
+  view.innerHTML = `
+    ${whoBar}
+    ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}. Task e voti restano firmati da te${meName ? `, ${esc(meName)}` : ""}.</p>`}
+    <div class="me-head"><h2>${esc(nome)}</h2>${mia
+      ? `<select class="instr" data-change="strumento" data-nome="${esc(nome)}" aria-label="Il tuo strumento">${strOpts}</select>`
+      : (strumento ? `<span class="instr">${nomeStrumento(strumento)}</span>` : "")}</div>
+    <p class="me-stats">${stats}</p>
+    <article class="card">
+      <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
+      ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
+    </article>
+    ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
+    <article class="card">
+      <h3 class="sec-title">${mia ? "Il mio setup" : "Setup"} <small>${strumento ? nomeStrumento(strumento) : ""}</small></h3>
+      ${setupHtml}
+    </article>
+    ${add}`;
 }
 
 // ---------- azioni ----------
@@ -683,6 +811,7 @@ async function act(btn) {
   switch (action) {
     case "toggle":
       state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+      if (state.expanded.has(id)) enrichSong(state.canzoni.find(c => c.id === id));
       render(); break;
     case "voters":
       state.votersOpen.has(id) ? state.votersOpen.delete(id) : state.votersOpen.add(id);
@@ -744,7 +873,7 @@ async function act(btn) {
       const reazioni = { ...(c.reazioni || {}) };
       if (reazioni[state.user] === voto) delete reazioni[state.user];
       else reazioni[state.user] = voto;
-      state.votersOpen.add(id);
+      if (!btn.closest("#view-personale")) state.votersOpen.add(id);
       await updateDoc(doc(db, "canzoni", id), { reazioni }).catch(onDenied);
       break;
     }
@@ -776,11 +905,36 @@ async function act(btn) {
       const w = btn.dataset.where;
       state.addOpen[w] = true;
       render();
-      document.querySelector(`[data-keep="add-${w}-titolo"], [data-keep="add-membro"]`)?.focus();
+      document.querySelector(w === "personale" ? '[data-keep="add-membro"]' : `[data-keep="add-${w}-titolo"]`)?.focus();
       break;
     }
     case "tipo":
       state.tipoMov = btn.dataset.tipo;
+      render(); break;
+    case "setup-toggle":
+      state.setupOpen.has(id) ? state.setupOpen.delete(id) : state.setupOpen.add(id);
+      if (!state.setupOpen.has(id) && state.editSetup?.song === id) state.editSetup = null;
+      render(); break;
+    case "recs-toggle":
+      state.recsOpen.has(id) ? state.recsOpen.delete(id) : state.recsOpen.add(id);
+      render(); break;
+    case "setup-edit":
+      state.editSetup = { song: id, key: btn.dataset.key };
+      render();
+      document.querySelector(`[data-keep="setup-${id}-${btn.dataset.key}"]`)?.focus();
+      break;
+    case "setup-cancel":
+      state.editSetup = null;
+      render(); break;
+    case "link-edit":
+      state.linkEdit = state.linkEdit === id ? null : id;
+      render(); break;
+    case "link-cancel":
+      state.linkEdit = null;
+      render(); break;
+    case "view-person":
+      state.viewPerson = btn.dataset.nome === state.user ? null : btn.dataset.nome;
+      state.editSetup = null;
       render(); break;
     case "mov":
       state.movOpen = state.movOpen === id ? null : id;
@@ -809,6 +963,11 @@ mainEl.addEventListener("keydown", e => {
   if (el.matches?.('[role="button"][data-action]')) { e.preventDefault(); act(el); }
 });
 mainEl.addEventListener("change", e => {
+  if (e.target.dataset.change === "strumento") {
+    const m = state.membri.find(x => x.nome === e.target.dataset.nome);
+    if (m) updateDoc(doc(db, "membri", m.id), { strumento: e.target.value }).catch(onDenied);
+    return;
+  }
   if (e.target.type !== "file") return;
   state.pendingFiles = [...e.target.files];
   const lbl = e.target.closest(".file-btn")?.querySelector("span");
@@ -835,7 +994,7 @@ mainEl.addEventListener("submit", async e => {
         propostaDa: stato === "proposta" ? (state.user || "") : "", creato: serverTimestamp()
       });
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
-      enrichSpotify(ref.id, titolo, artista);
+      enrichSong({ id: ref.id, titolo, artista });
     } catch (ex) { onDenied(ex); }
   }
 
@@ -856,9 +1015,32 @@ mainEl.addEventListener("submit", async e => {
     const nome = form.nome.value.trim().replace(/\s+/g, " ");
     if (!nome) return;
     form.nome.value = "";
-    state.addOpen.persone = false;
+    state.addOpen.personale = false;
     if (state.membri.some(m => m.nome.toLowerCase() === nome.toLowerCase())) { toast(`${nome} c'è già.`); render(); return; }
     await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(onDenied);
+  }
+
+  if (kind === "setup") {
+    const song = form.dataset.song, key = form.dataset.key;
+    const testo = form.testo.value.trim();
+    form.testo.value = "";
+    state.editSetup = null;
+    await updateDoc(doc(db, "canzoni", song), { [`setup.${key}`]: testo }).catch(onDenied);
+    render();
+  }
+
+  if (kind === "links") {
+    const song = form.dataset.song;
+    const spIn = form.spotify.value.trim(), ssIn = form.songsterr.value.trim();
+    const sp = spIn ? (spIn.match(SPOTIFY_RE) || [null])[0] : "";
+    const ss = ssIn ? (ssIn.match(SONGSTERR_RE) || [null])[0] : "";
+    if (sp === null) { toast("Il link Spotify deve essere quello di un brano (open.spotify.com/track/…)."); return; }
+    if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
+    form.spotify.value = ""; form.songsterr.value = "";
+    state.linkEdit = null;
+    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss.replace(/[?#].*$/, "") }).catch(onDenied);
+    toast("Link salvati.");
+    render();
   }
 
   if (kind === "mov") {
@@ -908,17 +1090,29 @@ mainEl.addEventListener("submit", async e => {
   }
 });
 
-// ---------- link Spotify trovato da Gemini (Cloud Function) ----------
-async function enrichSpotify(songId, titolo, artista) {
+// ---------- link trovati in automatico (Cloud Function con Gemini) ----------
+// La funzione risponde con un URL; lo teniamo solo se è del servizio giusto.
+async function enrichLink(songId, titolo, artista, cosa) {
   try {
     const r = await fetch("/api/spotify-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titolo, artista })
+      body: JSON.stringify({ titolo, artista, cosa })
     });
     const j = await r.json();
-    if (j && j.url) await updateDoc(doc(db, "canzoni", songId), { spotifyUrl: j.url });
+    const re = cosa === "songsterr" ? SONGSTERR_RE : SPOTIFY_RE;
+    const url = j && typeof j.url === "string" ? (j.url.match(re) || [null])[0] : null;
+    if (!url) return;
+    const c = state.canzoni.find(x => x.id === songId);
+    const campo = cosa === "songsterr" ? "songsterrUrl" : "spotifyUrl";
+    if (c && !c[campo]) await updateDoc(doc(db, "canzoni", songId), { [campo]: url });
   } catch (e) { /* resta il link di ricerca */ }
+}
+function enrichSong(c) {
+  if (!c || isGenerale(c) || state.enrichTried.has(c.id)) return;
+  state.enrichTried.add(c.id);
+  if (!c.spotifyUrl) enrichLink(c.id, c.titolo, c.artista, "spotify");
+  if (!c.songsterrUrl) enrichLink(c.id, c.titolo, c.artista, "songsterr");
 }
 
 // ---------- piccoli premi ----------
