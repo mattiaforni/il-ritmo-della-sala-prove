@@ -1,0 +1,33 @@
+# Pubblica le Cloud Functions (cartella functions/) quando cambiano su main.
+# Usa lo stesso account di servizio che pubblica il sito: deve avere i ruoli
+# elencati nel README ("Pubblicare le funzioni da GitHub").
+# Si può anche avviare a mano: GitHub → Actions → "Pubblica le funzioni" → Run workflow.
+name: Pubblica le funzioni
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "functions/**"
+      - ".github/workflows/firebase-functions-merge.yml"
+  workflow_dispatch:
+concurrency:
+  group: functions-deploy
+  cancel-in-progress: false
+jobs:
+  deploy_functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dipendenze delle funzioni
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Credenziali Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_IL_RITMO_DELLA_SALA_PROVE }}
+      - name: Pubblica
+        run: npx --yes firebase-tools@15 deploy --only functions --project il-ritmo-della-sala-prove --non-interactive --force

@@ -113,4 +113,23 @@ Le app aperte sui telefoni controllano `version.json` quando tornano in primo pi
 
 Se una modifica richiede di ripulire dati salvati sui telefoni (chiavi di `localStorage`, accessi vecchi), aumentare `DATA_VERSION` in `public/app.js` e aggiungere la pulizia corrispondente in `MIGRAZIONI`: viene eseguita una volta sola su ogni telefono.
 
-La Cloud Function (`functions/`) non passa dalla pubblicazione automatica: si pubblica da terminale con `firebase deploy --only functions`.
+## Pubblicare le funzioni da GitHub
+
+Le Cloud Functions (`functions/`) si pubblicano da sole quando cambia qualcosa in quella cartella su `main` (workflow `firebase-functions-merge.yml`, avviabile anche a mano da GitHub → Actions → "Pubblica le funzioni"). Il terminale non serve più.
+
+Il workflow usa l'account di servizio `github-action-…` che pubblica già il sito. In Google Cloud Console → IAM, a quell'account vanno dati una volta questi ruoli:
+
+- Cloud Functions Admin (`roles/cloudfunctions.admin`)
+- Cloud Run Admin (`roles/run.admin`)
+- Service Account User (`roles/iam.serviceAccountUser`)
+- Artifact Registry Administrator (`roles/artifactregistry.admin`)
+- Secret Manager Admin (`roles/secretmanager.admin`)
+- Service Usage Consumer (`roles/serviceusage.serviceUsageConsumer`)
+- Firebase Viewer (`roles/firebase.viewer`)
+
+Funzioni presenti:
+
+- `spotifyLink` — cerca con Gemini il link Spotify o Songsterr di una canzone (secret `GEMINI_API_KEY`).
+- `playlist` e `spotifyCallback` — collegano l'account Spotify e tengono aggiornate le playlist "Scaletta" e "Proposte". Serve il Client ID dell'app Spotify in `functions/.env` (`SPOTIFY_CLIENT_ID=...`, non è un segreto) e, nell'app Spotify, il Redirect URI `https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/spotifyCallback`.
+
+Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
