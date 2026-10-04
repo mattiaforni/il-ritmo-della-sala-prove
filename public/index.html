@@ -24,21 +24,22 @@
   </div>
 </header>
 
-<nav class="tabs" role="tablist">
-  <button class="tab active" data-tab="scaletta" role="tab">Scaletta</button>
-  <button class="tab" data-tab="proposte" role="tab">Proposte</button>
-  <button class="tab" data-tab="audio" role="tab">Audio</button>
-  <button class="tab" data-tab="cassa" role="tab">Cassa</button>
-  <button class="tab" data-tab="persone" role="tab">Persone</button>
-</nav>
-
 <main>
   <section id="view-scaletta" class="view active"></section>
   <section id="view-proposte" class="view"></section>
   <section id="view-audio" class="view"></section>
   <section id="view-cassa" class="view"></section>
-  <section id="view-persone" class="view"></section>
+  <section id="view-personale" class="view"></section>
 </main>
+
+<!-- barra delle sezioni, fissa in basso -->
+<nav class="bnav tabs" aria-label="Sezioni">
+  <button class="tab active" data-tab="scaletta"><svg aria-hidden="true"><use href="#i-scaletta"/></svg><span>Scaletta</span></button>
+  <button class="tab" data-tab="proposte"><svg aria-hidden="true"><use href="#i-proposte"/></svg><span>Proposte</span></button>
+  <button class="tab" data-tab="audio"><svg aria-hidden="true"><use href="#i-audio"/></svg><span>Audio</span></button>
+  <button class="tab" data-tab="cassa"><svg aria-hidden="true"><use href="#i-cassa"/></svg><span>Cassa</span></button>
+  <button class="tab" data-tab="personale"><span id="nav-me" class="me-ico">—</span><span>Personale</span></button>
+</nav>
 
 <!-- accesso: password della band, chiesta una volta sola -->
 <div id="gate" class="gate hidden">
@@ -60,7 +61,7 @@
 <div id="overlay" class="overlay hidden">
   <div class="overlay-card">
     <h2 class="overlay-title">Chi sei?</h2>
-    <p class="overlay-sub">Il nome con cui firmi task, voti e spese.</p>
+    <p class="overlay-sub">Il nome con cui firmi task, voti, spese e appunti di setup.</p>
     <div id="member-picker" class="member-picker"></div>
     <form id="new-member-form" class="inline-form">
       <input id="new-member-name" class="field" type="text" placeholder="…o aggiungi il tuo nome" maxlength="30" autocomplete="off">
@@ -80,6 +81,10 @@
 <!-- chiave di basso su quattro righe (icona tablatura) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <symbol id="i-scaletta" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M3.5 6h2M3.5 12h2M3.5 18h2" stroke-width="2.6"/></g></symbol>
+    <symbol id="i-proposte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.1v.1h5v-.1c0-.8.4-1.5 1.1-2.1A6 6 0 0 0 12 3z"/></g></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10v4M8 7v10M12 3.5v17M16 7.5v9M20 10.5v3"/></g></symbol>
+    <symbol id="i-cassa" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6" width="19" height="12"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/></g></symbol>
     <symbol id="ico-clef" viewBox="0 0 24 24">
       <g stroke="currentColor" stroke-width=".9" opacity=".5">
         <path d="M1.5 5h21M1.5 9.5h21M1.5 14h21M1.5 18.5h21"/>
