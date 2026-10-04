@@ -4,7 +4,7 @@
 // ============================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, getFirestore,
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
   query, orderBy, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -29,6 +29,8 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
   "<ellipse cx='6.9' cy='17.9' rx='3' ry='2.3' transform='rotate(-18 6.9 17.9)'/>" +
   "<ellipse cx='15.7' cy='15.6' rx='3' ry='2.3' transform='rotate(-18 15.7 15.6)'/></svg>");
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const APP_VERSION = "9";
 const STRUMENTI = [
   { key: "chitarra1", nome: "Chitarra 1" },
   { key: "chitarra2", nome: "Chitarra 2" },
@@ -51,9 +53,9 @@ if (!cfg.projectId || cfg.projectId.includes("INCOLLA")) {
 const app = initializeApp(cfg);
 let db;
 try {
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  });
+  db = initializeFirestore(app, IS_IOS
+    ? { localCache: memoryLocalCache() }
+    : { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 } catch (e) {
   db = getFirestore(app);
 }
@@ -246,12 +248,33 @@ $("#gate-show").addEventListener("click", () => {
 });
 
 // ---------- dati in tempo reale ----------
-function onDenied(err) {
+function onDenied(err) {           // errori di lettura: i dati smettono di aggiornarsi
   console.error(err);
-  if (err && err.code === "permission-denied" && !state.deniedShown) {
-    state.deniedShown = true;
-    toast("Il database ha rifiutato l'accesso: controlla le regole su Firebase.");
+  const box = document.getElementById("conn-banner");
+  if (box) {
+    box.querySelector("span").textContent = err && err.code === "permission-denied"
+      ? "Il database ha rifiutato l'accesso: i dati non si aggiornano."
+      : "Collegamento ai dati interrotto: i dati non si aggiornano.";
+    box.classList.remove("hidden");
   }
+}
+function erroreScrittura(err) {    // errori di scrittura: sempre un messaggio
+  console.error(err);
+  const code = (err && err.code) || "";
+  toast(code === "permission-denied"
+    ? "Non salvato: il database ha rifiutato la modifica. Chiudi e riapri l'app."
+    : `Non salvato${code ? " (" + code + ")" : ""}. Controlla la connessione e riprova.`);
+}
+// scrive, avvisa se resta in sospeso, rimette il testo nei campi se fallisce
+async function scrivi(promessa, ripristina) {
+  const lento = setTimeout(() => toast("Salvataggio in sospeso: controlla la connessione."), 10000);
+  try { return await promessa; }
+  catch (ex) { if (ripristina) ripristina(); erroreScrittura(ex); return null; }
+  finally { clearTimeout(lento); }
+}
+function rimetti(key, valore) {
+  const el = document.querySelector(`main [data-keep="${CSS.escape(key)}"]`);
+  if (el && !el.value) el.value = valore;
 }
 function subscribe() {
   if (state.subscribed) return;
@@ -277,7 +300,7 @@ function ensureGenerale(snap) {
   state.generaleOk = true;
   setDoc(doc(db, "canzoni", GENERALE_ID), {
     titolo: "Generale", artista: "", stato: "generale", ordine: 0, creato: serverTimestamp()
-  }, { merge: true }).catch(onDenied);
+  }, { merge: true }).catch(erroreScrittura);
 }
 
 // ---------- nome con cui firmare ----------
@@ -325,7 +348,7 @@ $("#new-member-form").addEventListener("submit", async e => {
   if (!nome) return;
   input.value = "";
   if (!state.membri.some(m => m.nome.toLowerCase() === nome.toLowerCase())) {
-    await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(onDenied);
+    await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(erroreScrittura);
   }
   setUser(state.membri.find(m => m.nome.toLowerCase() === nome.toLowerCase())?.nome || nome);
 });
@@ -802,7 +825,8 @@ function renderPersonale() {
       <h3 class="sec-title">${mia ? "Il mio setup" : "Setup"} <small>${strumento ? nomeStrumento(strumento) : ""}</small></h3>
       ${setupHtml}
     </article>
-    ${add}`;
+    ${add}
+    <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
 }
 
 // ---------- azioni ----------
@@ -833,12 +857,12 @@ async function act(btn) {
       const fatto = !t.fatto;
       await updateDoc(doc(db, "tasks", id), {
         fatto, fattoDa: fatto ? (state.user || "") : "", fattoIl: fatto ? serverTimestamp() : null
-      }).catch(onDenied);
+      }).catch(erroreScrittura);
       if (fatto) maybeCelebrate(t.canzoneId);
       break;
     }
     case "del-task":
-      if (confirm("Eliminare questo task?")) await deleteDoc(doc(db, "tasks", id)).catch(onDenied);
+      if (confirm("Eliminare questo task?")) await deleteDoc(doc(db, "tasks", id)).catch(erroreScrittura);
       break;
     case "del-song": {
       const c = state.canzoni.find(x => x.id === id);
@@ -850,7 +874,7 @@ async function act(btn) {
       recsOf(id).forEach(r => batch.update(doc(db, "registrazioni", r.id), { canzoneId: "" }));
       batch.delete(doc(db, "canzoni", id));
       state.expanded.delete(id);
-      await batch.commit().catch(onDenied);
+      await batch.commit().catch(erroreScrittura);
       break;
     }
     case "up": case "down": {
@@ -862,7 +886,7 @@ async function act(btn) {
       const batch = writeBatch(db);
       batch.update(doc(db, "canzoni", a.id), { ordine: b.ordine });
       batch.update(doc(db, "canzoni", b.id), { ordine: a.ordine });
-      await batch.commit().catch(onDenied);
+      await batch.commit().catch(erroreScrittura);
       break;
     }
     case "react-up": case "react-down": {
@@ -874,13 +898,13 @@ async function act(btn) {
       if (reazioni[state.user] === voto) delete reazioni[state.user];
       else reazioni[state.user] = voto;
       if (!btn.closest("#view-personale")) state.votersOpen.add(id);
-      await updateDoc(doc(db, "canzoni", id), { reazioni }).catch(onDenied);
+      await updateDoc(doc(db, "canzoni", id), { reazioni }).catch(erroreScrittura);
       break;
     }
     case "promote": {
       const c = state.canzoni.find(x => x.id === id);
       const maxOrd = scaletta().reduce((m, x) => Math.max(m, x.ordine || 0), 0);
-      await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 }).catch(onDenied);
+      await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 }).catch(erroreScrittura);
       toast(`"${c?.titolo || "Pezzo"}" è in scaletta.`);
       break;
     }
@@ -898,7 +922,7 @@ async function act(btn) {
       if (!r || !confirm("Eliminare questa registrazione?")) return;
       if (state.playId === id) { player.pause(); state.playId = null; }
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
-      await deleteDoc(doc(db, "registrazioni", id)).catch(onDenied);
+      await deleteDoc(doc(db, "registrazioni", id)).catch(erroreScrittura);
       break;
     }
     case "add-open": {
@@ -943,7 +967,7 @@ async function act(btn) {
       const m = state.movimenti.find(x => x.id === id);
       if (!m || !confirm(`Eliminare "${m.descrizione}" (${euro(m.importoCent)})?`)) return;
       state.movOpen = null;
-      await deleteDoc(doc(db, "movimenti", id)).catch(onDenied);
+      await deleteDoc(doc(db, "movimenti", id)).catch(erroreScrittura);
       break;
     }
   }
@@ -965,7 +989,7 @@ mainEl.addEventListener("keydown", e => {
 mainEl.addEventListener("change", e => {
   if (e.target.dataset.change === "strumento") {
     const m = state.membri.find(x => x.nome === e.target.dataset.nome);
-    if (m) updateDoc(doc(db, "membri", m.id), { strumento: e.target.value }).catch(onDenied);
+    if (m) updateDoc(doc(db, "membri", m.id), { strumento: e.target.value }).catch(erroreScrittura);
     return;
   }
   if (e.target.type !== "file") return;
@@ -986,16 +1010,17 @@ mainEl.addEventListener("submit", async e => {
     if (!titolo) return;
     const artista = form.artista.value.trim();
     const stato = form.dataset.stato === "proposta" ? "proposta" : "scaletta";
+    const where = stato === "proposta" ? "proposte" : "scaletta";
     form.titolo.value = ""; form.artista.value = "";
     const maxOrd = state.canzoni.reduce((m, c) => Math.max(m, c.ordine || 0), 0);
-    try {
-      const ref = await addDoc(collection(db, "canzoni"), {
-        titolo, artista, stato, ordine: maxOrd + 1, spotifyUrl: "", reazioni: {},
-        propostaDa: stato === "proposta" ? (state.user || "") : "", creato: serverTimestamp()
-      });
+    const ref = await scrivi(addDoc(collection(db, "canzoni"), {
+      titolo, artista, stato, ordine: maxOrd + 1, spotifyUrl: "", reazioni: {},
+      propostaDa: stato === "proposta" ? (state.user || "") : "", creato: serverTimestamp()
+    }), () => { rimetti(`add-${where}-titolo`, titolo); rimetti(`add-${where}-artista`, artista); });
+    if (ref) {
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
       enrichSong({ id: ref.id, titolo, artista });
-    } catch (ex) { onDenied(ex); }
+    }
   }
 
   if (kind === "add-task") {
@@ -1006,9 +1031,9 @@ mainEl.addEventListener("submit", async e => {
     form.titolo.value = "";
     delete state.drafts[song];
     form.querySelectorAll("button.ini.on").forEach(b => { b.classList.remove("on", "light"); b.style.background = ""; });
-    await addDoc(collection(db, "tasks"), {
+    await scrivi(addDoc(collection(db, "tasks"), {
       canzoneId: song, titolo, assegnatari, fatto: false, fattoDa: "", creato: serverTimestamp()
-    }).catch(onDenied);
+    }), () => rimetti(`task-${song}`, titolo));
   }
 
   if (kind === "add-member") {
@@ -1017,7 +1042,7 @@ mainEl.addEventListener("submit", async e => {
     form.nome.value = "";
     state.addOpen.personale = false;
     if (state.membri.some(m => m.nome.toLowerCase() === nome.toLowerCase())) { toast(`${nome} c'è già.`); render(); return; }
-    await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(onDenied);
+    await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(erroreScrittura);
   }
 
   if (kind === "setup") {
@@ -1025,7 +1050,7 @@ mainEl.addEventListener("submit", async e => {
     const testo = form.testo.value.trim();
     form.testo.value = "";
     state.editSetup = null;
-    await updateDoc(doc(db, "canzoni", song), { [`setup.${key}`]: testo }).catch(onDenied);
+    await scrivi(updateDoc(doc(db, "canzoni", song), { [`setup.${key}`]: testo }));
     render();
   }
 
@@ -1038,7 +1063,7 @@ mainEl.addEventListener("submit", async e => {
     if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
     form.spotify.value = ""; form.songsterr.value = "";
     state.linkEdit = null;
-    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss.replace(/[?#].*$/, "") }).catch(onDenied);
+    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss.replace(/[?#].*$/, "") }).catch(erroreScrittura);
     toast("Link salvati.");
     render();
   }
@@ -1051,11 +1076,12 @@ mainEl.addEventListener("submit", async e => {
     const data = form.data.value || oggi();
     const chi = form.chi.value || state.user || "";
     const tipo = state.tipoMov;
+    const importoTesto = form.importo.value;
     form.importo.value = ""; form.descrizione.value = "";
-    await addDoc(collection(db, "movimenti"), {
+    const ok = await scrivi(addDoc(collection(db, "movimenti"), {
       tipo, importoCent, data, descrizione, chi, registratoDa: state.user || "", creato: serverTimestamp()
-    }).then(() => toast(tipo === "spesa" ? `Spesa registrata: ${euro(importoCent)}.` : `Versamento registrato: ${euro(importoCent)}.`))
-      .catch(onDenied);
+    }), () => { rimetti("mov-imp", importoTesto); rimetti("mov-desc", descrizione); });
+    if (ok) toast(tipo === "spesa" ? `Spesa registrata: ${euro(importoCent)}.` : `Versamento registrato: ${euro(importoCent)}.`);
   }
 
   if (kind === "upload") {
