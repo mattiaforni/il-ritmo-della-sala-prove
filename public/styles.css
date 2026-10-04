@@ -551,3 +551,16 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
 }
 .update-banner span { flex: 1; }
 .update-banner button { background: var(--ambra); color: var(--legno); border: none; border-radius: var(--r-tag); font: 600 13px var(--sans); padding: 7px 12px; }
+
+/* ---------- rinomina e nomi da sistemare ---------- */
+.rename-btn { margin-left: auto; padding: 5px 10px; font-size: 12px; }
+.rename-form { display: flex; gap: 6px; align-items: center; margin: 2px 0 4px; }
+.rename-form .field { flex: 1; min-width: 0; font: 600 18px var(--display); padding: 7px 10px; }
+.rename-hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+.card.orfani { border-left: 3px solid var(--ambra); background: var(--ambra-chiaro); }
+.orfani-txt { font-size: 13px; color: #6b4a10; margin: 0; padding: 0 14px 6px; }
+.orfano { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; padding: 8px 14px 10px; border-top: 1px solid rgba(217, 154, 43, .35); }
+.orfano-nome { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; }
+.orfano-nome b { font: 600 15px var(--sans); }
+.orfano-nome span { font-size: 12px; color: var(--muted); }
+.orfano .field { min-width: 0; font-size: 14px; padding: 7px 10px; }

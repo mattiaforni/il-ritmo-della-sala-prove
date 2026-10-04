@@ -31,7 +31,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "11";
+const APP_VERSION = "12";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -91,6 +91,8 @@ const MIGRAZIONI = {
 const state = {
   account: null,
   user: store.get("prove_user"),
+  userId: store.get("prove_user_id"),   // l'identità del telefono segue la persona anche se cambia nome
+  renaming: null,                        // id della persona che si sta rinominando
   membri: [], canzoni: [], tasks: [], registrazioni: [], movimenti: [],
   ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false },
   subscribed: false,
@@ -334,6 +336,15 @@ function ensureUser() {
   if (!state.account || !state.ready.membri) return;
   const overlay = $("#overlay");
   const chip = $("#user-chip");
+  if (state.userId) {
+    const me = state.membri.find(m => m.id === state.userId);
+    if (!me) { state.userId = null; store.del("prove_user_id"); }
+    else if (me.nome !== state.user) { state.user = me.nome; store.set("prove_user", me.nome); }
+  }
+  if (state.user && !state.userId) {
+    const me = state.membri.find(m => m.nome === state.user);
+    if (me) { state.userId = me.id; store.set("prove_user_id", me.id); }
+  }
   updateNavMe();
   if (state.user && state.membri.some(m => m.nome === state.user)) {
     overlay.classList.add("hidden");
@@ -360,6 +371,9 @@ function setUser(nome) {
   state.user = nome;
   state.viewPerson = null;
   store.set("prove_user", nome);
+  const me = state.membri.find(m => m.nome === nome);
+  state.userId = me ? me.id : null;
+  if (me) store.set("prove_user_id", me.id); else store.del("prove_user_id");
   ensureUser();
   render();
 }
@@ -380,7 +394,9 @@ $("#new-member-form").addEventListener("submit", async e => {
 });
 $("#user-chip").addEventListener("click", () => {
   store.del("prove_user");
+  store.del("prove_user_id");
   state.user = null;
+  state.userId = null;
   ensureUser();
 });
 
@@ -796,6 +812,61 @@ function renderCassa() {
     </article>`;
 }
 
+// ---------- nomi nei dati: rinominare e unire ----------
+// Voti, task, spese e registrazioni portano il nome della persona: rinominando,
+// il nome va cambiato ovunque; un nome che non corrisponde più a nessuno è "orfano".
+function nomiInUso() {
+  const uso = new Map();
+  const add = (n, k) => { if (!n) return; const o = uso.get(n) || { voti: 0, task: 0, altro: 0 }; o[k]++; uso.set(n, o); };
+  state.tasks.forEach(t => { (t.assegnatari || []).forEach(n => add(n, "task")); add(t.fattoDa, "task"); });
+  state.canzoni.forEach(c => { Object.keys(c.reazioni || {}).forEach(n => add(n, "voti")); add(c.propostaDa, "altro"); });
+  state.registrazioni.forEach(r => add(r.caricatoDa, "altro"));
+  state.movimenti.forEach(m => { add(m.chi, "altro"); add(m.registratoDa, "altro"); });
+  return uso;
+}
+const ignorati = () => new Set(JSON.parse(store.get("prove_nomi_ignorati") || "[]"));
+function nomiOrfani() {
+  const noti = new Set(state.membri.map(m => m.nome)), ign = ignorati();
+  return [...nomiInUso()].filter(([n]) => !noti.has(n) && !ign.has(n));
+}
+// prepara in un unico batch il passaggio di tutto ciò che è di "vecchio" a "nuovo"
+function sostituisciNome(vecchio, nuovo) {
+  const batch = writeBatch(db);
+  let n = 0;
+  state.tasks.forEach(t => {
+    const ass = t.assegnatari || [], upd = {};
+    if (ass.includes(vecchio)) upd.assegnatari = [...new Set(ass.map(x => x === vecchio ? nuovo : x))];
+    if (t.fattoDa === vecchio) upd.fattoDa = nuovo;
+    if (Object.keys(upd).length) { batch.update(doc(db, "tasks", t.id), upd); n++; }
+  });
+  state.canzoni.forEach(c => {
+    const r = c.reazioni || {}, upd = {};
+    if (Object.prototype.hasOwnProperty.call(r, vecchio)) {
+      const nr = { ...r };
+      if (!Object.prototype.hasOwnProperty.call(nr, nuovo)) nr[nuovo] = nr[vecchio]; // se ha votato con entrambi i nomi resta il voto dato col nome nuovo
+      delete nr[vecchio];
+      upd.reazioni = nr;
+    }
+    if (c.propostaDa === vecchio) upd.propostaDa = nuovo;
+    if (Object.keys(upd).length) { batch.update(doc(db, "canzoni", c.id), upd); n++; }
+  });
+  state.registrazioni.forEach(r => { if (r.caricatoDa === vecchio) { batch.update(doc(db, "registrazioni", r.id), { caricatoDa: nuovo }); n++; } });
+  state.movimenti.forEach(m => {
+    const upd = {};
+    if (m.chi === vecchio) upd.chi = nuovo;
+    if (m.registratoDa === vecchio) upd.registratoDa = nuovo;
+    if (Object.keys(upd).length) { batch.update(doc(db, "movimenti", m.id), upd); n++; }
+  });
+  return { batch, n };
+}
+function descriviUso(o) {
+  const p = [];
+  if (o.voti) p.push(`${o.voti} ${o.voti === 1 ? "voto" : "voti"}`);
+  if (o.task) p.push(`${o.task} task`);
+  if (o.altro) p.push(`${o.altro} ${o.altro === 1 ? "altro riferimento" : "altri riferimenti"}`);
+  return p.join(", ");
+}
+
 // ---------- area personale ----------
 function renderPersonale() {
   const view = $("#view-personale");
@@ -853,6 +924,21 @@ function renderPersonale() {
   const stats = [`${aperti.length} ${aperti.length === 1 ? "task aperto" : "task aperti"}`]
     .concat(mia && daVotare.length ? [`${daVotare.length} ${daVotare.length === 1 ? "proposta" : "proposte"} da votare`] : []).join(", ");
 
+  const orfani = mia ? nomiOrfani() : [];
+  const opzioniPersone = state.membri.map(m => `<option value="${esc(m.nome)}">${esc(m.nome)}</option>`).join("");
+  const orfaniHtml = !orfani.length ? "" : `
+    <article class="card orfani">
+      <h3 class="sec-title">Nomi da sistemare <small>${orfani.length}</small></h3>
+      <p class="orfani-txt">Questi nomi compaiono nei dati ma non corrispondono più a nessuna persona: di solito è qualcuno che è stato rinominato. Scegli a chi appartengono.</p>
+      ${orfani.map(([n, o]) => `
+        <form class="orfano" data-form="unisci" data-vecchio="${esc(n)}">
+          <div class="orfano-nome"><b>${esc(n)}</b><span>${descriviUso(o)}</span></div>
+          <select class="field" name="nuovo" required aria-label="Persona a cui appartiene ${esc(n)}"><option value="">È…</option>${opzioniPersone}</select>
+          <button class="btn fill" type="submit">Unisci</button>
+          <button type="button" class="btn quiet" data-action="ignora-nome" data-nome="${esc(n)}">Lascia</button>
+        </form>`).join("")}
+    </article>`;
+
   const add = state.addOpen.personale
     ? `<form class="inline-form add-person" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
     : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">+</span>Aggiungi una persona</button>`;
@@ -860,9 +946,17 @@ function renderPersonale() {
   view.innerHTML = `
     ${whoBar}
     ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}. Task e voti restano firmati da te${meName ? `, ${esc(meName)}` : ""}.</p>`}
+    ${orfaniHtml}
+    ${state.renaming === persona.id ? `
+    <form class="rename-form" data-form="rename" data-id="${persona.id}">
+      <input class="field" name="nome" data-keep="rename-${persona.id}" value="${esc(nome)}" maxlength="30" autocomplete="off" required aria-label="Nuovo nome">
+      <button type="button" class="btn quiet" data-action="rename-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button>
+    </form>
+    <p class="rename-hint">Il nome cambia anche in voti, task, spese e registrazioni. La sigla si aggiorna da sola.</p>` : `
     <div class="me-head"><h2>${esc(nome)}</h2>${mia
       ? `<select class="instr" data-change="strumento" data-nome="${esc(nome)}" aria-label="Il tuo strumento">${strOpts}</select>`
-      : (strumento ? `<span class="instr">${nomeStrumento(strumento)}</span>` : "")}</div>
+      : (strumento ? `<span class="instr">${nomeStrumento(strumento)}</span>` : "")}
+      <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button></div>`}
     <p class="me-stats">${stats}</p>
     <article class="card">
       <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
@@ -1004,6 +1098,19 @@ async function act(btn) {
     case "link-cancel":
       state.linkEdit = null;
       render(); break;
+    case "rename":
+      state.renaming = id;
+      render();
+      document.querySelector(`[data-keep="rename-${id}"]`)?.select();
+      break;
+    case "rename-cancel":
+      state.renaming = null;
+      render(); break;
+    case "ignora-nome": {
+      const ign = ignorati(); ign.add(btn.dataset.nome);
+      store.set("prove_nomi_ignorati", JSON.stringify([...ign]));
+      render(); break;
+    }
     case "view-person":
       state.viewPerson = btn.dataset.nome === state.user ? null : btn.dataset.nome;
       state.editSetup = null;
@@ -1091,6 +1198,34 @@ mainEl.addEventListener("submit", async e => {
     state.addOpen.personale = false;
     if (state.membri.some(m => m.nome.toLowerCase() === nome.toLowerCase())) { toast(`${nome} c'è già.`); render(); return; }
     await addDoc(collection(db, "membri"), { nome, creato: serverTimestamp() }).catch(erroreScrittura);
+  }
+
+  if (kind === "rename") {
+    const persona = state.membri.find(m => m.id === form.dataset.id);
+    const nuovo = form.nome.value.trim().replace(/\s+/g, " ");
+    if (!persona || !nuovo) return;
+    if (nuovo === persona.nome) { state.renaming = null; render(); return; }
+    if (state.membri.some(m => m.id !== persona.id && m.nome.toLowerCase() === nuovo.toLowerCase())) {
+      toast(`C'è già una persona che si chiama ${nuovo}.`); return;
+    }
+    const vecchio = persona.nome;
+    const { batch, n } = sostituisciNome(vecchio, nuovo);
+    batch.update(doc(db, "membri", persona.id), { nome: nuovo });
+    state.renaming = null;
+    if (state.viewPerson === vecchio) state.viewPerson = nuovo;
+    const ok = await scrivi(batch.commit().then(() => true));
+    if (ok) toast(`${vecchio} ora si chiama ${nuovo}${n ? ` (${n} ${n === 1 ? "elemento aggiornato" : "elementi aggiornati"})` : ""}.`);
+    render();
+  }
+
+  if (kind === "unisci") {
+    const vecchio = form.dataset.vecchio, nuovo = form.nuovo.value;
+    if (!nuovo) { toast("Scegli a chi appartiene questo nome."); return; }
+    if (!confirm(`Tutto ciò che è di ${vecchio} passa a ${nuovo}. Se hanno votato la stessa proposta con entrambi i nomi, resta il voto di ${nuovo}. Procedo?`)) return;
+    const { batch, n } = sostituisciNome(vecchio, nuovo);
+    const ok = await scrivi(batch.commit().then(() => true));
+    if (ok) toast(`Uniti: ${n} ${n === 1 ? "elemento" : "elementi"} di ${vecchio} ora sono di ${nuovo}.`);
+    render();
   }
 
   if (kind === "setup") {

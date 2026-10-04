@@ -1,6 +1,6 @@
 // Service worker minimale: rende l'app installabile e apre anche offline.
 // Le richieste a Firestore NON passano di qui (le gestisce l'SDK con la sua cache).
-const CACHE = "prove-v11";
+const CACHE = "prove-v12";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 
 self.addEventListener("install", e => {
