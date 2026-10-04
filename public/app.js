@@ -31,7 +31,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "12";
+const APP_VERSION = "13";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -44,6 +44,8 @@ const STRUMENTI = [
 const nomeStrumento = (k) => STRUMENTI.find(s => s.key === k)?.nome || "";
 const SPOTIFY_RE = /https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?track\/[A-Za-z0-9]+/;
 const SONGSTERR_RE = /https:\/\/(?:www\.)?songsterr\.com\/a\/[^\s"'<>]+/;
+// funzione che tiene aggiornate le playlist Spotify (vedi functions/index.js)
+const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/playlist";
 
 // ---------- configurazione ----------
 const cfg = window.FIREBASE_CONFIG || {};
@@ -113,7 +115,7 @@ const state = {
   pendingFiles: [],
   upload: { active: false, pct: 0, txt: "" },
   playId: null,
-  spIcon: "icons/spotify.svg",
+  spIcon: "icons/spotify.png",
   sigle: {},
   deniedShown: false
 };
@@ -212,7 +214,7 @@ function linksHtml(c) {
     <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
   </div>`;
 }
-// icona Spotify: prima .svg, poi .png, infine un'icona di ripiego
+// icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
 document.addEventListener("error", e => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.classList.contains("ico-sp")) return;
@@ -222,6 +224,92 @@ document.addEventListener("error", e => {
   else return;
   document.querySelectorAll("img.ico-sp").forEach(i => { i.src = state.spIcon; });
 }, true);
+
+// ---------- playlist Spotify ----------
+// Le playlist "Scaletta" e "Proposte" stanno sull'account Spotify collegato e le scrive
+// solo la funzione. I loro link arrivano nel documento Generale (campo playlist).
+const playlistInfo = () => state.canzoni.find(c => c.id === GENERALE_ID)?.playlist || null;
+const haLinkSpotify = (c) => SPOTIFY_RE.test(c.spotifyUrl || "");
+function contaBrani(lista) {
+  const con = lista.filter(haLinkSpotify).length;
+  return { con, senza: lista.length - con };
+}
+function descriviBrani(lista) {
+  const { con, senza } = contaBrani(lista);
+  return `${con} ${con === 1 ? "brano" : "brani"}${senza ? ` · ${senza} senza link` : ""}`;
+}
+function plStrip(kind) {
+  const info = playlistInfo();
+  if (!info || !info[kind]) return "";
+  const lista = kind === "scaletta" ? scaletta() : proposte();
+  return `
+    <a class="pl-strip" ${appLink(info[kind], "com.spotify.music")} data-link>
+      <img class="ico ico-sp" src="${esc(state.spIcon)}" alt="">
+      <span class="pl-txt"><b>${kind === "scaletta" ? "Playlist della scaletta" : "Playlist delle proposte"}</b><small>${descriviBrani(lista)}${kind === "proposte" ? " · dalla più votata" : ""}</small></span>
+      <span class="pl-go" aria-hidden="true">Apri</span>
+    </a>`;
+}
+async function chiamaPlaylist(op, extra = {}, keepalive = false) {
+  const token = await auth.currentUser.getIdToken();
+  const r = await fetch(PLAYLIST_FN, {
+    method: "POST", keepalive,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ op, ...extra })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+  return j;
+}
+// dopo una modifica a canzoni o voti: un solo aggiornamento anche per più tocchi di fila
+let plTimer = null;
+function playlistDaAggiornare() {
+  if (!playlistInfo()?.scaletta) return;
+  clearTimeout(plTimer);
+  plTimer = setTimeout(() => { plTimer = null; chiamaPlaylist("aggiorna").catch(e => console.warn("[playlist]", e.message)); }, 2500);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "hidden" || !plTimer) return;
+  clearTimeout(plTimer); plTimer = null;
+  chiamaPlaylist("aggiorna", {}, true).catch(() => {});
+});
+function quandoBreve(d) {
+  if (!d) return "";
+  const ora = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const oggi = new Date().toDateString() === d.toDateString();
+  return oggi ? `oggi alle ${ora}` : `il ${d.toLocaleDateString("it-IT", { day: "numeric", month: "long" })} alle ${ora}`;
+}
+function spotifyCard() {
+  const info = playlistInfo();
+  if (!info || !info.scaletta) {
+    return `
+    <article class="card spcard">
+      <h3 class="sec-title">Playlist Spotify</h3>
+      <p class="sp-txt">Due playlist pubbliche, <b>Scaletta</b> e <b>Proposte</b>, che si aggiornano da sole quando cambiate qualcosa qui. Si collegano una volta sola, con l'account Spotify che ha creato l'app Spotify della band.</p>
+      <div class="sp-actions"><button class="btn fill" data-action="sp-collega">Collega Spotify</button></div>
+    </article>`;
+  }
+  const senza = [...scaletta(), ...proposte()].filter(c => !haLinkSpotify(c)).map(c => c.titolo);
+  const riga = (kind, nome, lista) => `
+      <div class="sp-row">
+        <img class="ico ico-sp" src="${esc(state.spIcon)}" alt="">
+        <span class="t"><b>${nome}</b><span>${descriviBrani(lista)}</span></span>
+        <a class="btn quiet" ${appLink(info[kind], "com.spotify.music")} data-link>Apri</a>
+      </div>`;
+  const agg = info.aggiornata?.toDate ? info.aggiornata.toDate() : null;
+  return `
+    <article class="card spcard">
+      <h3 class="sec-title">Playlist Spotify <small>account di ${esc(info.account || "—")}</small></h3>
+      ${info.errore ? `<p class="sp-err">${esc(info.errore)}</p>` : ""}
+      ${riga("scaletta", "Scaletta", scaletta())}
+      ${riga("proposte", "Proposte", proposte())}
+      ${senza.length ? `<p class="sp-txt sp-senza">Non sono in playlist perché manca il link Spotify: ${senza.map(esc).join(", ")}. Aggiungilo da «Link» nella scheda della canzone.</p>` : ""}
+      <div class="sp-actions">
+        <span class="sp-meta">${agg ? `Aggiornata ${quandoBreve(agg)}` : ""}</span>
+        <button class="btn quiet" data-action="sp-aggiorna">Aggiorna adesso</button>
+        <button class="btn quiet" data-action="sp-collega">Ricollega</button>
+      </div>
+    </article>`;
+}
 
 // ---------- accesso ----------
 onAuthStateChanged(auth, (account) => {
@@ -411,6 +499,18 @@ function showTab(name) {
   window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
+// ritorno dalla pagina di consenso di Spotify (?spotify=ok|annullato|errore)
+(function ritornoDaSpotify() {
+  const q = new URLSearchParams(location.search);
+  const esito = q.get("spotify");
+  if (!esito) return;
+  history.replaceState(null, "", location.pathname);
+  state.tab = "personale";
+  const msg = esito === "ok" ? "Spotify collegato: le playlist sono pronte."
+    : esito === "annullato" ? "Collegamento a Spotify annullato."
+    : `Spotify non collegato: ${q.get("motivo") || "errore"}`;
+  setTimeout(() => toast(msg), 700);
+})();
 showTab(state.tab);
 
 // ---------- aggiornamenti: se online c'è una versione nuova, barra con "Aggiorna" ----------
@@ -478,7 +578,7 @@ function render() {
 function renderScaletta() {
   const gen = state.canzoni.find(c => c.id === GENERALE_ID);
   const lista = scaletta();
-  let html = gen ? songCard(gen, 0, 0) : "";
+  let html = plStrip("scaletta") + (gen ? songCard(gen, 0, 0) : "");
   html += lista.map((c, i) => songCard(c, i, lista.length)).join("");
   if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta. Aggiungine una qui sotto.</p>`;
   html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
@@ -629,7 +729,7 @@ function renderProposte() {
       ${voters}
     </article>`;
   }).join("");
-  $("#view-proposte").innerHTML =
+  $("#view-proposte").innerHTML = plStrip("proposte") +
     (lista.length ? cards : `<p class="empty big">Nessuna proposta. Butta lì un pezzo da provare.</p>`) +
     addSongBlock("proposte", "Proponi un pezzo", "Proponi");
 }
@@ -967,6 +1067,7 @@ function renderPersonale() {
       <h3 class="sec-title">${mia ? "Il mio setup" : "Setup"} <small>${strumento ? nomeStrumento(strumento) : ""}</small></h3>
       ${setupHtml}
     </article>
+    ${mia ? spotifyCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
 }
@@ -1017,6 +1118,7 @@ async function act(btn) {
       batch.delete(doc(db, "canzoni", id));
       state.expanded.delete(id);
       await batch.commit().catch(erroreScrittura);
+      playlistDaAggiornare();
       break;
     }
     case "up": case "down": {
@@ -1029,6 +1131,7 @@ async function act(btn) {
       batch.update(doc(db, "canzoni", a.id), { ordine: b.ordine });
       batch.update(doc(db, "canzoni", b.id), { ordine: a.ordine });
       await batch.commit().catch(erroreScrittura);
+      playlistDaAggiornare();
       break;
     }
     case "react-up": case "react-down": {
@@ -1041,6 +1144,7 @@ async function act(btn) {
       else reazioni[state.user] = voto;
       if (!btn.closest("#view-personale")) state.votersOpen.add(id);
       await updateDoc(doc(db, "canzoni", id), { reazioni }).catch(erroreScrittura);
+      playlistDaAggiornare();
       break;
     }
     case "promote": {
@@ -1048,6 +1152,7 @@ async function act(btn) {
       const maxOrd = scaletta().reduce((m, x) => Math.max(m, x.ordine || 0), 0);
       await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 }).catch(erroreScrittura);
       toast(`"${c?.titolo || "Pezzo"}" è in scaletta.`);
+      playlistDaAggiornare();
       break;
     }
     case "play": playToggle(id); break;
@@ -1106,6 +1211,26 @@ async function act(btn) {
     case "rename-cancel":
       state.renaming = null;
       render(); break;
+    case "sp-collega": {
+      btn.disabled = true; btn.textContent = "Apro Spotify…";
+      try {
+        const { url } = await chiamaPlaylist("collega");
+        location.href = url;
+      } catch (e) {
+        toast(e.message);
+        btn.disabled = false; btn.textContent = playlistInfo()?.scaletta ? "Ricollega" : "Collega Spotify";
+      }
+      break;
+    }
+    case "sp-aggiorna": {
+      btn.disabled = true; btn.textContent = "Aggiorno…";
+      try {
+        const r = await chiamaPlaylist("aggiorna", { forza: true });
+        toast(r.collegato === false ? "Spotify non è collegato." : "Playlist aggiornate.");
+      } catch (e) { toast("Playlist non aggiornate: " + e.message); }
+      render();
+      break;
+    }
     case "ignora-nome": {
       const ign = ignorati(); ign.add(btn.dataset.nome);
       store.set("prove_nomi_ignorati", JSON.stringify([...ign]));
@@ -1175,6 +1300,7 @@ mainEl.addEventListener("submit", async e => {
     if (ref) {
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
       enrichSong({ id: ref.id, titolo, artista });
+      playlistDaAggiornare();
     }
   }
 
@@ -1248,6 +1374,7 @@ mainEl.addEventListener("submit", async e => {
     state.linkEdit = null;
     await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss.replace(/[?#].*$/, "") }).catch(erroreScrittura);
     toast("Link salvati.");
+    playlistDaAggiornare();
     render();
   }
 
@@ -1320,7 +1447,8 @@ async function enrichLink(songId, titolo, artista, cosa) {
 function enrichSong(c) {
   if (!c || isGenerale(c) || state.enrichTried.has(c.id)) return;
   state.enrichTried.add(c.id);
-  if (!c.spotifyUrl) enrichLink(c.id, c.titolo, c.artista, "spotify");
+  // con le playlist collegate il link Spotify lo cerca la funzione delle playlist, direttamente su Spotify
+  if (!c.spotifyUrl && !playlistInfo()?.scaletta) enrichLink(c.id, c.titolo, c.artista, "spotify");
   if (!c.songsterrUrl) enrichLink(c.id, c.titolo, c.artista, "songsterr");
 }
 

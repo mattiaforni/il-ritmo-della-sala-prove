@@ -564,3 +564,33 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
 .orfano-nome b { font: 600 15px var(--sans); }
 .orfano-nome span { font-size: 12px; color: var(--muted); }
 .orfano .field { min-width: 0; font-size: 14px; padding: 7px 10px; }
+
+/* ---------- playlist Spotify ---------- */
+.pl-strip {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--carta); border: 1px solid var(--rule); border-radius: var(--r);
+  padding: 9px 12px; margin-bottom: 10px;
+  color: var(--legno); text-decoration: none;
+  -webkit-tap-highlight-color: rgba(58, 42, 29, .14);
+}
+.pl-strip:active { background: var(--calce); }
+.pl-strip .ico { width: 22px; height: 22px; flex: none; }
+.pl-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pl-txt b { font: 600 14px var(--sans); }
+.pl-txt small { font-size: 12px; color: var(--muted); }
+.pl-go { font: 600 12.5px var(--sans); color: var(--cotto); flex: none; }
+.pl-go::after { content: " ›"; }
+.spcard .sp-txt { font-size: 13px; color: var(--muted); margin: 0; padding: 0 14px 10px; }
+.spcard .sp-txt b { color: var(--legno); font-weight: 600; }
+.spcard .sp-senza { padding-top: 8px; border-top: 1px solid var(--rule); }
+.sp-err { font-size: 13px; color: #6b4a10; background: var(--ambra-chiaro); border-top: 1px solid rgba(217, 154, 43, .45); border-bottom: 1px solid rgba(217, 154, 43, .45); margin: 0 0 4px; padding: 8px 14px; }
+.sp-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--rule); }
+.sp-row .ico { width: 20px; height: 20px; flex: none; }
+.sp-row .t { flex: 1; min-width: 0; }
+.sp-row .t b { display: block; font: 600 14px var(--sans); }
+.sp-row .t span { font-size: 12px; color: var(--muted); }
+.sp-row .btn { padding: 5px 10px; font-size: 12px; text-decoration: none; }
+.sp-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px 12px; border-top: 1px solid var(--rule); }
+.spcard .sp-txt + .sp-actions { border-top: none; padding-top: 0; }
+.sp-meta { flex: 1 1 100%; font-size: 12px; color: var(--muted); }
+.sp-meta:empty { display: none; }
