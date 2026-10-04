@@ -30,7 +30,10 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
   "<ellipse cx='15.7' cy='15.6' rx='3' ry='2.3' transform='rotate(-18 15.7 15.6)'/></svg>");
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const APP_VERSION = "10";
+// A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
+const APP_VERSION = "11";
+// Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
+const DATA_VERSION = 2;
 const STRUMENTI = [
   { key: "chitarra1", nome: "Chitarra 1" },
   { key: "chitarra2", nome: "Chitarra 2" },
@@ -68,6 +71,23 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
+// Ogni voce porta i dati del telefono dalla versione precedente a quella indicata.
+const MIGRAZIONI = {
+  2: () => {
+    // la tab "Persone" è diventata "Personale"; via le chiavi delle prime versioni
+    if (store.get("prove_tab") === "persone") store.set("prove_tab", "personale");
+    ["prove_user_google", "prove_login"].forEach(k => store.del(k));
+  }
+};
+(function migraDatiLocali() {
+  const da = Number(store.get("prove_data_version") || 1);
+  if (da >= DATA_VERSION) return;
+  for (let n = da + 1; n <= DATA_VERSION; n++) {
+    try { MIGRAZIONI[n] && MIGRAZIONI[n](); } catch (e) { console.error("migrazione", n, e); }
+  }
+  store.set("prove_data_version", String(DATA_VERSION));
+})();
+
 const state = {
   account: null,
   user: store.get("prove_user"),
@@ -376,6 +396,28 @@ function showTab(name) {
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 showTab(state.tab);
+
+// ---------- aggiornamenti: se online c'è una versione nuova, barra con "Aggiorna" ----------
+async function controllaVersione() {
+  try {
+    const r = await fetch("version.json", { cache: "no-store" });
+    if (!r.ok) return;
+    const { version } = await r.json();
+    if (version && String(version) !== APP_VERSION) $("#update-banner")?.classList.remove("hidden");
+  } catch (e) { /* offline: si riprova più tardi */ }
+}
+$("#update-btn")?.addEventListener("click", async () => {
+  const btn = $("#update-btn");
+  btn.disabled = true; btn.textContent = "Aggiorno…";
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+  } catch (e) { /* si ricarica comunque */ }
+  location.reload();
+});
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") controllaVersione(); });
+setInterval(() => { if (document.visibilityState === "visible") controllaVersione(); }, 15 * 60 * 1000);
+setTimeout(controllaVersione, 3000);
 
 // ---------- render (conserva campi in compilazione e riproduzione) ----------
 function captureInputs() {

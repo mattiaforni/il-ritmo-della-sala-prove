@@ -100,3 +100,17 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 ## Costi
 
 Con Blaze paghi solo l'eccedenza oltre i free tier, che a 5 persone non toccherete mai: Firestore 50k letture/20k scritture al giorno, Hosting 10 GB storage + 360 MB/giorno di traffico, Functions 2M invocazioni/mese, Gemini free tier a parte. Il budget con avviso del passo 1.4 è la rete di sicurezza.
+
+## Pubblicare una nuova versione
+
+L'interfaccia (`public/`) va online da sola a ogni merge su `main`. A ogni pubblicazione aumentare **insieme** tre numeri:
+
+- `APP_VERSION` in `public/app.js`
+- `"version"` in `public/version.json`
+- `CACHE` in `public/sw.js`
+
+Le app aperte sui telefoni controllano `version.json` quando tornano in primo piano (e ogni 15 minuti): se la versione online è diversa compare la barra "È disponibile una versione nuova" con il bottone **Aggiorna**.
+
+Se una modifica richiede di ripulire dati salvati sui telefoni (chiavi di `localStorage`, accessi vecchi), aumentare `DATA_VERSION` in `public/app.js` e aggiungere la pulizia corrispondente in `MIGRAZIONI`: viene eseguita una volta sola su ogni telefono.
+
+La Cloud Function (`functions/`) non passa dalla pubblicazione automatica: si pubblica da terminale con `firebase deploy --only functions`.
