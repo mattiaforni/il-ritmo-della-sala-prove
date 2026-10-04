@@ -18,8 +18,8 @@ jobs:
   deploy_functions:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Dipendenze delle funzioni
@@ -30,4 +30,13 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_IL_RITMO_DELLA_SALA_PROVE }}
       - name: Pubblica
-        run: npx --yes firebase-tools@15 deploy --only functions --project il-ritmo-della-sala-prove --non-interactive --force
+        run: |
+          set -o pipefail
+          if ! npx --yes firebase-tools@15 deploy --only functions --project il-ritmo-della-sala-prove --non-interactive --force 2>&1 | tee deploy.log; then
+            # gli errori diventano annotazioni, leggibili nella pagina del run senza aprire il log
+            grep -iE "error|permission|denied|403|missing|required" deploy.log | grep -v "^\s*$" | tail -n 6 | while IFS= read -r l; do echo "::error::${l:0:900}"; done || true
+            if [ -f firebase-debug.log ]; then
+              grep -iE "permission|denied|\"code\": 4|PERMISSION" firebase-debug.log | tail -n 4 | while IFS= read -r l; do echo "::error::${l:0:900}"; done || true
+            fi
+            exit 1
+          fi
