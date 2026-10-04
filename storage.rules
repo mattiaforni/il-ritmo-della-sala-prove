@@ -1,0 +1,15 @@
+// Regole Storage — Console Firebase → Storage → Regole
+// Solo l'account condiviso della band; caricamenti: solo audio sotto i 60 MB.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /registrazioni/{file} {
+      allow read, delete: if request.auth != null
+        && request.auth.token.email == 'band@il-ritmo-della-sala-prove.web.app';
+      allow create, update: if request.auth != null
+        && request.auth.token.email == 'band@il-ritmo-della-sala-prove.web.app'
+        && request.resource.size < 60 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+    }
+  }
+}
