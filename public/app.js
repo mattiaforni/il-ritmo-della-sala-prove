@@ -9,7 +9,7 @@ import {
   query, orderBy, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject
@@ -30,7 +30,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
   "<ellipse cx='15.7' cy='15.6' rx='3' ry='2.3' transform='rotate(-18 15.7 15.6)'/></svg>");
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const APP_VERSION = "9";
+const APP_VERSION = "10";
 const STRUMENTI = [
   { key: "chitarra1", nome: "Chitarra 1" },
   { key: "chitarra2", nome: "Chitarra 2" },
@@ -203,6 +203,12 @@ document.addEventListener("error", e => {
 
 // ---------- accesso ----------
 onAuthStateChanged(auth, (account) => {
+  // un accesso rimasto da versioni precedenti (es. login Google) non vale:
+  // si esce e si chiede la password della band
+  if (account && (account.email || "").toLowerCase() !== BAND_EMAIL.toLowerCase()) {
+    signOut(auth).catch(() => {});
+    return;
+  }
   state.account = account;
   if (account) {
     $("#gate").classList.add("hidden");
