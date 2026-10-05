@@ -31,7 +31,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "15";
+const APP_VERSION = "16";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -415,7 +415,7 @@ function subscribe() {
     state[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready[key] = true;
     if (key === "membri") { computeSigle(); ensureUser(); }
-    if (key === "canzoni") { ensureGenerale(snap); if (!snap.metadata.fromCache) completaLinkSongsterr(); }
+    if (key === "canzoni") ensureGenerale(snap);
     render();
   }, onDenied);
   listen("membri", query(collection(db, "membri"), orderBy("creato")), "membri");
@@ -1460,29 +1460,13 @@ async function enrichLink(songId, titolo, artista, cosa) {
     if (c && !c[campo]) await updateDoc(doc(db, "canzoni", songId), { [campo]: cosa === "songsterr" ? normalizzaSongsterr(url) : url });
   } catch (e) { /* resta il link di ricerca */ }
 }
-// Una volta per sessione cerca i link Songsterr che mancano alle canzoni di scaletta e proposte.
-// Senza link la tablatura si apre come ricerca nel browser, perché l'app Songsterr apre solo le pagine
-// delle canzoni. Ogni canzone viene ritentata al massimo una volta alla settimana (campo songsterrCercato).
-const RITENTA_SONGSTERR = 7 * 24 * 3600 * 1000;
-function completaLinkSongsterr() {
-  if (state.songsterrFatto) return;
-  state.songsterrFatto = true;
-  const ora = Date.now();
-  const daCercare = [...scaletta(), ...proposte()]
-    .filter(c => !c.songsterrUrl && !(typeof c.songsterrCercato === "number" && ora - c.songsterrCercato < RITENTA_SONGSTERR))
-    .slice(0, 15);
-  daCercare.forEach((c, i) => setTimeout(() => {
-    state.enrichTried.add(c.id);
-    updateDoc(doc(db, "canzoni", c.id), { songsterrCercato: Date.now() }).catch(() => {});
-    enrichLink(c.id, c.titolo, c.artista, "songsterr");
-  }, 1500 * (i + 1)));
-}
 function enrichSong(c) {
   if (!c || isGenerale(c) || state.enrichTried.has(c.id)) return;
   state.enrichTried.add(c.id);
   // con le playlist collegate il link Spotify lo cerca la funzione delle playlist, direttamente su Spotify
   if (!c.spotifyUrl && !playlistInfo()?.scaletta) enrichLink(c.id, c.titolo, c.artista, "spotify");
-  if (!c.songsterrUrl) enrichLink(c.id, c.titolo, c.artista, "songsterr");
+  // il link Songsterr non si cerca in automatico: senza link l'icona apre la ricerca su Songsterr,
+  // e il link alla pagina della canzone si incolla a mano da «Link»
 }
 
 // ---------- piccoli premi ----------
