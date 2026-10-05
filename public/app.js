@@ -31,7 +31,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "13";
+const APP_VERSION = "14";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -205,12 +205,26 @@ function appLink(httpsUrl, pkg) {
     `S.browser_fallback_url=${encodeURIComponent(httpsUrl)};end`;
   return `href="${esc(intent)}"`;
 }
+// Con le playlist collegate il brano si apre "dentro" la playlist della sua sezione:
+// finito il brano, Spotify continua con i successivi della scaletta (o delle proposte).
+// Parametro "context" non documentato da Spotify: se lo ignora, si apre il brano da solo come prima.
+function linkSpotify(c) {
+  const track = (c.spotifyUrl || "").match(/track\/([A-Za-z0-9]+)/);
+  if (!track) return null;
+  const info = playlistInfo();
+  const kind = c.stato === "proposta" ? "proposte" : "scaletta";
+  const pl = info && (String(info[kind] || "").match(/playlist\/([A-Za-z0-9]+)/) || [])[1];
+  if (!pl) return { url: c.spotifyUrl, kind: null };
+  return { url: `https://open.spotify.com/track/${track[1]}?context=${encodeURIComponent("spotify:playlist:" + pl)}`, kind };
+}
 function linksHtml(c) {
   const q = encodeURIComponent(songQuery(c));
-  const sp = c.spotifyUrl || `https://open.spotify.com/search/${q}`;
+  const ls = linkSpotify(c);
+  const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
+  const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
   const tab = c.songsterrUrl || `https://www.songsterr.com/?pattern=${q}`;
   return `<div class="links">
-    <a ${appLink(sp, "com.spotify.music")} data-link title="Ascolta su Spotify" aria-label="Ascolta su Spotify"><img class="ico ico-sp" src="${esc(state.spIcon)}" alt=""></a>
+    <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}"><img class="ico ico-sp" src="${esc(state.spIcon)}" alt=""></a>
     <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
   </div>`;
 }
