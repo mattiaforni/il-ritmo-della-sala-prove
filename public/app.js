@@ -31,7 +31,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "14";
+const APP_VERSION = "15";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -44,6 +44,8 @@ const STRUMENTI = [
 const nomeStrumento = (k) => STRUMENTI.find(s => s.key === k)?.nome || "";
 const SPOTIFY_RE = /https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?track\/[A-Za-z0-9]+/;
 const SONGSTERR_RE = /https:\/\/(?:www\.)?songsterr\.com\/a\/[^\s"'<>]+/;
+// l'app Songsterr su Android apre solo le pagine delle canzoni su www.songsterr.com
+const normalizzaSongsterr = (u) => String(u || "").replace(/^https:\/\/songsterr\.com/i, "https://www.songsterr.com").replace(/[?#].*$/, "");
 // funzione che tiene aggiornate le playlist Spotify (vedi functions/index.js)
 const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/playlist";
 
@@ -222,7 +224,7 @@ function linksHtml(c) {
   const ls = linkSpotify(c);
   const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
   const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
-  const tab = c.songsterrUrl || `https://www.songsterr.com/?pattern=${q}`;
+  const tab = c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`;
   return `<div class="links">
     <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}"><img class="ico ico-sp" src="${esc(state.spIcon)}" alt=""></a>
     <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
@@ -413,7 +415,7 @@ function subscribe() {
     state[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready[key] = true;
     if (key === "membri") { computeSigle(); ensureUser(); }
-    if (key === "canzoni") ensureGenerale(snap);
+    if (key === "canzoni") { ensureGenerale(snap); if (!snap.metadata.fromCache) completaLinkSongsterr(); }
     render();
   }, onDenied);
   listen("membri", query(collection(db, "membri"), orderBy("creato")), "membri");
@@ -1386,7 +1388,7 @@ mainEl.addEventListener("submit", async e => {
     if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
     form.spotify.value = ""; form.songsterr.value = "";
     state.linkEdit = null;
-    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss.replace(/[?#].*$/, "") }).catch(erroreScrittura);
+    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" }).catch(erroreScrittura);
     toast("Link salvati.");
     playlistDaAggiornare();
     render();
@@ -1455,8 +1457,25 @@ async function enrichLink(songId, titolo, artista, cosa) {
     if (!url) return;
     const c = state.canzoni.find(x => x.id === songId);
     const campo = cosa === "songsterr" ? "songsterrUrl" : "spotifyUrl";
-    if (c && !c[campo]) await updateDoc(doc(db, "canzoni", songId), { [campo]: url });
+    if (c && !c[campo]) await updateDoc(doc(db, "canzoni", songId), { [campo]: cosa === "songsterr" ? normalizzaSongsterr(url) : url });
   } catch (e) { /* resta il link di ricerca */ }
+}
+// Una volta per sessione cerca i link Songsterr che mancano alle canzoni di scaletta e proposte.
+// Senza link la tablatura si apre come ricerca nel browser, perché l'app Songsterr apre solo le pagine
+// delle canzoni. Ogni canzone viene ritentata al massimo una volta alla settimana (campo songsterrCercato).
+const RITENTA_SONGSTERR = 7 * 24 * 3600 * 1000;
+function completaLinkSongsterr() {
+  if (state.songsterrFatto) return;
+  state.songsterrFatto = true;
+  const ora = Date.now();
+  const daCercare = [...scaletta(), ...proposte()]
+    .filter(c => !c.songsterrUrl && !(typeof c.songsterrCercato === "number" && ora - c.songsterrCercato < RITENTA_SONGSTERR))
+    .slice(0, 15);
+  daCercare.forEach((c, i) => setTimeout(() => {
+    state.enrichTried.add(c.id);
+    updateDoc(doc(db, "canzoni", c.id), { songsterrCercato: Date.now() }).catch(() => {});
+    enrichLink(c.id, c.titolo, c.artista, "songsterr");
+  }, 1500 * (i + 1)));
 }
 function enrichSong(c) {
   if (!c || isGenerale(c) || state.enrichTried.has(c.id)) return;
