@@ -14,6 +14,7 @@ import {
 import {
   getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { creaDiretta } from "./diretta.js";
 
 // ---------- costanti ----------
 // Email dell'unico account condiviso della band (creato in Console Firebase → Authentication).
@@ -31,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "16";
+const APP_VERSION = "17";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -408,9 +409,15 @@ function rimetti(key, valore) {
   const el = document.querySelector(`main [data-keep="${CSS.escape(key)}"]`);
   if (el && !el.value) el.value = valore;
 }
+// diretta dalla sala (vedi diretta.js): ha i suoi dati e la sua scheda in cima ad Audio
+const diretta = creaDiretta({
+  db, toast: (m) => toast(m), utente: () => state.user, esc, iniTag: (n) => iniTag(n),
+  isMobile: IS_ANDROID || IS_IOS, isIOS: IS_IOS
+});
 function subscribe() {
   if (state.subscribed) return;
   state.subscribed = true;
+  diretta.subscribe();
   const listen = (name, q, key, opts) => onSnapshot(q, opts || {}, snap => {
     state[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready[key] = true;
@@ -788,6 +795,7 @@ function renderAudio() {
   const filesLabel = n === 0 ? "Scegli file audio…" : n === 1 ? state.pendingFiles[0].name : `${n} file selezionati`;
   const up = state.upload;
   $("#view-audio").innerHTML = `
+    <div id="diretta-box"></div>
     ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione. Carica l'audio delle prove qui sotto.</p>`}
     <form class="upload" data-form="upload">
       <h3>+ Carica registrazione</h3>
@@ -804,6 +812,7 @@ function renderAudio() {
         <div class="bar"><i style="width:${up.pct}%"></i></div><span class="upload-txt">${esc(up.txt)}</span>
       </div>
     </form>`;
+  diretta.render();
 }
 
 // player unico: la riproduzione continua anche quando la pagina si ridisegna
@@ -1266,6 +1275,8 @@ async function act(btn) {
       await deleteDoc(doc(db, "movimenti", id)).catch(erroreScrittura);
       break;
     }
+    default:
+      if (action && action.startsWith("dir-")) diretta.azione(action);
   }
 }
 const mainEl = document.querySelector("main");
@@ -1283,6 +1294,7 @@ mainEl.addEventListener("keydown", e => {
   if (el.matches?.('[role="button"][data-action]')) { e.preventDefault(); act(el); }
 });
 mainEl.addEventListener("change", e => {
+  if (e.target.dataset.change === "dir-ingresso") { diretta.cambiaIngresso(e.target.value); return; }
   if (e.target.dataset.change === "strumento") {
     const m = state.membri.find(x => x.nome === e.target.dataset.nome);
     if (m) updateDoc(doc(db, "membri", m.id), { strumento: e.target.value }).catch(erroreScrittura);

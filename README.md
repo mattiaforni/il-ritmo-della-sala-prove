@@ -96,6 +96,7 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 | `canzoni` | `titolo`, `artista`, `ordine`, `spotifyUrl`, `creato` |
 | `tasks` | `canzoneId`, `titolo`, `assegnatari` (array di nomi), `fatto`, `fattoDa`, `fattoIl`, `creato` |
 | `membri` | `nome`, `creato` |
+| `diretta` | `stato`: `attiva`, `sessione`, `da`, `inizio`, `battito`; `ascolto-…`: `tipo`, `sessione`, `chi`, `offer`, `answer`, `creato` |
 
 ## Costi
 
@@ -112,6 +113,16 @@ L'interfaccia (`public/`) va online da sola a ogni merge su `main`. A ogni pubbl
 Le app aperte sui telefoni controllano `version.json` quando tornano in primo piano (e ogni 15 minuti): se la versione online è diversa compare la barra "È disponibile una versione nuova" con il bottone **Aggiorna**.
 
 Se una modifica richiede di ripulire dati salvati sui telefoni (chiavi di `localStorage`, accessi vecchi), aumentare `DATA_VERSION` in `public/app.js` e aggiungere la pulizia corrispondente in `MIGRAZIONI`: viene eseguita una volta sola su ogni telefono.
+
+## Diretta dalla sala
+
+In cima alla sezione **Audio**. Il computer della sala trasmette quello che entra dal mixer (lo stesso ingresso USB da cui registra GarageBand: macOS lo fa leggere a più app insieme); i telefoni ascoltano.
+
+- **Trasmettere:** dal computer della sala, Audio → *Avvia la diretta* → scegliere l'ingresso del mixer. La pagina va tenuta aperta finché si suona. Un indicatore mostra il livello del segnale e chi è in ascolto.
+- **Ascoltare:** dal telefono, Audio → *Ascolta*. Su Android l'audio continua di norma anche a schermo bloccato; su iPhone si ferma quando si blocca lo schermo o si cambia app (limite di iOS per WebRTC).
+- **Come funziona:** l'audio va dal computer al telefono direttamente (WebRTC, Opus stereo 128 kbps, ritardo sotto il secondo). Firestore, collezione `diretta`, serve solo a far incontrare i dispositivi: documento `stato` (chi trasmette, battito ogni minuto; senza battito da 3 minuti la diretta si considera chiusa) e un documento `ascolto-…` per ogni telefono. Nessun server in più, nessun costo.
+- **Fuori casa:** di solito funziona anche da un'altra rete grazie al server STUN di Google; con alcune reti mobili o router serve un server ponte (TURN), che non c'è.
+- **Regola del database:** la collezione `diretta` va aggiunta una volta alle regole Firestore (file `firestore.rules`, da copiare in Console Firebase → Firestore Database → Regole → Pubblica). Finché manca, la scheda della diretta lo segnala e il resto dell'app funziona come prima.
 
 ## Pubblicare le funzioni da GitHub
 

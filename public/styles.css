@@ -594,3 +594,29 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
 .spcard .sp-txt + .sp-actions { border-top: none; padding-top: 0; }
 .sp-meta { flex: 1 1 100%; font-size: 12px; color: var(--muted); }
 .sp-meta:empty { display: none; }
+
+/* ---------- diretta dalla sala ---------- */
+.dircard { border-left: 3px solid var(--muted); }
+.dircard.live { border-left-color: var(--rosso); }
+.dircard.spenta { background: transparent; border-style: dashed; border-left-style: solid; }
+.dircard.spenta .dir-txt { padding-top: 10px; }
+.dircard .dir-txt { font-size: 14px; color: var(--legno); margin: 0; padding: 0 14px 10px; }
+.dircard .dir-txt.small { font-size: 12.5px; color: var(--muted); }
+.dircard .dir-txt .ini { margin-left: 4px; }
+.onair {
+  font: 700 10.5px var(--sans); letter-spacing: .06em; text-transform: uppercase;
+  color: #fff; background: var(--rosso); border-radius: var(--r-tag); padding: 2px 6px;
+  align-self: center;
+}
+.dir-meter { height: 8px; margin: 2px 14px 12px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.dir-meter i { display: block; height: 100%; width: 0; background: var(--verde); transition: width .06s linear; }
+.dir-meter i.clip { background: var(--rosso); }
+.dir-lbl { display: block; font: 600 12px var(--sans); color: var(--muted); padding: 0 14px 10px; }
+.dir-lbl .field { margin-top: 4px; font-size: 14px; }
+.dir-actions { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 12px; }
+.bnav .tab.live::after {
+  content: ""; position: absolute; top: 6px; left: calc(50% + 10px);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--rosso);
+  box-shadow: 0 0 0 2px var(--carta);
+}
+@media (prefers-reduced-motion: reduce) { .dir-meter i { transition: none; } }
