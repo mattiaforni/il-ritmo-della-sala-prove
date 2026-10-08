@@ -283,11 +283,19 @@ function proposte(dati) {
 }
 
 // ---------- task aperti, per persona ----------
+// task con più persone: ognuno spunta la sua parte (campo fattiDa, come nell'app)
+const conParti = (t) => (t.assegnatari || []).length > 1 && Array.isArray(t.fattiDa);
+const parteFatta = (t, n) => (conParti(t) ? t.fattiDa.includes(n) : !!t.fatto);
+const taskFatta = (t) => (conParti(t) ? t.assegnatari.every(n => t.fattiDa.includes(n)) : !!t.fatto);
 function taskAperti(dati) {
   const ctx = contesto(dati);
-  const aperti = ctx.tasks.filter(t => !t.fatto).sort((a, b) => (a.creato || 0) - (b.creato || 0));
+  const aperti = ctx.tasks.filter(t => !taskFatta(t)).sort((a, b) => (a.creato || 0) - (b.creato || 0));
   if (!aperti.length) return "<b>Task aperti</b>\n\nNessun task aperto.";
-  const riga = (t) => `• ${esc(t.titolo)} — <i>${esc(ctx.nomeCanzone(t.canzoneId))}</i>`;
+  const quanti = (t) => {
+    const k = conParti(t) ? t.assegnatari.filter(n => t.fattiDa.includes(n)).length : 0;
+    return k ? ` · fatto da ${k} su ${t.assegnatari.length}` : "";
+  };
+  const riga = (t) => `• ${esc(t.titolo)} — <i>${esc(ctx.nomeCanzone(t.canzoneId))}</i>${quanti(t)}`;
   const gruppi = [];
   const diTutti = aperti.filter(t => ctx.chiTask(t.assegnatari) === "tutti");
   if (diTutti.length) gruppi.push(sezione(`Tutti (${diTutti.length})`, diTutti.map(riga)));
@@ -296,7 +304,7 @@ function taskAperti(dati) {
   const nomi = [...ctx.nomi];
   for (const t of resto) for (const n of t.assegnatari || []) if (n && !nomi.includes(n)) nomi.push(n);
   for (const n of nomi) {
-    const suoi = resto.filter(t => (t.assegnatari || []).includes(n));
+    const suoi = resto.filter(t => (t.assegnatari || []).includes(n) && !parteFatta(t, n));
     if (suoi.length) gruppi.push(sezione(`${esc(n)} (${suoi.length})`, suoi.map(riga)));
   }
   const nessuno = resto.filter(t => !(t.assegnatari || []).filter(Boolean).length);
