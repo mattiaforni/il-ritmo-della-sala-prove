@@ -6,7 +6,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, getFirestore,
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, orderBy, serverTimestamp, writeBatch
+  query, orderBy, serverTimestamp, writeBatch, arrayUnion, arrayRemove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "17";
+const APP_VERSION = "18";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -196,6 +196,16 @@ const isGenerale = (c) => c.id === GENERALE_ID || c.stato === "generale";
 const scaletta = () => state.canzoni.filter(c => !isGenerale(c) && c.stato !== "proposta");
 const proposte = () => state.canzoni.filter(c => c.stato === "proposta");
 const tasksOf = (id) => state.tasks.filter(t => t.canzoneId === id);
+// Task con più persone: ognuno spunta la sua parte (campo fattiDa, elenco di nomi);
+// la task è fatta quando l'hanno spuntata tutti. Task senza fattiDa (vecchie): vale "fatto".
+const assegnati = (t) => t.assegnatari || [];
+const multipla = (t) => assegnati(t).length > 1;
+function fattiDi(t) {
+  if (multipla(t) && Array.isArray(t.fattiDa)) return t.fattiDa.filter(n => assegnati(t).includes(n));
+  return t.fatto ? assegnati(t).slice() : [];
+}
+const taskFatta = (t) => multipla(t) ? assegnati(t).every(n => fattiDi(t).includes(n)) : !!t.fatto;
+const parteFatta = (t, nome) => multipla(t) ? fattiDi(t).includes(nome) : !!t.fatto;
 const recsOf = (id) => state.registrazioni.filter(r => r.canzoneId === id);
 const pct = (d, t) => t ? Math.round(d / t * 100) : 0;
 const songQuery = (c) => c.titolo + (c.artista ? " " + c.artista : "");
@@ -610,7 +620,7 @@ function renderScaletta() {
 function songCard(c, idx, tot) {
   const gen = isGenerale(c);
   const ts = tasksOf(c.id);
-  const done = ts.filter(t => t.fatto).length;
+  const done = ts.filter(taskFatta).length;
   const p = pct(done, ts.length);
   const pronta = !gen && ts.length > 0 && done === ts.length;
   const open = state.expanded.has(c.id);
@@ -628,13 +638,51 @@ function songCard(c, idx, tot) {
     ${open ? songBody(c, ts, idx, tot, gen) : ""}
   </article>`;
 }
-function songBody(c, ts, idx, tot, gen) {
-  const tasks = ts.map(t => `
+function taskRow(t) {
+  const del = `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button>`;
+  if (!multipla(t)) return `
     <div class="task${t.fatto ? " fatto" : ""}">
       <button class="chk" data-action="check" data-id="${t.id}" aria-label="${t.fatto ? "Segna da fare" : "Segna fatto"}">${t.fatto ? "✓" : ""}</button>
       <span><span class="tt">${esc(t.titolo)}</span>${t.fatto && t.fattoDa ? `<span class="by">fatto da ${esc(t.fattoDa)}</span>` : ""}</span>
-      <span class="task-side">${whoTags(t.assegnatari)}<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button></span>
-    </div>`).join("");
+      <span class="task-side">${whoTags(t.assegnatari)}${del}</span>
+    </div>`;
+  // più persone: la casella è la tua parte (se la task è anche tua), le sigle sono le parti di ciascuno
+  const fatti = fattiDi(t), tutta = taskFatta(t);
+  const mia = state.user && assegnati(t).includes(state.user);
+  const spunta = mia ? fatti.includes(state.user) : tutta;
+  const parti = assegnati(t).map(n => {
+    const on = fatti.includes(n), col = colorOf(n);
+    return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}" aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}">${esc(siglaOf(n))}</button>`;
+  }).join("");
+  return `
+    <div class="task multi${tutta ? " fatto" : ""}">
+      <button class="chk${spunta && !tutta ? " mia" : ""}" data-action="check" data-id="${t.id}" aria-label="${mia ? (spunta ? "Segna la mia parte da fare" : "Segna fatta la mia parte") : (tutta ? "Segna da fare per tutti" : "Segna fatto per tutti")}">${spunta ? "✓" : ""}</button>
+      <span><span class="tt">${esc(t.titolo)}</span><span class="parti">${parti}<span class="parti-n">${fatti.length}/${assegnati(t).length}</span></span></span>
+      <span class="task-side">${del}</span>
+    </div>`;
+}
+// segna la parte di una persona; la task diventa fatta quando l'hanno fatta tutti
+async function segnaParte(t, nome) {
+  const prima = fattiDi(t);
+  const fatto = !prima.includes(nome);
+  const dopo = fatto ? [...prima, nome] : prima.filter(n => n !== nome);
+  const tutta = assegnati(t).every(n => dopo.includes(n));
+  await updateDoc(doc(db, "tasks", t.id), {
+    // la prima volta (task vecchie) si scrive l'elenco intero, poi un nome alla volta: due spunte insieme non si perdono
+    fattiDa: Array.isArray(t.fattiDa) ? (fatto ? arrayUnion(nome) : arrayRemove(nome)) : dopo,
+    fatto: tutta, fattoDa: tutta ? (state.user || "") : "", fattoIl: tutta ? serverTimestamp() : null
+  }).catch(erroreScrittura);
+  if (tutta) maybeCelebrate(t.canzoneId, t.id);
+}
+async function segnaTutti(t, fatto) {
+  await updateDoc(doc(db, "tasks", t.id), {
+    fattiDa: fatto ? assegnati(t).slice() : [],
+    fatto, fattoDa: fatto ? (state.user || "") : "", fattoIl: fatto ? serverTimestamp() : null
+  }).catch(erroreScrittura);
+  if (fatto) maybeCelebrate(t.canzoneId, t.id);
+}
+function songBody(c, ts, idx, tot, gen) {
+  const tasks = ts.map(taskRow).join("");
   const sel = state.drafts[c.id] || new Set();
   const picks = state.membri.map(m => {
     const on = sel.has(m.nome), col = colorOf(m.nome);
@@ -943,7 +991,7 @@ function renderCassa() {
 function nomiInUso() {
   const uso = new Map();
   const add = (n, k) => { if (!n) return; const o = uso.get(n) || { voti: 0, task: 0, altro: 0 }; o[k]++; uso.set(n, o); };
-  state.tasks.forEach(t => { (t.assegnatari || []).forEach(n => add(n, "task")); add(t.fattoDa, "task"); });
+  state.tasks.forEach(t => { (t.assegnatari || []).forEach(n => add(n, "task")); add(t.fattoDa, "task"); (Array.isArray(t.fattiDa) ? t.fattiDa : []).forEach(n => add(n, "task")); });
   state.canzoni.forEach(c => { Object.keys(c.reazioni || {}).forEach(n => add(n, "voti")); add(c.propostaDa, "altro"); });
   state.registrazioni.forEach(r => add(r.caricatoDa, "altro"));
   state.movimenti.forEach(m => { add(m.chi, "altro"); add(m.registratoDa, "altro"); });
@@ -962,6 +1010,7 @@ function sostituisciNome(vecchio, nuovo) {
     const ass = t.assegnatari || [], upd = {};
     if (ass.includes(vecchio)) upd.assegnatari = [...new Set(ass.map(x => x === vecchio ? nuovo : x))];
     if (t.fattoDa === vecchio) upd.fattoDa = nuovo;
+    if (Array.isArray(t.fattiDa) && t.fattiDa.includes(vecchio)) upd.fattiDa = [...new Set(t.fattiDa.map(x => x === vecchio ? nuovo : x))];
     if (Object.keys(upd).length) { batch.update(doc(db, "tasks", t.id), upd); n++; }
   });
   state.canzoni.forEach(c => {
@@ -1009,14 +1058,14 @@ function renderPersonale() {
   }).join("")}</div>`;
 
   const mine = state.tasks.filter(t => (t.assegnatari || []).includes(nome) && state.canzoni.some(c => c.id === t.canzoneId));
-  const aperti = mine.filter(t => !t.fatto);
+  const aperti = mine.filter(t => !parteFatta(t, nome));
   const daFare = aperti.map(t => {
     const song = state.canzoni.find(c => c.id === t.canzoneId);
     const gen = song && isGenerale(song);
     return `
       <div class="ptask">
-        <button class="chk" data-action="check" data-id="${t.id}" aria-label="Segna fatto"></button>
-        <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}</span><span class="tt">${esc(t.titolo)}</span></span>
+        <button class="chk" data-action="check" data-id="${t.id}" data-nome="${esc(nome)}" aria-label="Segna fatto"></button>
+        <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}${multipla(t) ? (fattiDi(t).length ? ` · fatto da ${fattiDi(t).length} su ${assegnati(t).length}` : ` · con altri ${assegnati(t).length - 1}`) : ""}</span><span class="tt">${esc(t.titolo)}</span></span>
       </div>`;
   }).join("");
 
@@ -1070,7 +1119,7 @@ function renderPersonale() {
 
   view.innerHTML = `
     ${whoBar}
-    ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}. Task e voti restano firmati da te${meName ? `, ${esc(meName)}` : ""}.</p>`}
+    ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
     ${orfaniHtml}
     ${state.renaming === persona.id ? `
     <form class="rename-form" data-form="rename" data-id="${persona.id}">
@@ -1122,11 +1171,23 @@ async function act(btn) {
     case "check": {
       const t = state.tasks.find(x => x.id === id);
       if (!t) return;
+      if (multipla(t)) {
+        // dalla pagina personale: la parte di quella persona; altrimenti la tua, se la task è anche tua
+        const chi = btn.dataset.nome || (assegnati(t).includes(state.user) ? state.user : null);
+        if (chi) await segnaParte(t, chi);
+        else await segnaTutti(t, !taskFatta(t));
+        break;
+      }
       const fatto = !t.fatto;
       await updateDoc(doc(db, "tasks", id), {
         fatto, fattoDa: fatto ? (state.user || "") : "", fattoIl: fatto ? serverTimestamp() : null
       }).catch(erroreScrittura);
-      if (fatto) maybeCelebrate(t.canzoneId);
+      if (fatto) maybeCelebrate(t.canzoneId, t.id);
+      break;
+    }
+    case "parte": {
+      const t = state.tasks.find(x => x.id === id);
+      if (t && btn.dataset.nome) await segnaParte(t, btn.dataset.nome);
       break;
     }
     case "del-task":
@@ -1482,11 +1543,11 @@ function enrichSong(c) {
 }
 
 // ---------- piccoli premi ----------
-function maybeCelebrate(canzoneId) {
+function maybeCelebrate(canzoneId, appenaFatta) {
   const song = state.canzoni.find(c => c.id === canzoneId);
   if (!song || isGenerale(song)) return;
   const ts = tasksOf(canzoneId);
-  if (ts.length > 0 && ts.filter(t => !t.fatto).length <= 1) {
+  if (ts.length > 0 && ts.every(t => t.id === appenaFatta || taskFatta(t))) {
     setTimeout(() => toast(`★ "${song.titolo}" è pronta.`), 350);
   }
 }

@@ -620,3 +620,17 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
   box-shadow: 0 0 0 2px var(--carta);
 }
 @media (prefers-reduced-motion: reduce) { .dir-meter i { transition: none; } }
+
+/* ---------- task con più persone: ognuno spunta la sua parte ---------- */
+.parti { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+button.ini.parte {
+  width: 36px; height: 26px; font-size: 10px;
+  background: var(--carta); color: var(--muted); border: 1.5px dashed var(--c);
+}
+button.ini.parte.on { background: var(--c); color: #fff; border-style: solid; }
+button.ini.parte.on.light { color: var(--legno); }
+.parti-n { font-size: 11.5px; color: var(--muted); margin-left: 4px; }
+.chk.mia { background: var(--verde); border-color: var(--verde); opacity: .55; }
+.task.multi { align-items: start; }
+.task.multi .chk { margin-top: 1px; }
+.task.multi.fatto .parti { opacity: .7; }
