@@ -622,15 +622,24 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
 @media (prefers-reduced-motion: reduce) { .dir-meter i { transition: none; } }
 
 /* ---------- task con più persone: ognuno spunta la sua parte ---------- */
-.parti { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+/* sigla colorata = deve ancora farlo; grigia e barrata = fatto */
+.parti { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 7px; }
 button.ini.parte {
-  width: 36px; height: 26px; font-size: 10px;
-  background: var(--carta); color: var(--muted); border: 1.5px dashed var(--c);
+  width: 38px; height: 26px; font-size: 10px;
+  background: var(--c); color: #fff; border: 1px solid transparent;
 }
-button.ini.parte.on { background: var(--c); color: #fff; border-style: solid; }
-button.ini.parte.on.light { color: var(--legno); }
-.parti-n { font-size: 11.5px; color: var(--muted); margin-left: 4px; }
-.chk.mia { background: var(--verde); border-color: var(--verde); opacity: .55; }
+button.ini.parte.light { color: var(--legno); }
+button.ini.parte.on {
+  background: transparent; color: var(--muted); border-color: var(--rule);
+  text-decoration: line-through; text-decoration-thickness: 1.5px;
+}
+.pbox {
+  width: 22px; height: 22px;
+  border: 1.5px dashed var(--muted); border-radius: var(--r-tag);
+  display: grid; place-items: center;
+  font: 700 8.5px var(--sans); color: var(--muted); letter-spacing: -.02em;
+}
 .task.multi { align-items: start; }
-.task.multi .chk { margin-top: 1px; }
-.task.multi.fatto .parti { opacity: .7; }
+.task.multi .chk, .task.multi .pbox { margin-top: 1px; }
+.chk.stato { background: var(--verde); border-color: var(--verde); }
+.task.multi.fatto .parti { opacity: .75; }

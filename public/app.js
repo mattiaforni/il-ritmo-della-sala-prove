@@ -646,18 +646,20 @@ function taskRow(t) {
       <span><span class="tt">${esc(t.titolo)}</span>${t.fatto && t.fattoDa ? `<span class="by">fatto da ${esc(t.fattoDa)}</span>` : ""}</span>
       <span class="task-side">${whoTags(t.assegnatari)}${del}</span>
     </div>`;
-  // più persone: la casella è la tua parte (se la task è anche tua), le sigle sono le parti di ciascuno
+  // più persone: ogni sigla è la parte di una persona e si tocca per segnarla;
+  // colorata = da fare, grigia e barrata = fatto. A sinistra solo lo stato (non si tocca).
   const fatti = fattiDi(t), tutta = taskFatta(t);
-  const mia = state.user && assegnati(t).includes(state.user);
-  const spunta = mia ? fatti.includes(state.user) : tutta;
   const parti = assegnati(t).map(n => {
     const on = fatti.includes(n), col = colorOf(n);
-    return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}" aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}">${esc(siglaOf(n))}</button>`;
+    return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}" aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}" aria-label="${esc(n)}: ${on ? "fatto, tocca per segnare da fare" : "da fare, tocca per segnare fatto"}">${esc(siglaOf(n))}</button>`;
   }).join("");
+  const stato = tutta
+    ? `<span class="chk stato" aria-label="Fatto da tutti">✓</span>`
+    : `<span class="pbox" aria-label="Fatto da ${fatti.length} su ${assegnati(t).length}">${fatti.length}/${assegnati(t).length}</span>`;
   return `
     <div class="task multi${tutta ? " fatto" : ""}">
-      <button class="chk${spunta && !tutta ? " mia" : ""}" data-action="check" data-id="${t.id}" aria-label="${mia ? (spunta ? "Segna la mia parte da fare" : "Segna fatta la mia parte") : (tutta ? "Segna da fare per tutti" : "Segna fatto per tutti")}">${spunta ? "✓" : ""}</button>
-      <span><span class="tt">${esc(t.titolo)}</span><span class="parti">${parti}<span class="parti-n">${fatti.length}/${assegnati(t).length}</span></span></span>
+      ${stato}
+      <span><span class="tt">${esc(t.titolo)}</span><span class="parti">${parti}</span></span>
       <span class="task-side">${del}</span>
     </div>`;
 }
@@ -673,13 +675,6 @@ async function segnaParte(t, nome) {
     fatto: tutta, fattoDa: tutta ? (state.user || "") : "", fattoIl: tutta ? serverTimestamp() : null
   }).catch(erroreScrittura);
   if (tutta) maybeCelebrate(t.canzoneId, t.id);
-}
-async function segnaTutti(t, fatto) {
-  await updateDoc(doc(db, "tasks", t.id), {
-    fattiDa: fatto ? assegnati(t).slice() : [],
-    fatto, fattoDa: fatto ? (state.user || "") : "", fattoIl: fatto ? serverTimestamp() : null
-  }).catch(erroreScrittura);
-  if (fatto) maybeCelebrate(t.canzoneId, t.id);
 }
 function songBody(c, ts, idx, tot, gen) {
   const tasks = ts.map(taskRow).join("");
@@ -1172,10 +1167,9 @@ async function act(btn) {
       const t = state.tasks.find(x => x.id === id);
       if (!t) return;
       if (multipla(t)) {
-        // dalla pagina personale: la parte di quella persona; altrimenti la tua, se la task è anche tua
+        // dalla pagina personale: la parte di quella persona
         const chi = btn.dataset.nome || (assegnati(t).includes(state.user) ? state.user : null);
         if (chi) await segnaParte(t, chi);
-        else await segnaTutti(t, !taskFatta(t));
         break;
       }
       const fatto = !t.fatto;
