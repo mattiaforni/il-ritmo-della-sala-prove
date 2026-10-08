@@ -367,3 +367,10 @@ exports.spotifyCallback = onRequest({ region: REGIONE, maxInstances: 1 }, async 
     return torna("errore", e.message);
   }
 });
+
+// ============================================================
+// Bot Telegram della band (riepiloghi nel gruppo): vedi telegram.js
+// ============================================================
+const telegram = require("./telegram");
+exports.telegram = telegram.telegram;
+exports.telegramOgniOra = telegram.telegramOgniOra;
