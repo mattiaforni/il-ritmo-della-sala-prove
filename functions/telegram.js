@@ -42,7 +42,8 @@ const COMANDI = [
   { command: "task", description: "Task aperti, per persona" },
   { command: "cassa", description: "Saldo e ultimi movimenti" },
   { command: "menu", description: "Mostra i pulsanti" },
-  { command: "automatico", description: "Riepilogo automatico, es. /automatico 2 19 oppure off" }
+  { command: "automatico", description: "Riepilogo automatico, es. /automatico 2 19 oppure off" },
+  { command: "vai", description: "Il bot risponde /vai" }
 ];
 
 const db = () => getFirestore();
@@ -92,7 +93,8 @@ async function invia(chatId, testo, { menu = true } = {}) {
 // webhook e comandi: li imposta solo se mancano o se il token è cambiato
 async function configura({ forza = false } = {}) {
   const st = (await refStato().get()).data() || {};
-  const firma = impronta(segreto()).slice(0, 16);
+  // la firma cambia anche quando cambia l'elenco dei comandi: così la funzione oraria lo ripubblica da sola
+  const firma = impronta(segreto() + JSON.stringify(COMANDI)).slice(0, 16);
   const info = await tg("getWebhookInfo");
   if (!forza && info.url === WEBHOOK_URL && st.firma === firma && st.bot) return st;
   const me = await tg("getMe");
@@ -310,6 +312,7 @@ async function gestisci(u) {
   }
   console.log(`[telegram] comando /${cmd}`);
   if (cmd === "automatico") return automatico(chat.id, arg, st);
+  if (cmd === "vai") return invia(chat.id, "/vai", { menu: false });
   if (!AZIONI[cmd]) return; // comandi di altri bot o sconosciuti: silenzio
   return invia(chat.id, await risposta(AZIONI[cmd], arg, st));
 }
