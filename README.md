@@ -97,6 +97,7 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 | `tasks` | `canzoneId`, `titolo`, `assegnatari` (array di nomi), `fatto`, `fattoDa`, `fattoIl`, `creato` |
 | `membri` | `nome`, `creato` |
 | `diretta` | `stato`: `attiva`, `sessione`, `da`, `inizio`, `battito`; `ascolto-…`: `tipo`, `sessione`, `chi`, `offer`, `answer`, `creato` |
+| `privato` | solo per le funzioni, i telefoni non la leggono: `spotify` (playlist), `telegram` (gruppo e impostazioni del bot) con la sottocollezione `eventi`, `telegram-foto` (ultima fotografia del database) |
 
 ## Costi
 
@@ -137,10 +138,33 @@ Il workflow usa l'account di servizio `github-action-…` che pubblica già il s
 - Secret Manager Admin (`roles/secretmanager.admin`)
 - Service Usage Consumer (`roles/serviceusage.serviceUsageConsumer`)
 - Firebase Viewer (`roles/firebase.viewer`)
+- Cloud Scheduler Admin (`roles/cloudscheduler.admin`), per la funzione oraria del bot Telegram; serve anche l'API Cloud Scheduler attiva nel progetto
 
 Funzioni presenti:
 
 - `spotifyLink` — cerca con Gemini il link Spotify o Songsterr di una canzone (secret `GEMINI_API_KEY`).
 - `playlist` e `spotifyCallback` — collegano l'account Spotify e tengono aggiornate le playlist "Scaletta" e "Proposte". Serve il Client ID dell'app Spotify in `functions/.env` (`SPOTIFY_CLIENT_ID=...`, non è un segreto) e, nell'app Spotify, il Redirect URI `https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/spotifyCallback`.
 
+- `telegram` e `telegramOgniOra` — il bot Telegram della band (secret `TELEGRAM_TOKEN`), vedi sotto.
+
 Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
+
+## Bot Telegram
+
+Nel gruppo Telegram della band riassume cosa si muove nell'app, per chi non la apre spesso. Codice in `functions/telegram.js` (Telegram e database) e `functions/telegram-testi.js` (registro e testi, funzioni pure).
+
+- **Pulsanti e comandi:** Novità 2 o 7 giorni (`/novita 3` per un numero a scelta, fino a 60), Scaletta, Proposte e voti (con chi deve ancora votare), Task aperti per persona, Cassa.
+- **Riepilogo automatico:** ogni 2 giorni alle 19, solo se si è mosso qualcosa. Si cambia dal gruppo con `/automatico 3 21` (ogni 3 giorni alle 21) o `/automatico off`.
+- **Registro:** voti, passaggi in scaletta, modifiche ai setup ed eliminazioni non hanno una data nel database. La funzione `telegramOgniOra` confronta ogni ora il database con una fotografia salvata e registra le differenze in `privato/telegram/eventi` (conservate 120 giorni). Canzoni, task, registrazioni, movimenti e persone nuove si leggono invece dal loro campo `creato` (e `fattoIl` per i task). L'app non cambia.
+- **Chi lo usa:** risponde solo nel gruppo collegato con `/collega` (il primo e unico) e, in privato, a chi è membro di quel gruppo. Aggiunto ad altri gruppi, esce. Telegram firma ogni chiamata al webhook con una chiave ricavata dal token.
+
+Configurazione, una volta:
+
+1. Su Telegram, @BotFather → `/newbot` → nome e username del bot → copiare il token.
+2. Google Cloud Console → Security → Secret Manager → *Create secret*: nome `TELEGRAM_TOKEN`, valore il token. Va fatto **prima** di pubblicare le funzioni: senza il secret la pubblicazione si ferma.
+3. Google Cloud Console → API → abilitare *Cloud Scheduler API*; IAM → all'account `github-action-…` aggiungere *Cloud Scheduler Admin*.
+4. Pubblicare le funzioni (merge su `main`). Poi aprire una volta https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/telegram nel browser: imposta il webhook (lo farebbe comunque la funzione oraria entro un'ora).
+5. Aggiungere il bot al gruppo della band e scrivere `/collega`.
+6. Da @BotFather → `/mybots` → il bot → *Bot Settings* → *Allow Groups?* → *Turn groups off*: nessun altro potrà aggiungerlo a un gruppo.
+
+Per un bot nuovo (token cambiato) basta aggiornare il secret con una nuova versione e ripubblicare: il webhook si reimposta da solo.
