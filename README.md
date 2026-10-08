@@ -154,6 +154,7 @@ Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
 Nel gruppo Telegram della band riassume cosa si muove nell'app, per chi non la apre spesso. Codice in `functions/telegram.js` (Telegram e database) e `functions/telegram-testi.js` (registro e testi, funzioni pure).
 
 - **Pulsanti e comandi:** Novità 2 o 7 giorni (`/novita 3` per un numero a scelta, fino a 60), Scaletta, Proposte e voti (con chi deve ancora votare), Task aperti per persona, Cassa.
+- **`/vai`:** il bot risponde `/vai`.
 - **Riepilogo automatico:** ogni 2 giorni alle 19, solo se si è mosso qualcosa. Si cambia dal gruppo con `/automatico 3 21` (ogni 3 giorni alle 21) o `/automatico off`.
 - **Registro:** voti, passaggi in scaletta, modifiche ai setup ed eliminazioni non hanno una data nel database. La funzione `telegramOgniOra` confronta ogni ora il database con una fotografia salvata e registra le differenze in `privato/telegram/eventi` (conservate 120 giorni). Canzoni, task, registrazioni, movimenti e persone nuove si leggono invece dal loro campo `creato` (e `fattoIl` per i task). L'app non cambia.
 - **Chi lo usa:** risponde solo nel gruppo collegato con `/collega` (il primo e unico) e, in privato, a chi è membro di quel gruppo. Aggiunto ad altri gruppi, esce. Telegram firma ogni chiamata al webhook con una chiave ricavata dal token.
@@ -167,4 +168,4 @@ Configurazione, una volta:
 5. Aggiungere il bot al gruppo della band e scrivere `/collega`.
 6. Da @BotFather → `/mybots` → il bot → *Bot Settings* → *Allow Groups?* → *Turn groups off*: nessun altro potrà aggiungerlo a un gruppo.
 
-Per un bot nuovo (token cambiato) basta aggiornare il secret con una nuova versione e ripubblicare: il webhook si reimposta da solo.
+Per un bot nuovo (token cambiato) basta aggiornare il secret con una nuova versione e ripubblicare: il webhook si reimposta da solo. Anche l'elenco dei comandi che Telegram suggerisce scrivendo `/` si aggiorna da solo entro un'ora quando cambia nel codice (o subito riaprendo il link del passo 4); le app Telegram possono mostrarlo solo dopo essere state chiuse e riaperte.
