@@ -153,7 +153,8 @@ Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
 
 Nel gruppo Telegram della band riassume cosa si muove nell'app, per chi non la apre spesso. Codice in `functions/telegram.js` (Telegram e database) e `functions/telegram-testi.js` (registro e testi, funzioni pure).
 
-- **Pulsanti e comandi:** Novità 2 o 7 giorni (`/novita 3` per un numero a scelta, fino a 60), Scaletta, Proposte e voti (con chi deve ancora votare), Task aperti per persona, Cassa.
+- **Pulsanti** sotto ogni messaggio: Novità 2 giorni, Novità 7 giorni, Apri l'app.
+- **Comandi:** `/novita 3` (numero di giorni a scelta, fino a 60), `/scaletta`, `/proposte` (con chi deve ancora votare), `/task` (task aperti per persona), `/cassa`, `/menu`.
 - **`/vai`:** il bot risponde `/vai`.
 - **Riepilogo automatico:** ogni 2 giorni alle 19, solo se si è mosso qualcosa. Si cambia dal gruppo con `/automatico 3 21` (ogni 3 giorni alle 21) o `/automatico off`.
 - **Registro:** voti, passaggi in scaletta, modifiche ai setup ed eliminazioni non hanno una data nel database. La funzione `telegramOgniOra` confronta ogni ora il database con una fotografia salvata e registra le differenze in `privato/telegram/eventi` (conservate 120 giorni). Canzoni, task, registrazioni, movimenti e persone nuove si leggono invece dal loro campo `creato` (e `fattoIl` per i task). L'app non cambia.

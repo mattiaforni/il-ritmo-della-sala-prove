@@ -32,9 +32,9 @@ const durata = (sec) => (sec > 0 ? `${Math.floor(sec / 60)}:${String(Math.round(
 
 const MENU = {
   inline_keyboard: [
+    // pochi pulsanti, scelta di Mattia; scaletta, proposte, task e cassa restano come comandi
+    // (e i pulsanti dei messaggi già inviati continuano a funzionare)
     [{ text: "Novità 2 giorni", callback_data: "nov:2" }, { text: "Novità 7 giorni", callback_data: "nov:7" }],
-    [{ text: "Scaletta", callback_data: "scaletta" }, { text: "Proposte e voti", callback_data: "proposte" }],
-    [{ text: "Task aperti", callback_data: "task" }, { text: "Cassa", callback_data: "cassa" }],
     [{ text: "Apri l'app", url: APP_URL }]
   ]
 };
