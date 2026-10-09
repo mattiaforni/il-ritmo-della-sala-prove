@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "19";
+const APP_VERSION = "20";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -698,7 +698,7 @@ function songBody(c, ts, idx, tot, gen) {
       <div class="actions">
         <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx === 0 ? "disabled" : ""} aria-label="Sposta su">↑</button>
         <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx === tot - 1 ? "disabled" : ""} aria-label="Sposta giù">↓</button>
-        <button class="btn quiet" data-action="link-edit" data-id="${c.id}">Link</button>
+        <button class="btn quiet" data-action="link-edit" data-id="${c.id}">Modifica</button>
         <span class="sp"></span>
         <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone">✕</button>
       </div>`}
@@ -739,14 +739,17 @@ function recsBlock(c) {
 }
 function linkBlock(c) {
   if (state.linkEdit !== c.id) return "";
+  // si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo (niente link da incollare)
   return `
     <form class="link-form" data-form="links" data-song="${c.id}">
-      <label>Link Spotify della canzone
-        <input class="field" name="spotify" data-keep="link-sp-${c.id}" value="${esc(c.spotifyUrl || "")}" placeholder="https://open.spotify.com/track/…" autocomplete="off" inputmode="url"></label>
+      <label>Titolo
+        <input class="field" name="titolo" data-keep="ed-tit-${c.id}" value="${esc(c.titolo || "")}" maxlength="80" autocomplete="off" required></label>
+      <label>Artista
+        <input class="field" name="artista" data-keep="ed-art-${c.id}" value="${esc(c.artista || "")}" maxlength="60" autocomplete="off"></label>
       <label>Link Songsterr della canzone
         <input class="field" name="songsterr" data-keep="link-ss-${c.id}" value="${esc(c.songsterrUrl || "")}" placeholder="https://www.songsterr.com/a/wsa/…" autocomplete="off" inputmode="url"></label>
-      <p class="hint">Dall'app Spotify o Songsterr: Condividi → Copia link, poi incolla qui. Lascia vuoto per usare la ricerca.</p>
-      <div class="ed"><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva link</button></div>
+      <p class="hint">Se correggi titolo o artista, il brano su Spotify si cerca di nuovo. Se il brano è sbagliato ma il testo è giusto, tocca «Cerca di nuovo».</p>
+      <div class="ed"><button type="submit" class="btn quiet" name="cerca" value="1" title="Cerca di nuovo il brano su Spotify">Cerca di nuovo</button><span class="sp"></span><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
     </form>`;
 }
 function addSongBlock(where, label, cta) {
@@ -789,7 +792,7 @@ function renderProposte() {
         <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">👍 ${su.length}</button>
         <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">👎 ${giu.length}</button>
         <span class="sp"></span>
-        <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">Link</button>
+        <button class="x" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica">✎</button>
         <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">↑ In scaletta</button>
         <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>
       </div>
@@ -1450,18 +1453,39 @@ mainEl.addEventListener("submit", async e => {
 
   if (kind === "links") {
     const song = form.dataset.song;
-    const spIn = form.spotify.value.trim(), ssIn = form.songsterr.value.trim();
-    const sp = spIn ? (spIn.match(SPOTIFY_RE) || [null])[0] : "";
+    const c = state.canzoni.find(x => x.id === song);
+    if (!c) return;
+    const titolo = form.titolo.value.trim().replace(/\s+/g, " "), artista = form.artista.value.trim().replace(/\s+/g, " ");
+    if (!titolo) { toast("Il titolo non può essere vuoto."); return; }
+    const ssIn = form.songsterr.value.trim();
     const ss = ssIn ? (ssIn.match(SONGSTERR_RE) || [null])[0] : "";
-    if (sp === null) { toast("Il link Spotify deve essere quello di un brano (open.spotify.com/track/…)."); return; }
     if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
-    form.spotify.value = ""; form.songsterr.value = "";
+    const cerca = e.submitter && e.submitter.name === "cerca";
+    const testoCambiato = titolo !== (c.titolo || "") || artista !== (c.artista || "");
+    // si cerca di nuovo se lo si chiede, o se il testo è cambiato e il link era stato trovato in automatico
+    const ricerca = cerca || (testoCambiato && c.spotifyAuto !== false) || !c.spotifyUrl;
+    const upd = { titolo, artista, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" };
+    if (ricerca) { upd.spotifyUrl = ""; upd.spotifyAuto = null; }
+    form.songsterr.value = "";
     state.linkEdit = null;
-    // un link salvato a mano non è più "trovato in automatico"
-    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, spotifyAuto: false, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" }).catch(erroreScrittura);
-    toast("Link salvati.");
-    playlistDaAggiornare();
+    const ok = await scrivi(updateDoc(doc(db, "canzoni", song), upd).then(() => true));
     render();
+    if (!ok) return;
+    if (!ricerca) { toast("Salvato."); playlistDaAggiornare(); return; }
+    if (playlistInfo()?.scaletta) {
+      // con Spotify collegato la ricerca la fa la funzione delle playlist: subito, per dire com'è andata
+      toast(`Salvato. Cerco "${titolo}" su Spotify…`);
+      try {
+        const r = await chiamaPlaylist("aggiorna");
+        if ((r.trovate || []).includes(titolo)) toast(`Trovato su Spotify: "${titolo}".`);
+        else if ((r.senza || []).includes(titolo)) toast("Non trovato su Spotify: controlla titolo e artista.");
+        else toast("Salvato.");
+      } catch (err) { toast("Salvato. La ricerca su Spotify non è riuscita: " + err.message); }
+    } else {
+      // senza Spotify collegato il link lo cerca Gemini, come quando si aggiunge una canzone
+      toast("Salvato.");
+      enrichLink(song, titolo, artista, "spotify");
+    }
   }
 
   if (kind === "mov") {
