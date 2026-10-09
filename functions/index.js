@@ -219,16 +219,55 @@ async function accessToken(dati) {
   return dati.access;
 }
 
-async function cercaBrano(token, c) {
-  const prove = [];
-  if (c.artista) prove.push(`track:${c.titolo} artist:${c.artista}`);
-  prove.push(`${c.titolo}${c.artista ? " " + c.artista : ""}`);
-  for (const q of prove) {
-    const d = await api(token, "GET", `/search?type=track&limit=1&q=${encodeURIComponent(q)}`);
-    const t = d.tracks && d.tracks.items && d.tracks.items[0];
-    if (t && t.external_urls && t.external_urls.spotify) return t.external_urls.spotify;
+// Ricerca del brano su Spotify: si prova in più modi e si accetta solo un risultato
+// che somiglia davvero a titolo e artista (tollera piccoli errori di battitura).
+// Se niente somiglia abbastanza si lascia la canzone senza link: meglio vuoto che sbagliato.
+const pulisci = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/\(.*?\)|\[.*?\]/g, " ").replace(/\s-\s.*$/, " ")
+  .replace(/&/g, " and ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+function distanza(a, b) {
+  const v = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prec = v[0]; v[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const t = v[j];
+      v[j] = Math.min(v[j] + 1, v[j - 1] + 1, prec + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prec = t;
+    }
   }
-  return null;
+  return v[b.length];
+}
+function somiglianza(a, b) {
+  a = pulisci(a); b = pulisci(b);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if ((a.length >= 4 && b.startsWith(a)) || (b.length >= 4 && a.startsWith(b))) return 0.9;
+  return 1 - distanza(a, b) / Math.max(a.length, b.length);
+}
+const SOGLIA_TITOLO = 0.75, SOGLIA_ARTISTA = 0.6;
+function punteggio(c, t) {
+  const st = somiglianza(c.titolo, t.name);
+  if (st < SOGLIA_TITOLO) return 0;
+  if (!c.artista) return st;
+  const sa = Math.max(0, ...(t.artists || []).map(a => somiglianza(c.artista, a.name)));
+  if (sa < SOGLIA_ARTISTA) return 0;
+  return st * 0.6 + sa * 0.4;
+}
+async function cercaBrano(token, c) {
+  const prove = c.artista
+    ? [`track:${c.titolo} artist:${c.artista}`, `${c.titolo} artist:${c.artista}`, `${c.titolo} ${c.artista}`]
+    : [`track:${c.titolo}`, c.titolo];
+  let migliore = null, best = 0;
+  for (const q of prove) {
+    const d = await api(token, "GET", `/search?type=track&limit=10&q=${encodeURIComponent(q)}`);
+    for (const t of (d.tracks && d.tracks.items) || []) {
+      const p = punteggio(c, t);
+      if (p > best && t.external_urls && t.external_urls.spotify) { best = p; migliore = t; }
+    }
+    if (best >= 0.95) break;
+  }
+  if (!migliore) console.log(`[playlist] nessun brano abbastanza simile a "${c.titolo}" (${c.artista || "senza artista"})`);
+  return migliore ? migliore.external_urls.spotify : null;
 }
 
 const voti = (c) => Object.values(c.reazioni || {}).filter(v => v === "up").length;
@@ -262,7 +301,7 @@ async function sincronizza({ forza = false } = {}) {
     if (!m && c.titolo) {
       const url = await cercaBrano(token, c).catch(e => { console.error(`[playlist] ricerca "${c.titolo}": ${e.message}`); return null; });
       if (url) {
-        await db().doc(`canzoni/${c.id}`).update({ spotifyUrl: url });
+        await db().doc(`canzoni/${c.id}`).update({ spotifyUrl: url, spotifyAuto: true });
         trovate.push(c.titolo);
         m = url.match(TRACK_RE);
       }
