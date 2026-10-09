@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "21";
+const APP_VERSION = "22";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -808,7 +808,7 @@ function renderProposte() {
         ${suSolo.length ? `<span class="vg"><span class="vl" aria-label="Mi piace">👍</span>${suSolo.map(iniTag).join("")}</span>` : ""}
         ${giuSolo.length ? `<span class="vg"><span class="vl" aria-label="Non mi piace">👎</span>${giuSolo.map(iniTag).join("")}</span>` : ""}
         ${!su.length && !giu.length ? `<span class="none">Nessun voto ancora.</span>` : ""}
-        ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom">${iniTag(n)}<span class="vl">${r[n] === "down" ? "👎" : "👍"}</span><span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
+        ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom"><span class="vl" aria-label="${r[n] === "down" ? "Non mi piace" : "Mi piace"}">${r[n] === "down" ? "👎" : "👍"}</span>${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
       </div>`;
     return `
     <article class="card">

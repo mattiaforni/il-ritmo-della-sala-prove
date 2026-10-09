@@ -2,6 +2,12 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "22", "data": "2026-10-09", "titolo": "Voti più leggibili",
+      "punti": [
+        "Toccando una proposta, il pollice è sempre all'inizio della riga, anche accanto ai commenti."
+      ]
+    },
+    {
       "versione": "21", "data": "2026-10-09", "titolo": "Commenti ai voti",
       "punti": [
         "Votando 👎 si scrive in una riga il perché (obbligatorio); con 👍 il commento è facoltativo.",
