@@ -658,7 +658,8 @@ button.ini.parte.on {
 .vcomm .field { flex: 1; min-width: 0; font-size: 14px; }
 .vcomm.giu .field { border-color: var(--rosso); }
 .vcom-list { flex-basis: 100%; display: grid; gap: 6px; padding-top: 2px; }
-.vcom { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: start; font-size: 13px; }
+.vcom { display: grid; grid-template-columns: auto auto 1fr; gap: 6px 7px; align-items: start; font-size: 13px; }
 .vcom .vl { margin: 0; line-height: 22px; }
+.vcom .vcom-t { margin-left: 3px; }
 .vcom-t { line-height: 1.4; padding-top: 2px; overflow-wrap: anywhere; }
 .ncom { color: var(--muted); }
