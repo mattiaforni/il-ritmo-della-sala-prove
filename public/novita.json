@@ -1,0 +1,80 @@
+{
+  "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
+  "voci": [
+    {
+      "versione": "21", "data": "2026-10-09", "titolo": "Commenti ai voti",
+      "punti": [
+        "Votando 👎 si scrive in una riga il perché (obbligatorio); con 👍 il commento è facoltativo.",
+        "I commenti si leggono toccando la proposta, accanto a chi ha votato.",
+        "Nelle proposte la matita per modificare è un'icona piena."
+      ]
+    },
+    {
+      "versione": "20", "data": "2026-10-09", "titolo": "Correggere titolo e artista",
+      "punti": [
+        "Con «Modifica» (in scaletta) o la matita (nelle proposte) si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo.",
+        "«Cerca di nuovo» rifà la ricerca se il brano trovato è sbagliato.",
+        "La ricerca su Spotify accetta solo brani che somigliano davvero a titolo e artista: meglio nessun link che un brano a caso."
+      ]
+    },
+    {
+      "versione": "18", "data": "2026-10-08", "titolo": "Task spuntati uno per uno",
+      "punti": [
+        "Nei task assegnati a più persone ognuno spunta la sua parte: sigla colorata = deve ancora farlo, grigia e barrata = fatto.",
+        "Il task è fatto quando l'hanno fatto tutti."
+      ]
+    },
+    {
+      "versione": null, "data": "2026-10-08", "titolo": "Bot Telegram",
+      "punti": [
+        "Nel gruppo della band arrivano i riepiloghi di cosa si muove nell'app; con i comandi si vedono scaletta, proposte, task e cassa."
+      ]
+    },
+    {
+      "versione": "17", "data": "2026-10-07", "titolo": "Diretta dalla sala",
+      "punti": [
+        "Dal computer della sala si trasmette l'audio del mixer; dai telefoni si ascolta in diretta, dalla scheda in cima ad Audio."
+      ]
+    },
+    {
+      "versione": "16", "data": "2026-10-05", "titolo": "Tablature",
+      "punti": [
+        "Il link a Songsterr si incolla a mano e apre l'app sulla canzone; senza link l'icona apre la ricerca su Songsterr."
+      ]
+    },
+    {
+      "versione": "14", "data": "2026-10-05", "titolo": "Brani dentro la playlist",
+      "punti": [
+        "Toccando l'icona Spotify di una canzone il brano parte dentro la playlist della scaletta (o delle proposte) e poi continua con i successivi."
+      ]
+    },
+    {
+      "versione": "13", "data": "2026-10-04", "titolo": "Playlist Spotify",
+      "punti": [
+        "Due playlist pubbliche, Scaletta e Proposte, che si aggiornano da sole quando cambia qualcosa nell'app.",
+        "Icona ufficiale di Spotify."
+      ]
+    },
+    {
+      "versione": "12", "data": "2026-10-04", "titolo": "Rinomina",
+      "punti": [
+        "Si può cambiare il nome di una persona: voti, task e spese la seguono.",
+        "«Nomi da sistemare» unisce un vecchio nome alla persona giusta."
+      ]
+    },
+    {
+      "versione": "9–11", "data": "2026-10-04", "titolo": "Più affidabile",
+      "punti": [
+        "Salvataggi più sicuri su iPhone, con un messaggio se qualcosa non va.",
+        "Su Android viene sempre chiesta la password della band.",
+        "Quando esce una versione nuova compare la barra «Aggiorna»."
+      ]
+    },
+    {
+      "versione": "1–8", "data": "2026-10-02", "titolo": "Le basi",
+      "punti": [
+        "Scaletta con task e setup per strumento, proposte con voti, registrazioni, cassa e pagina personale."
+      ]
+    }
+  ]
+}

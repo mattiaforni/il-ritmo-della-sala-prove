@@ -41,6 +41,7 @@ const COMANDI = [
   { command: "proposte", description: "Proposte, voti e chi deve ancora votare" },
   { command: "task", description: "Task aperti, per persona" },
   { command: "cassa", description: "Saldo e ultimi movimenti" },
+  { command: "aggiornamenti", description: "Cosa c'è di nuovo nell'app" },
   { command: "menu", description: "Mostra i pulsanti" },
   { command: "automatico", description: "Riepilogo automatico, es. /automatico 2 19 oppure off" },
   { command: "vai", description: "Il bot risponde /vai" }
@@ -156,6 +157,19 @@ async function pulisciEventi() {
   return vecchi.size;
 }
 
+// novità dell'app: public/novita.json, pubblicato insieme all'app (null se non si riesce a leggerlo)
+async function leggiNovitaApp() {
+  try {
+    const r = await fetch(`${T.APP_URL}/novita.json?t=${Date.now()}`, { headers: { "Cache-Control": "no-cache" } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    return Array.isArray(d.voci) ? d.voci : null;
+  } catch (e) {
+    console.error(`[telegram] novità dell'app: ${e.message}`);
+    return null;
+  }
+}
+
 // ---------- risposte ----------
 async function testoNovita(giorni, st) {
   const a = Date.now();
@@ -163,6 +177,7 @@ async function testoNovita(giorni, st) {
   const dati = await leggiDati();
   await aggiornaRegistro(dati); // così compaiono anche i voti dell'ultima ora
   dati.eventi = await leggiEventi(da);
+  dati.app = await leggiNovitaApp();
   const registroDa = millis(st.registroDa) || millis(((await refStato().get()).data() || {}).registroDa);
   return T.novita(dati, { da, a, titolo: T.titoloNovita(giorni), registroDa: registroDa || null }).testo;
 }
@@ -178,6 +193,7 @@ async function risposta(azione, arg, st) {
     case "proposte": return T.proposte(await leggiDati());
     case "task": return T.taskAperti(await leggiDati());
     case "cassa": return T.cassa(await leggiDati());
+    case "aggiornamenti": return T.aggiornamentiApp(await leggiNovitaApp(), arg || 3);
     default: return T.aiuto({ ...PREDEFINITI, ...st });
   }
 }
@@ -186,6 +202,7 @@ const AZIONI = {
   novita: "novita", "novità": "novita", nov: "novita", news: "novita",
   scaletta: "scaletta", proposte: "proposte", voti: "proposte",
   task: "task", tasks: "task", cassa: "cassa",
+  aggiornamenti: "aggiornamenti", app: "aggiornamenti", versioni: "aggiornamenti", sviluppi: "aggiornamenti",
   menu: "menu", start: "menu", aiuto: "menu", help: "menu"
 };
 
@@ -328,6 +345,7 @@ async function riepilogoAutomatico(dati, adesso) {
   // il periodo arriva fino a questo momento, così entrano anche le modifiche appena registrate
   const fine = Math.max(adesso, Date.now());
   dati.eventi = await leggiEventi(da);
+  dati.app = await leggiNovitaApp();
   const r = T.novita(dati, { da, a: fine, titolo: `Riepilogo dal ${T.giorno(da)}`, registroDa: millis(st.registroDa) || null });
   // prima si segna, poi si manda: un errore non deve produrre un doppio invio
   await refStato().set({ ultimoAuto: Timestamp.fromMillis(fine) }, { merge: true });
@@ -389,4 +407,4 @@ exports.telegramOgniOra = onSchedule(
 );
 
 // per le prove
-exports._interni = { gestisci, riepilogoAutomatico, aggiornaRegistro, leggiDati, segreto, WEBHOOK_URL };
+exports._interni = { gestisci, riepilogoAutomatico, aggiornaRegistro, leggiDati, segreto, WEBHOOK_URL, leggiNovitaApp };
