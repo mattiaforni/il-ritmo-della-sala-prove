@@ -647,3 +647,4 @@ button.ini.parte.on {
 /* modulo dei link dentro la scheda di una proposta */
 .prop-link { padding: 0 14px 12px; }
 .prop-link .link-form { margin-top: 0; }
+.link-form .ed { flex-wrap: wrap; }
