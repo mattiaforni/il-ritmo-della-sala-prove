@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "20";
+const APP_VERSION = "21";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -663,6 +663,15 @@ function taskRow(t) {
       <span class="task-side">${del}</span>
     </div>`;
 }
+// salva voto e commento di chi usa l'app (voto null = toglie il voto e il commento)
+async function salvaVoto(c, voto, commento) {
+  const reazioni = { ...(c.reazioni || {}) }, commenti = { ...(c.commenti || {}) };
+  if (voto) reazioni[state.user] = voto; else delete reazioni[state.user];
+  const t = String(commento || "").trim().slice(0, 100);
+  if (voto && t) commenti[state.user] = t; else delete commenti[state.user];
+  await updateDoc(doc(db, "canzoni", c.id), { reazioni, commenti }).catch(erroreScrittura);
+  playlistDaAggiornare();
+}
 // segna la parte di una persona; la task diventa fatta quando l'hanno fatta tutti
 async function segnaParte(t, nome) {
   const prima = fattiDi(t);
@@ -765,6 +774,23 @@ function addSongBlock(where, label, cta) {
 }
 
 // ---------- proposte ----------
+// commenti ai voti: una riga, obbligatoria per 👎 e facoltativa per 👍 (campo commenti: nome → testo)
+const commentiDi = (c) => {
+  const r = c.reazioni || {}, m = c.commenti || {};
+  return Object.keys(m).filter(n => r[n] && String(m[n] || "").trim()).map(n => [n, String(m[n]).trim()]);
+};
+function commentoForm(c) {
+  const cv = state.commentoVoto;
+  if (!cv || cv.id !== c.id) return "";
+  const giu = cv.voto === "down";
+  const att = ((c.commenti || {})[state.user] || "");
+  return `
+    <form class="vcomm${giu ? " giu" : ""}" data-form="commento" data-id="${c.id}" data-voto="${cv.voto}">
+      <input class="field" name="testo" data-keep="vc-${c.id}" value="${esc(att)}" maxlength="100" autocomplete="off" placeholder="${giu ? "Perché no? (obbligatorio)" : "Un commento? (facoltativo)"}"${giu ? " required" : ""}>
+      <button class="btn ${giu ? "fill" : "quiet"}" type="submit">${giu ? "Vota 👎" : "Salva"}</button>
+      <button type="button" class="x" data-action="commento-chiudi" data-id="${c.id}" aria-label="${giu ? "Annulla il voto" : "Chiudi"}">✕</button>
+    </form>`;
+}
 function renderProposte() {
   const lista = proposte();
   const cards = lista.map(c => {
@@ -773,11 +799,16 @@ function renderProposte() {
     const giu = Object.keys(r).filter(n => r[n] === "down");
     const mia = state.user ? r[state.user] : null;
     const open = state.votersOpen.has(c.id);
+    const com = commentiDi(c);
+    // chi ha commentato compare con il suo commento, gli altri solo con la sigla
+    const conCom = new Set(com.map(([n]) => n));
+    const suSolo = su.filter(n => !conCom.has(n)), giuSolo = giu.filter(n => !conCom.has(n));
     const voters = !open ? "" : `
       <div class="voters">
-        ${su.length ? `<span class="vg"><span class="vl" aria-label="Mi piace">👍</span>${su.map(iniTag).join("")}</span>` : ""}
-        ${giu.length ? `<span class="vg"><span class="vl" aria-label="Non mi piace">👎</span>${giu.map(iniTag).join("")}</span>` : ""}
+        ${suSolo.length ? `<span class="vg"><span class="vl" aria-label="Mi piace">👍</span>${suSolo.map(iniTag).join("")}</span>` : ""}
+        ${giuSolo.length ? `<span class="vg"><span class="vl" aria-label="Non mi piace">👎</span>${giuSolo.map(iniTag).join("")}</span>` : ""}
         ${!su.length && !giu.length ? `<span class="none">Nessun voto ancora.</span>` : ""}
+        ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom">${iniTag(n)}<span class="vl">${r[n] === "down" ? "👎" : "👍"}</span><span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
       </div>`;
     return `
     <article class="card">
@@ -785,17 +816,18 @@ function renderProposte() {
         <div class="song-row">
           <h2 class="song-title">${esc(c.titolo)}</h2>
           <div class="song-right">${linksHtml(c)}</div>
-          <div class="song-artist">${esc(c.artista || "")}</div>
+          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
         </div>
       </div>
       <div class="prop-bar">
         <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">👍 ${su.length}</button>
         <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">👎 ${giu.length}</button>
         <span class="sp"></span>
-        <button class="x" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica">✎</button>
+        <button class="ico-btn" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica"><svg class="ico" aria-hidden="true"><use href="#ico-matita"/></svg></button>
         <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">↑ In scaletta</button>
         <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>
       </div>
+      ${commentoForm(c)}
       ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
       ${voters}
     </article>`;
@@ -1017,6 +1049,12 @@ function sostituisciNome(vecchio, nuovo) {
     const r = c.reazioni || {}, upd = {};
     if (Object.prototype.hasOwnProperty.call(r, vecchio)) {
       const nr = { ...r };
+      const cm = { ...(c.commenti || {}) };
+      if (Object.prototype.hasOwnProperty.call(cm, vecchio)) {
+        if (!Object.prototype.hasOwnProperty.call(nr, nuovo)) cm[nuovo] = cm[vecchio];
+        delete cm[vecchio];
+        upd.commenti = cm;
+      }
       if (!Object.prototype.hasOwnProperty.call(nr, nuovo)) nr[nuovo] = nr[vecchio]; // se ha votato con entrambi i nomi resta il voto dato col nome nuovo
       delete nr[vecchio];
       upd.reazioni = nr;
@@ -1075,7 +1113,7 @@ function renderPersonale() {
       <span class="t"><b>${esc(c.titolo)}</b><span>${esc(c.artista || "")}</span></span>
       <button class="vote" data-action="react-up" data-id="${c.id}" aria-label="Mi piace">👍</button>
       <button class="vote" data-action="react-down" data-id="${c.id}" aria-label="Non mi piace">👎</button>
-    </div>`).join("");
+    </div>${commentoForm(c)}`).join("");
 
   let setupHtml;
   if (!strumento) {
@@ -1224,14 +1262,28 @@ async function act(btn) {
       const c = state.canzoni.find(x => x.id === id);
       if (!c) return;
       const voto = action === "react-up" ? "up" : "down";
-      const reazioni = { ...(c.reazioni || {}) };
-      if (reazioni[state.user] === voto) delete reazioni[state.user];
-      else reazioni[state.user] = voto;
+      const gia = (c.reazioni || {})[state.user] === voto;
       if (!btn.closest("#view-personale")) state.votersOpen.add(id);
-      await updateDoc(doc(db, "canzoni", id), { reazioni }).catch(erroreScrittura);
-      playlistDaAggiornare();
+      if (gia) {
+        // stesso voto di nuovo: si toglie, insieme al commento
+        state.commentoVoto = null;
+        await salvaVoto(c, null, null);
+      } else if (voto === "down") {
+        // 👎: prima il perché, poi il voto
+        state.commentoVoto = { id, voto: "down" };
+        render();
+        document.querySelector(`[data-keep="vc-${id}"]`)?.focus();
+      } else {
+        // 👍: il voto vale subito, il commento è facoltativo (dalla pagina personale niente commento)
+        state.commentoVoto = btn.closest("#view-personale") ? null : { id, voto: "up" };
+        await salvaVoto(c, "up", null);
+        document.querySelector(`[data-keep="vc-${id}"]`)?.focus();
+      }
       break;
     }
+    case "commento-chiudi":
+      state.commentoVoto = null;
+      render(); break;
     case "promote": {
       const c = state.canzoni.find(x => x.id === id);
       const maxOrd = scaletta().reduce((m, x) => Math.max(m, x.ordine || 0), 0);
@@ -1448,6 +1500,19 @@ mainEl.addEventListener("submit", async e => {
     form.testo.value = "";
     state.editSetup = null;
     await scrivi(updateDoc(doc(db, "canzoni", song), { [`setup.${key}`]: testo }));
+    render();
+  }
+
+  if (kind === "commento") {
+    const c = state.canzoni.find(x => x.id === form.dataset.id);
+    if (!c || !state.user) return;
+    const voto = form.dataset.voto === "down" ? "down" : "up";
+    const testo = form.testo.value.trim().replace(/\s+/g, " ");
+    if (voto === "down" && !testo) { toast("Per il 👎 serve una riga sul perché."); form.testo.focus(); return; }
+    form.testo.value = "";
+    state.commentoVoto = null;
+    await salvaVoto(c, voto, testo);
+    toast(voto === "down" ? "Voto 👎 salvato." : (testo ? "Commento salvato." : "Salvato."));
     render();
   }
 
