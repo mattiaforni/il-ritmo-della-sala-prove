@@ -643,3 +643,7 @@ button.ini.parte.on {
 .task.multi .chk, .task.multi .pbox { margin-top: 1px; }
 .chk.stato { background: var(--verde); border-color: var(--verde); }
 .task.multi.fatto .parti { opacity: .75; }
+
+/* modulo dei link dentro la scheda di una proposta */
+.prop-link { padding: 0 14px 12px; }
+.prop-link .link-form { margin-top: 0; }

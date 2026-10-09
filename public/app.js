@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "18";
+const APP_VERSION = "19";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 const STRUMENTI = [
@@ -789,9 +789,11 @@ function renderProposte() {
         <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">👍 ${su.length}</button>
         <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">👎 ${giu.length}</button>
         <span class="sp"></span>
+        <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">Link</button>
         <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">↑ In scaletta</button>
         <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>
       </div>
+      ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
       ${voters}
     </article>`;
   }).join("");
@@ -1455,7 +1457,8 @@ mainEl.addEventListener("submit", async e => {
     if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
     form.spotify.value = ""; form.songsterr.value = "";
     state.linkEdit = null;
-    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" }).catch(erroreScrittura);
+    // un link salvato a mano non è più "trovato in automatico"
+    await updateDoc(doc(db, "canzoni", song), { spotifyUrl: sp, spotifyAuto: false, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" }).catch(erroreScrittura);
     toast("Link salvati.");
     playlistDaAggiornare();
     render();
