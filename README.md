@@ -111,6 +111,8 @@ L'interfaccia (`public/`) va online da sola a ogni merge su `main`. A ogni pubbl
 - `"version"` in `public/version.json`
 - `CACHE` in `public/sw.js`
 
+E si aggiunge in cima a `public/novita.json` una voce per la band (versione, data, titolo, due o tre punti in parole semplici): la legge il bot Telegram con `/aggiornamenti`.
+
 Le app aperte sui telefoni controllano `version.json` quando tornano in primo piano (e ogni 15 minuti): se la versione online è diversa compare la barra "È disponibile una versione nuova" con il bottone **Aggiorna**.
 
 Se una modifica richiede di ripulire dati salvati sui telefoni (chiavi di `localStorage`, accessi vecchi), aumentare `DATA_VERSION` in `public/app.js` e aggiungere la pulizia corrispondente in `MIGRAZIONI`: viene eseguita una volta sola su ogni telefono.

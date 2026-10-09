@@ -21,6 +21,11 @@ const ordine = (c) => (typeof c.ordine === "number" ? c.ordine : 0);
 const nelPeriodo = (t, da, a) => typeof t === "number" && t >= da && t <= a;
 const impronta = (s) => crypto.createHash("sha1").update(String(s)).digest("hex").slice(0, 12);
 const votanti = (c, v) => Object.keys(c.reazioni || {}).filter(n => c.reazioni[n] === v);
+// commenti ai voti (dalla versione 21 dell'app): nome → testo, solo di chi ha votato
+const commenti = (c) => Object.entries(c.commenti || {})
+  .filter(([n, t]) => (c.reazioni || {})[n] && String(t || "").trim())
+  .map(([n, t]) => [n, String(t).trim().slice(0, 100)]);
+const VOTO = { up: "👍", down: "👎" };
 
 const FMT_GIORNO = new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", weekday: "short", day: "numeric", month: "short" });
 const FMT_DATA = new Intl.DateTimeFormat("it-IT", { timeZone: "UTC", day: "numeric", month: "short" });
@@ -53,7 +58,7 @@ function fotografa({ canzoni = [], membri = [] }) {
       const testo = String(v || "").trim();
       if (testo) su[k] = impronta(testo);
     }
-    foto.canzoni[c.id] = { t: c.titolo || "", s: c.stato || "", r: { ...(c.reazioni || {}) }, su };
+    foto.canzoni[c.id] = { t: c.titolo || "", s: c.stato || "", r: { ...(c.reazioni || {}) }, su, cm: Object.fromEntries(commenti(c)) };
   }
   for (const m of membri) foto.membri[m.id] = m.nome || "";
   return foto;
@@ -77,6 +82,12 @@ function differenze(prima, dopo) {
     const dr = d.r || {};
     for (const n of new Set([...Object.keys(pr), ...Object.keys(dr)])) {
       if (pr[n] !== dr[n]) ev.push({ tipo: "voto", canzoneId: id, titolo: d.t, chi: n, voto: dr[n] || "tolto" });
+    }
+    // commenti nuovi o cambiati (un commento tolto insieme al voto è già nel voto "tolto")
+    const pcm = {};
+    for (const [n, t] of Object.entries(p.cm || {})) pcm[rinomine[n] || n] = t;
+    for (const [n, t] of Object.entries(d.cm || {})) {
+      if (pcm[n] !== t) ev.push({ tipo: "commento", canzoneId: id, titolo: d.t, chi: n, voto: dr[n] || "", testo: t });
     }
     const ps = p.su || {}, ds = d.su || {};
     for (const k of Object.keys(ds)) {
@@ -159,15 +170,26 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
     if (!voti.has(e.canzoneId)) voti.set(e.canzoneId, { titolo: e.titolo, chi: new Map() });
     voti.get(e.canzoneId).chi.set(e.chi, e.voto);
   }
+  // commenti del periodo: per ogni canzone l'ultimo di ciascuno, se c'è ancora
+  const comm = new Map();
+  for (const e of eventi.filter(e => e.tipo === "commento")) {
+    if (!comm.has(e.canzoneId)) comm.set(e.canzoneId, { titolo: e.titolo, chi: new Map() });
+    comm.get(e.canzoneId).chi.set(e.chi, e);
+  }
   const righeVoti = [];
-  for (const [id, v] of voti) {
+  for (const id of new Set([...voti.keys(), ...comm.keys()])) {
+    const v = voti.get(id) || { titolo: (comm.get(id) || {}).titolo, chi: new Map() };
     const su = [...v.chi].filter(([, x]) => x === "up").map(([n]) => esc(n));
     const giu = [...v.chi].filter(([, x]) => x === "down").map(([n]) => esc(n));
-    if (!su.length && !giu.length) continue;
     const c = perId.get(id);
+    const attuali = new Map(c ? commenti(c) : []);
+    const righeCom = [...((comm.get(id) || {}).chi || new Map()).keys()]
+      .filter(n => attuali.has(n))
+      .map(n => `   <i>${esc(n)} ${VOTO[(c.reazioni || {})[n]] || ""}: «${esc(attuali.get(n))}»</i>`);
+    if (!su.length && !giu.length && !righeCom.length) continue;
     const parti = [su.length ? `👍 ${su.join(", ")}` : "", giu.length ? `👎 ${giu.join(", ")}` : ""].filter(Boolean).join(" · ");
     const totale = c && c.stato === "proposta" ? ` <i>(ora 👍 ${votanti(c, "up").length} 👎 ${votanti(c, "down").length})</i>` : "";
-    righeVoti.push(`• <b>${esc(c ? c.titolo : v.titolo)}</b>: ${parti}${totale}`);
+    righeVoti.push([`• <b>${esc(c ? c.titolo : v.titolo)}</b>${parti ? ": " + parti : ""}${totale}`, ...righeCom].join("\n"));
   }
   blocchi.push(sezione("Voti", righeVoti));
 
@@ -229,6 +251,9 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
     const dv = rigaDaVotare(ctx);
     if (dv) coda.push(dv);
   }
+  // novità dell'app uscite nel periodo: solo un rimando, non fa partire da solo il riepilogo
+  const app = (dati.app || []).filter(x => x.data && nelPeriodo(Date.parse(x.data + "T12:00:00Z"), da - 12 * ORA, a + 12 * ORA));
+  if (app.length) coda.push(`L'app è stata aggiornata${app[0].versione ? ` (versione ${esc(app[0].versione)})` : ""}: /aggiornamenti per sapere cosa c'è di nuovo.`);
   if (!registroDa) coda.push("<i>Voti, passaggi in scaletta e setup si vedranno dalla prossima ora: il registro sta partendo.</i>");
   else if (da < registroDa - ORA) coda.push(`<i>Voti, passaggi in scaletta e setup sono registrati dal ${giorno(registroDa)}.</i>`);
 
@@ -274,6 +299,7 @@ function proposte(dati) {
     const mancano = ctx.nomi.filter(n => !(c.reazioni || {})[n]);
     let r = `• <b>${esc(c.titolo)}</b>${c.artista ? " – " + esc(c.artista) : ""} · 👍 ${su} 👎 ${giu}`;
     if (c.propostaDa) r += ` · <i>da ${esc(c.propostaDa)}</i>`;
+    for (const [n, t] of commenti(c)) r += `\n   <i>${esc(n)} ${VOTO[c.reazioni[n]] || ""}: «${esc(t)}»</i>`;
     if (su >= SOGLIA_SCALETTA) r += "\n   pronta per passare in scaletta";
     if (mancano.length) r += `\n   manca il voto di: ${esc(mancano.join(", "))}`;
     return r;
@@ -331,6 +357,22 @@ function cassa(dati) {
   return `<b>Cassa</b>\n\nSaldo: <b>${euro(versato - speso)}</b>\nVersato ${euro(versato)} · speso ${euro(speso)}\n\n<b>Ultimi movimenti</b>\n${righe.join("\n")}`;
 }
 
+// ---------- novità dell'app (public/novita.json) ----------
+const FMT_RILASCIO = new Intl.DateTimeFormat("it-IT", { timeZone: "UTC", day: "numeric", month: "short" });
+function aggiornamentiApp(voci, quante = 3) {
+  if (!Array.isArray(voci)) return "Non riesco a leggere le novità dell'app in questo momento. Riprova tra poco.";
+  if (!voci.length) return "<b>Novità dell'app</b>\n\nAncora nessuna novità registrata.";
+  const n = Math.max(1, Math.min(20, Math.round(Number(quante)) || 3));
+  const blocchi = voci.slice(0, n).map(v => {
+    const quando = /^\d{4}-\d{2}-\d{2}$/.test(v.data || "") ? FMT_RILASCIO.format(new Date(v.data + "T12:00:00Z")) : "";
+    const testa = [v.versione ? `Versione ${esc(v.versione)}` : "", quando].filter(Boolean).join(" · ");
+    const punti = (v.punti || []).map(p => `• ${esc(p)}`).join("\n");
+    return `<b>${esc(v.titolo || "")}</b>${testa ? ` <i>(${testa})</i>` : ""}${punti ? "\n" + punti : ""}`;
+  });
+  const altre = voci.length > n ? `\n\n<i>Le precedenti: /aggiornamenti ${Math.min(20, voci.length)}</i>` : "";
+  return taglia(`<b>Novità dell'app</b>\n\n${blocchi.join("\n\n")}${altre}`);
+}
+
 // ---------- aiuto ----------
 function aiuto(stato = {}) {
   const auto = stato.ogniGiorni > 0
@@ -339,12 +381,13 @@ function aiuto(stato = {}) {
   return [
     "<b>Il ritmo della sala prove</b>",
     "Riassumo cosa si muove nell'app. Usate i pulsanti qui sotto, oppure i comandi:",
-    "/novita 3 · novità degli ultimi 3 giorni (da 1 a 60)\n/scaletta · /proposte · /task · /cassa\n/automatico 2 19 · riepilogo ogni 2 giorni alle 19 (<i>/automatico off</i> per spegnerlo)",
+    "/novita 3 · novità degli ultimi 3 giorni (da 1 a 60)\n/scaletta · /proposte · /task · /cassa\n/aggiornamenti · cosa c'è di nuovo nell'app\n/automatico 2 19 · riepilogo ogni 2 giorni alle 19 (<i>/automatico off</i> per spegnerlo)",
     auto
   ].join("\n\n");
 }
 
 module.exports = {
   GENERALE_ID, GIORNO, ORA, APP_URL, MENU,
-  fotografa, differenze, novita, titoloNovita, scaletta, proposte, taskAperti, cassa, aiuto, saldo, esc, giorno
+  fotografa, differenze, novita, titoloNovita, scaletta, proposte, taskAperti, cassa, aiuto, saldo, esc, giorno,
+  aggiornamentiApp
 };
