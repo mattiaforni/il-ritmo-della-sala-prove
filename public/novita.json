@@ -2,6 +2,14 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "23", "data": "2026-10-10", "titolo": "Setup più semplice",
+      "punti": [
+        "Nella scheda della canzone si vedono solo le parti del setup già scritte; le altre sono in fondo, da toccare per aggiungerle.",
+        "Nuove parti: Acustica, Fisarmonica e Voce.",
+        "Niente più strumento fisso per persona: dalla pagina personale sono spariti lo strumento e «Il mio setup»."
+      ]
+    },
+    {
       "versione": "22", "data": "2026-10-09", "titolo": "Voti più leggibili",
       "punti": [
         "Toccando una proposta, il pollice è sempre all'inizio della riga, anche accanto ai commenti."

@@ -32,17 +32,20 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "22";
+const APP_VERSION = "23";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
+// parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo)
 const STRUMENTI = [
   { key: "chitarra1", nome: "Chitarra 1" },
   { key: "chitarra2", nome: "Chitarra 2" },
+  { key: "acustica", nome: "Acustica" },
   { key: "basso", nome: "Basso" },
   { key: "batteria", nome: "Batteria" },
-  { key: "tastiera", nome: "Tastiera" }
+  { key: "tastiera", nome: "Tastiera" },
+  { key: "fisarmonica", nome: "Fisarmonica" },
+  { key: "voce", nome: "Voce" }
 ];
-const nomeStrumento = (k) => STRUMENTI.find(s => s.key === k)?.nome || "";
 const SPOTIFY_RE = /https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?track\/[A-Za-z0-9]+/;
 const SONGSTERR_RE = /https:\/\/(?:www\.)?songsterr\.com\/a\/[^\s"'<>]+/;
 // l'app Songsterr su Android apre solo le pagine delle canzoni su www.songsterr.com
@@ -713,10 +716,9 @@ function songBody(c, ts, idx, tot, gen) {
       </div>`}
     </div>`;
 }
-const chiSuona = (key) => state.membri.find(m => m.strumento === key)?.nome || null;
-function setupEditor(songId, key, testo, mode) {
+function setupEditor(songId, key, testo) {
   return `
-    <form class="${mode === "card" ? "setup-edit" : ""}" data-form="setup" data-song="${songId}" data-key="${key}">
+    <form class="setup-edit" data-form="setup" data-song="${songId}" data-key="${key}">
       <textarea name="testo" data-keep="setup-${songId}-${key}" maxlength="400" placeholder="Effetti, preset, suoni, accorgimenti…">${esc(testo || "")}</textarea>
       <div class="ed"><button type="button" class="btn quiet" data-action="setup-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
     </form>`;
@@ -725,19 +727,22 @@ function setupBlock(c) {
   const setup = c.setup || {};
   const compilati = STRUMENTI.filter(s => (setup[s.key] || "").trim()).length;
   const open = state.setupOpen.has(c.id);
-  const rows = !open ? "" : STRUMENTI.map(s => {
-    const chi = chiSuona(s.key);
-    const tag = chi ? iniTag(chi) : `<span class="ini none" title="Nessuno">—</span>`;
-    const editing = state.editSetup && state.editSetup.song === c.id && state.editSetup.key === s.key;
+  const inModifica = (k) => state.editSetup && state.editSetup.song === c.id && state.editSetup.key === k;
+  // si vedono le parti scritte (e quella che si sta scrivendo); le altre sono in fondo, da toccare per aggiungerle
+  const piene = STRUMENTI.filter(s => (setup[s.key] || "").trim() || inModifica(s.key));
+  const vuote = STRUMENTI.filter(s => !piene.includes(s));
+  const rows = !open ? "" : piene.map(s => {
+    const editing = inModifica(s.key);
     const testo = (setup[s.key] || "").trim();
     return `
       <div class="setup-row" ${editing ? "" : `data-action="setup-edit" data-id="${c.id}" data-key="${s.key}" role="button" tabindex="0"`}>
-        ${tag}
-        <span class="setup-txt"><b>${s.nome}</b>${testo ? esc(testo) : `<span class="empty">da compilare</span>`}</span>
-        ${editing ? setupEditor(c.id, s.key, testo, "card") : ""}
+        <span class="setup-parte">${s.nome}</span>
+        <span class="setup-txt">${testo ? esc(testo) : ""}</span>
+        ${editing ? setupEditor(c.id, s.key, testo) : ""}
       </div>`;
-  }).join("");
-  return `<button class="disc" data-action="setup-toggle" data-id="${c.id}" aria-expanded="${open}">Setup <span class="n">${compilati} di ${STRUMENTI.length}</span><span class="chev">${open ? "▾" : "▸"}</span></button>${rows}`;
+  }).join("") + (vuote.length ? `
+      <div class="setup-add">${vuote.map(s => `<button class="parte-add" data-action="setup-edit" data-id="${c.id}" data-key="${s.key}">+ ${s.nome}</button>`).join("")}</div>` : "");
+  return `<button class="disc" data-action="setup-toggle" data-id="${c.id}" aria-expanded="${open}">Setup${compilati ? ` <span class="n">${compilati}</span>` : ""}<span class="chev">${open ? "▾" : "▸"}</span></button>${rows}`;
 }
 function recsBlock(c) {
   const recs = recsOf(c.id);
@@ -1088,7 +1093,6 @@ function renderPersonale() {
   if (!nome || !state.membri.some(m => m.nome === nome)) nome = state.membri[0].nome;
   const persona = state.membri.find(m => m.nome === nome);
   const mia = nome === meName;
-  const strumento = persona.strumento || "";
 
   const whoBar = `<div class="who-bar"><span class="lbl">Pagina di</span>${state.membri.map(m => {
     const col = colorOf(m.nome);
@@ -1115,24 +1119,6 @@ function renderPersonale() {
       <button class="vote" data-action="react-down" data-id="${c.id}" aria-label="Non mi piace">👎</button>
     </div>${commentoForm(c)}`).join("");
 
-  let setupHtml;
-  if (!strumento) {
-    setupHtml = `<p class="empty">${mia ? "Scegli il tuo strumento qui sopra per vedere e scrivere i tuoi appunti di setup." : `${esc(nome)} non ha ancora scelto uno strumento.`}</p>`;
-  } else {
-    const songs = scaletta();
-    setupHtml = songs.length ? songs.map(c => {
-      const testo = ((c.setup || {})[strumento] || "").trim();
-      const editing = state.editSetup && state.editSetup.song === c.id && state.editSetup.key === strumento;
-      return `
-        <div class="srow" ${editing ? "" : `data-action="setup-edit" data-id="${c.id}" data-key="${strumento}" role="button" tabindex="0"`}>
-          <div class="s">${esc(c.titolo)}</div>
-          ${editing ? setupEditor(c.id, strumento, testo, "page") : `<div class="snote${testo ? "" : " empty"}">${testo ? esc(testo) : "Tocca per aggiungere appunti"}</div>`}
-        </div>`;
-    }).join("") : `<p class="empty">Nessuna canzone in scaletta.</p>`;
-  }
-
-  const strOpts = `<option value="">Nessuno strumento</option>` + STRUMENTI.map(s =>
-    `<option value="${s.key}"${s.key === strumento ? " selected" : ""}>${s.nome}</option>`).join("");
   const stats = [`${aperti.length} ${aperti.length === 1 ? "task aperto" : "task aperti"}`]
     .concat(mia && daVotare.length ? [`${daVotare.length} ${daVotare.length === 1 ? "proposta" : "proposte"} da votare`] : []).join(", ");
 
@@ -1165,9 +1151,7 @@ function renderPersonale() {
       <button type="button" class="btn quiet" data-action="rename-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button>
     </form>
     <p class="rename-hint">Il nome cambia anche in voti, task, spese e registrazioni. La sigla si aggiorna da sola.</p>` : `
-    <div class="me-head"><h2>${esc(nome)}</h2>${mia
-      ? `<select class="instr" data-change="strumento" data-nome="${esc(nome)}" aria-label="Il tuo strumento">${strOpts}</select>`
-      : (strumento ? `<span class="instr">${nomeStrumento(strumento)}</span>` : "")}
+    <div class="me-head"><h2>${esc(nome)}</h2>
       <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button></div>`}
     <p class="me-stats">${stats}</p>
     <article class="card">
@@ -1175,10 +1159,6 @@ function renderPersonale() {
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
-    <article class="card">
-      <h3 class="sec-title">${mia ? "Il mio setup" : "Setup"} <small>${strumento ? nomeStrumento(strumento) : ""}</small></h3>
-      ${setupHtml}
-    </article>
     ${mia ? spotifyCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
@@ -1407,11 +1387,6 @@ mainEl.addEventListener("keydown", e => {
 });
 mainEl.addEventListener("change", e => {
   if (e.target.dataset.change === "dir-ingresso") { diretta.cambiaIngresso(e.target.value); return; }
-  if (e.target.dataset.change === "strumento") {
-    const m = state.membri.find(x => x.nome === e.target.dataset.nome);
-    if (m) updateDoc(doc(db, "membri", m.id), { strumento: e.target.value }).catch(erroreScrittura);
-    return;
-  }
   if (e.target.type !== "file") return;
   state.pendingFiles = [...e.target.files];
   const lbl = e.target.closest(".file-btn")?.querySelector("span");
