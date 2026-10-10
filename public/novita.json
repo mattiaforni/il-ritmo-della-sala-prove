@@ -2,10 +2,10 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
-      "versione": "23", "data": "2026-10-10", "titolo": "Setup più semplice",
+      "versione": "23", "data": "2026-10-10", "titolo": "Pagina della canzone e parti libere",
       "punti": [
-        "Nella scheda della canzone si vedono solo le parti del setup già scritte; le altre sono in fondo, da toccare per aggiungerle.",
-        "Nuove parti: Acustica, Fisarmonica e Voce.",
+        "Toccando una canzone in Scaletta si apre la sua pagina: task, setup, registrazioni e Modifica. Si torna indietro con la freccia o con il tasto indietro del telefono.",
+        "Il setup ha le parti che servono a quel pezzo: «Aggiungi parte» propone quelle comuni, quelle già usate in altre canzoni o un nome nuovo (es. Banjo, Cori); la ✕ toglie una parte.",
         "Niente più strumento fisso per persona: dalla pagina personale sono spariti lo strumento e «Il mio setup»."
       ]
     },
