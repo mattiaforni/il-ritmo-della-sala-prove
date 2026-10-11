@@ -463,30 +463,32 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
 
 /* ---------- sezioni richiudibili nella scheda ---------- */
-.disc {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  background: none; border: none; border-top: 1px solid var(--rule);
-  padding: 11px 0 9px; margin-top: 8px;
-  font: 600 13px var(--sans); color: var(--legno); text-align: left;
-}
-.disc .n { font-weight: 500; color: var(--muted); }
-.disc .chev { margin-left: auto; color: var(--muted); font-size: 12px; }
-.disc + .disc { margin-top: 0; }
 
 /* setup */
 .setup-row {
-  display: grid; grid-template-columns: 31px 1fr; gap: 10px;
-  padding: 7px 0; border-top: 1px dashed var(--rule);
-  align-items: start; cursor: pointer;
+  display: grid; grid-template-columns: 82px 1fr auto; gap: 10px;
+  padding: 8px 0; border-top: 1px dashed var(--rule);
+  align-items: start;
 }
+.setup-row .del-mini { margin-top: -2px; }
 .setup-row:first-of-type { border-top: none; }
-.setup-row > .ini { margin-top: 1px; height: 20px; font-size: 9px; }
-.ini.none { background: transparent; color: var(--muted); border: 1px dashed var(--rule); }
-.setup-txt { font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
-.setup-txt b { font-weight: 600; margin-right: 4px; }
-.setup-txt .empty, .snote.empty { color: var(--muted); font-style: italic; }
+.setup-parte { font: 600 12.5px var(--sans); color: var(--legno); line-height: 19px; }
+.setup-txt { font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; cursor: pointer; }
+.setup-txt .empty { color: var(--muted); font-style: italic; }
 .setup-edit { grid-column: 1 / -1; }
-.setup-edit textarea, .srow textarea {
+.parte-picker { border-top: 1px dashed var(--rule); padding-top: 10px; margin-top: 2px; }
+.pg-sec > .parte-picker:first-child { border-top: none; }
+.setup-add { display: flex; flex-wrap: wrap; gap: 6px; }
+.parte-add {
+  font: 500 13px var(--sans); color: var(--legno);
+  background: #fff; border: 1px solid var(--rule); border-radius: var(--r-tag);
+  padding: 6px 10px; cursor: pointer;
+}
+.parte-add.altro { background: none; border-style: dashed; color: var(--muted); }
+.parte-nuova { display: flex; gap: 8px; margin-top: 8px; }
+.parte-nuova .field { flex: 1; min-width: 0; font-size: 14px; }
+.parte-picker .ed { margin-top: 8px; }
+.setup-edit textarea {
   width: 100%; margin-top: 6px;
   font: 14px var(--sans); color: var(--legno);
   border: 1px solid var(--ambra); border-radius: var(--r);
@@ -509,8 +511,6 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .viewing { background: var(--ambra-chiaro); border: 1px solid rgba(217, 154, 43, .5); border-radius: var(--r); padding: 8px 12px; font-size: 13px; color: #6b4a10; margin: 0 0 10px; }
 .me-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 4px; }
 .me-head h2 { font: 600 24px var(--display); margin: 0; }
-.instr { font: 600 12.5px var(--sans); color: var(--legno); border: 1px solid var(--rule); border-radius: var(--r-tag); padding: 4px 8px; background: var(--carta); }
-select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 24px; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%; background-size: 4px 4px; background-repeat: no-repeat; }
 .me-stats { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
 .sec-title { font: 600 15px var(--display); margin: 0; padding: 12px 14px 6px; display: flex; align-items: baseline; gap: 8px; }
 .sec-title small { font: 500 12px var(--sans); color: var(--muted); }
@@ -520,9 +520,6 @@ select.instr { width: auto; max-width: 180px; appearance: none; padding-right: 2
 .vrow .t { flex: 1; min-width: 0; }
 .vrow .t b { display: block; font: 600 14px var(--sans); }
 .vrow .t span { font-size: 12px; color: var(--muted); }
-.srow { padding: 9px 14px; border-top: 1px solid var(--rule); cursor: pointer; }
-.srow .s { font: 600 14px var(--display); }
-.snote { font-size: 13.5px; margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
 .add-person { margin-top: 4px; }
 
 /* ---------- avviso di collegamento interrotto ---------- */
@@ -663,3 +660,20 @@ button.ini.parte.on {
 .vcom .vcom-t { margin-left: 3px; }
 .vcom-t { line-height: 1.4; padding-top: 2px; overflow-wrap: anywhere; }
 .ncom { color: var(--muted); }
+
+/* ---------- pagina della canzone (dentro Scaletta) ---------- */
+.pg-top { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; }
+.pg-back { padding: 7px 12px; font-size: 13px; color: var(--legno); }
+.pg-pos { font: 500 12.5px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pg-head { border-left: 3px solid var(--cotto); padding: 2px 2px 2px 12px; margin: 0 0 14px; }
+.pg-head.pronta { border-left-color: var(--verde); }
+.pg-head.generale { border-left-color: var(--ambra); }
+.pg-title { font: 600 26px/1.15 var(--display); margin: 0; overflow-wrap: anywhere; }
+.pg-head .song-artist { font-size: 14px; margin-top: 3px; }
+.pg-head .link-form { margin-top: 12px; }
+.pg-sec { padding: 0 14px 10px; }
+.pg-sec > .empty { margin: 4px 0 6px; font-size: 13.5px; color: var(--muted); }
+.pg-bar { margin: 2px 0 4px; }
+.pg-sec .addline { padding: 10px 2px 4px; }
+.pg-actions { border-top: none; padding: 4px 0 20px; margin: 0; }
+.pg-sec > .rec:first-child { border-top: none; padding-top: 2px; }

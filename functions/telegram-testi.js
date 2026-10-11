@@ -8,7 +8,7 @@ const crypto = require("crypto");
 
 const GENERALE_ID = "generale";
 const SOGLIA_SCALETTA = 5; // come nell'app: da 5 👍 una proposta è pronta per la scaletta
-const STRUMENTI = { chitarra1: "Chitarra 1", chitarra2: "Chitarra 2", basso: "Basso", batteria: "Batteria", tastiera: "Tastiera" };
+const STRUMENTI = { chitarra1: "Chitarra 1", chitarra2: "Chitarra 2", acustica: "Acustica", basso: "Basso", batteria: "Batteria", tastiera: "Tastiera", fisarmonica: "Fisarmonica", voce: "Voce" };
 const APP_URL = "https://il-ritmo-della-sala-prove.web.app";
 const ORA = 3600 * 1000;
 const GIORNO = 24 * ORA;
