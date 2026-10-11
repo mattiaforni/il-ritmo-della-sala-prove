@@ -23,7 +23,7 @@ const BITRATE = 128000;           // Opus stereo a 128 kbps: qualità musica, no
 const ATTESA_RISPOSTA_MS = 20000;
 const CHIAVE_INGRESSO = "prove_diretta_ingresso";
 
-export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS }) {
+export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, alAvvio }) {
   const supportata = typeof RTCPeerConnection !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
   const audioEl = document.getElementById("diretta-audio");
   const d = {
@@ -166,6 +166,7 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS })
       avviaMeter();
       controllaTrasmissione();
       toast("Diretta avviata: i telefoni possono ascoltare dalla sezione Audio.");
+      if (alAvvio) alAvvio();   // notifica a chi l'ha chiesta
     } catch (e) {
       console.error("[diretta]", e);
       fermaLocale();

@@ -1,7 +1,7 @@
 // Service worker minimale: rende l'app installabile e apre anche offline.
 // Le richieste a Firestore NON passano di qui (le gestisce l'SDK con la sua cache).
-const CACHE = "prove-v25";
-const SHELL = ["./", "index.html", "styles.css", "app.js", "diretta.js", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
+const CACHE = "prove-v26";
+const SHELL = ["./", "index.html", "styles.css", "app.js", "diretta.js", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/badge-96.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
@@ -25,3 +25,28 @@ self.addEventListener("fetch", e => {
     }).catch(() => caches.match(e.request).then(r => r || caches.match("index.html")))
   );
 });
+
+// ---------- notifiche push (vedi functions/notifiche.js) ----------
+self.addEventListener("push", e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = { testo: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.titolo || "Il ritmo della sala prove", {
+    body: d.testo || "",
+    icon: "icons/icon-192.png",
+    badge: "icons/badge-96.png",
+    tag: d.tag || undefined,
+    data: { url: d.url || "./" }
+  }));
+});
+// tocco sulla notifica: l'app (già aperta o da aprire) va alla pagina giusta
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "./", self.registration.scope).href;
+  e.waitUntil((async () => {
+    const aperte = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const app = aperte.find(c => c.url.startsWith(self.registration.scope));
+    if (app) { app.postMessage({ tipo: "vai", url }); return app.focus(); }
+    return self.clients.openWindow(url);
+  })());
+});
+

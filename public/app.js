@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "25";
+const APP_VERSION = "26";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -75,6 +75,17 @@ const SONGSTERR_RE = /https:\/\/(?:www\.)?songsterr\.com\/a\/[^\s"'<>]+/;
 const normalizzaSongsterr = (u) => String(u || "").replace(/^https:\/\/songsterr\.com/i, "https://www.songsterr.com").replace(/[?#].*$/, "");
 // funzione che tiene aggiornate le playlist Spotify (vedi functions/index.js)
 const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/playlist";
+// notifiche push (vedi functions/notifiche.js): ognuno sceglie sul suo telefono quali ricevere
+const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/notifiche";
+const EVENTI_PUSH = [
+  { key: "proposta", nome: "Nuove proposte da votare" },
+  { key: "task", nome: "Task assegnate a te" },
+  { key: "registrazione", nome: "Nuove registrazioni" },
+  { key: "diretta", nome: "Diretta dalla sala avviata" },
+  { key: "scaletta", nome: "Proposte passate in scaletta" }
+];
+const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const IN_APP = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 
 // ---------- configurazione ----------
 const cfg = window.FIREBASE_CONFIG || {};
@@ -146,11 +157,15 @@ const state = {
   pendingFiles: [],
   upload: { active: false, pct: 0, txt: "" },
   playId: null,
+  push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
+  pushOcc: false,
+  vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
   spIcon: "icons/spotify.png",
   sigle: {},
   deniedShown: false
 };
 
+try { state.push = JSON.parse(store.get("prove_push") || "null"); } catch { state.push = null; }
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -327,6 +342,120 @@ async function chiamaPlaylist(op, extra = {}, keepalive = false) {
   if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
   return j;
 }
+// ---------- notifiche push ----------
+async function chiamaNotifiche(op, extra = {}, keepalive = false) {
+  const token = await auth.currentUser.getIdToken();
+  const r = await fetch(NOTIFICHE_FN, {
+    method: "POST", keepalive,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ op, ...extra })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+  return j;
+}
+function salvaPush(p) {
+  state.push = p;
+  if (p) store.set("prove_push", JSON.stringify(p)); else store.del("prove_push");
+}
+const chiaveInByte = (b64) => {
+  const s = (b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+};
+// segnala un evento: le notifiche le prepara e le manda la funzione (chi fa l'azione non la riceve)
+function notifica(tipo, extra = {}) {
+  if (!auth.currentUser) return;
+  chiamaNotifiche("evento", { tipo, da: state.user || "", ...extra }, true).catch(e => console.warn("[notifiche]", e.message));
+}
+async function attivaNotifiche() {
+  if (!state.userId) { toast("Scegli prima il tuo nome."); return; }
+  state.pushOcc = true; render();
+  try {
+    // il permesso va chiesto subito, dentro il tocco sul pulsante
+    const permesso = await Notification.requestPermission();
+    if (permesso !== "granted") {
+      toast(permesso === "denied" ? "Notifiche bloccate: si riattivano dalle impostazioni del telefono." : "Notifiche non attivate.");
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const { publicKey } = await chiamaNotifiche("chiave");
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiaveInByte(publicKey) });
+    const eventi = EVENTI_PUSH.map(e => e.key);
+    await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId: state.userId, eventi });
+    salvaPush({ endpoint: sub.endpoint, membroId: state.userId, eventi });
+    toast("Notifiche attive su questo telefono.");
+  } catch (e) {
+    toast("Notifiche non attivate: " + (e.message || e));
+  } finally {
+    state.pushOcc = false; render();
+  }
+}
+async function disattivaNotifiche() {
+  const p = state.push;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe().catch(() => {});
+  } catch (e) { /* niente da togliere */ }
+  if (p) chiamaNotifiche("disiscrivi", { endpoint: p.endpoint }).catch(() => {});
+  salvaPush(null);
+  render();
+  toast("Notifiche disattivate su questo telefono.");
+}
+// tiene allineata l'iscrizione: persona cambiata sul telefono, permesso tolto, iscrizione rinnovata dal browser
+async function riallineaNotifiche() {
+  if (!state.push || !PUSH_OK || !auth.currentUser) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub || Notification.permission !== "granted") { salvaPush(null); render(); return; }
+    if (sub.endpoint !== state.push.endpoint || state.push.membroId !== state.userId) {
+      if (!state.userId) return;
+      await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId: state.userId, eventi: state.push.eventi });
+      if (sub.endpoint !== state.push.endpoint) chiamaNotifiche("disiscrivi", { endpoint: state.push.endpoint }).catch(() => {});
+      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId: state.userId });
+    }
+  } catch (e) { console.warn("[notifiche] riallineamento", e.message); }
+}
+function notificheCard() {
+  let corpo;
+  if (IS_IOS && !IN_APP) {
+    corpo = `<p class="nt-txt">Su iPhone le notifiche arrivano solo all'app aggiunta alla schermata Home. In Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, poi apri l'app da lì e torna qui.</p>`;
+  } else if (!PUSH_OK) {
+    corpo = `<p class="nt-txt">Questo browser non riceve notifiche.</p>`;
+  } else if (Notification.permission === "denied" && !state.push) {
+    corpo = `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
+  } else if (!state.push) {
+    corpo = `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, task assegnate a te, registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
+      <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
+  } else {
+    corpo = EVENTI_PUSH.map(e => {
+      const on = state.push.eventi.includes(e.key);
+      return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? "✓" : ""}</span><span>${e.nome}</span></button>`;
+    }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
+  }
+  return `
+    <article class="card ntcard">
+      <h3 class="sec-title">Notifiche <small>${state.push ? "attive su questo telefono" : ""}</small></h3>
+      <div class="pg-sec">${corpo}</div>
+    </article>`;
+}
+// tocco su una notifica: la pagina giusta (?vai=proposte|audio|canzone&id=…)
+function vaiA(url) {
+  let q;
+  try { q = new URL(url, location.href).searchParams; } catch { return; }
+  const vai = q.get("vai");
+  if (vai === "canzone") {
+    const id = q.get("id");
+    if (state.ready.canzoni && state.canzoni.some(c => c.id === id)) { showTab("scaletta"); apriCanzone(id); }
+    else { state.vaiCanzone = id; showTab("scaletta"); }
+  } else if (vai === "proposte" || vai === "audio") showTab(vai);
+}
+navigator.serviceWorker?.addEventListener("message", e => {
+  if (e.data && e.data.tipo === "vai") vaiA(e.data.url);
+});
+
 // dopo una modifica a canzoni o voti: un solo aggiornamento anche per più tocchi di fila
 let plTimer = null;
 function playlistDaAggiornare() {
@@ -392,6 +521,7 @@ onAuthStateChanged(auth, (account) => {
     subscribe();
     ensureUser();
     render();
+    setTimeout(riallineaNotifiche, 4000);   // permesso tolto o iscrizione rinnovata dal telefono
   } else {
     $("#gate").classList.remove("hidden");
     $("#overlay").classList.add("hidden");
@@ -462,6 +592,7 @@ function rimetti(key, valore) {
 // diretta dalla sala (vedi diretta.js): ha i suoi dati e la sua scheda in cima ad Audio
 const diretta = creaDiretta({
   db, toast: (m) => toast(m), utente: () => state.user, esc, iniTag: (n) => iniTag(n),
+  alAvvio: () => notifica("diretta"),
   isMobile: IS_ANDROID || IS_IOS, isIOS: IS_IOS
 });
 function subscribe() {
@@ -537,6 +668,7 @@ function setUser(nome) {
   if (me) store.set("prove_user_id", me.id); else store.del("prove_user_id");
   ensureUser();
   render();
+  riallineaNotifiche();
 }
 $("#member-picker").addEventListener("click", e => {
   const b = e.target.closest(".member-pick");
@@ -584,6 +716,14 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
     : esito === "annullato" ? "Collegamento a Spotify annullato."
     : `Spotify non collegato: ${q.get("motivo") || "errore"}`;
   setTimeout(() => toast(msg), 700);
+})();
+(function daNotifica() {
+  const q = new URLSearchParams(location.search);
+  const vai = q.get("vai");
+  if (!vai) return;
+  history.replaceState(null, "", location.pathname);
+  if (vai === "canzone") { state.tab = "scaletta"; state.vaiCanzone = q.get("id"); }
+  else if (vai === "proposte" || vai === "audio") state.tab = vai;
 })();
 showTab(state.tab);
 
@@ -637,6 +777,11 @@ function restoreInputs({ vals, focus }) {
 function render() {
   if (!state.account) return;
   if (!(state.ready.membri && state.ready.canzoni && state.ready.tasks)) return;
+  if (state.vaiCanzone) {
+    const id = state.vaiCanzone;
+    state.vaiCanzone = null;
+    if (state.canzoni.some(c => c.id === id)) { if (state.tab !== "scaletta") showTab("scaletta"); apriCanzone(id); return; }
+  }
   const kept = captureInputs();
   renderScaletta();
   renderProposte();
@@ -1353,6 +1498,7 @@ function renderPersonale() {
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
+    ${mia ? notificheCard() : ""}
     ${mia ? spotifyCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
@@ -1510,13 +1656,27 @@ async function act(btn) {
     case "promote": {
       const c = state.canzoni.find(x => x.id === id);
       const maxOrd = scaletta().reduce((m, x) => Math.max(m, x.ordine || 0), 0);
-      await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 }).catch(erroreScrittura);
+      const fatto = await updateDoc(doc(db, "canzoni", id), { stato: "scaletta", ordine: maxOrd + 1 }).then(() => true, erroreScrittura);
       toast(`"${c?.titolo || "Pezzo"}" è in scaletta.`);
       playlistDaAggiornare();
+      if (fatto) notifica("scaletta", { canzoneId: id });
       break;
     }
     case "play": playToggle(id); break;
     case "mini-stop": fermaRiproduzione(); break;
+    case "push-attiva": attivaNotifiche(); break;
+    case "push-disattiva": disattivaNotifiche(); break;
+    case "push-evento": {
+      const p = state.push;
+      if (!p) return;
+      const k = btn.dataset.key;
+      const eventi = p.eventi.includes(k) ? p.eventi.filter(x => x !== k) : [...p.eventi, k];
+      salvaPush({ ...p, eventi });
+      render();
+      chiamaNotifiche("preferenze", { endpoint: p.endpoint, eventi })
+        .catch(e => { if (/non trovata/.test(e.message)) riallineaNotifiche(); else toast("Scelta non salvata: controlla la connessione."); });
+      break;
+    }
     case "mini-salta": salta(Number(btn.dataset.sec) || 0); break;
     case "mini-vai": {
       // si va alla registrazione nella sezione Audio
@@ -1671,6 +1831,7 @@ mainEl.addEventListener("submit", async e => {
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
       enrichSong({ id: ref.id, titolo, artista });
       playlistDaAggiornare();
+      if (stato === "proposta") notifica("proposta", { canzoneId: ref.id });
     }
   }
 
@@ -1682,9 +1843,10 @@ mainEl.addEventListener("submit", async e => {
     form.titolo.value = "";
     delete state.drafts[song];
     form.querySelectorAll("button.ini.on").forEach(b => { b.classList.remove("on", "light"); b.style.background = ""; });
-    await scrivi(addDoc(collection(db, "tasks"), {
+    const ref = await scrivi(addDoc(collection(db, "tasks"), {
       canzoneId: song, titolo, assegnatari, fatto: false, fattoDa: "", creato: serverTimestamp()
     }), () => rimetti(`task-${song}`, titolo));
+    if (ref && assegnatari.some(n => n !== state.user)) notifica("task", { taskId: ref.id });
   }
 
   if (kind === "add-member") {
@@ -1820,16 +1982,18 @@ mainEl.addEventListener("submit", async e => {
     setUpload({ active: true, pct: 0, txt: "" });
     const submit = form.querySelector("button[type=submit]");
     if (submit) { submit.disabled = true; submit.textContent = "Caricamento…"; }
+    const caricate = [];
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         setUpload({ pct: 0, txt: files.length > 1 ? `File ${i + 1} di ${files.length}: ${f.name}` : f.name });
         const durata = await durataFile(f);
         const up = await uploadAudio(f, p => setUpload({ pct: p }));
-        await addDoc(collection(db, "registrazioni"), {
+        const ref = await addDoc(collection(db, "registrazioni"), {
           canzoneId, etichetta, nomeFile: f.name, url: up.url, path: up.path,
           size: f.size, durata, data, caricatoDa: state.user || "", creato: serverTimestamp()
         });
+        caricate.push(ref.id);
       }
       toast(files.length > 1 ? "Registrazioni caricate." : "Registrazione caricata.");
       document.querySelectorAll('main [data-keep="up-label"]').forEach(el => { el.value = ""; });
@@ -1838,6 +2002,7 @@ mainEl.addEventListener("submit", async e => {
     } finally {
       setUpload({ active: false, pct: 0, txt: "" });
       render();
+      if (caricate.length) notifica("registrazione", { ids: caricate });
     }
   }
 });
