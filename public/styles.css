@@ -677,3 +677,9 @@ button.ini.parte.on {
 .pg-sec .addline { padding: 10px 2px 4px; }
 .pg-actions { border-top: none; padding: 4px 0 20px; margin: 0; }
 .pg-sec > .rec:first-child { border-top: none; padding-top: 2px; }
+
+/* ---------- proposte: da votare in alto, poi classifica ---------- */
+.prop-sez { font: 600 12.5px var(--sans); color: var(--muted); letter-spacing: .02em; margin: 14px 2px 6px; display: flex; gap: 6px; align-items: baseline; }
+.prop-sez:first-of-type { margin-top: 4px; }
+.prop-sez small { font-weight: 500; }
+.card.da-votare { border-left: 3px solid var(--ambra); background: var(--ambra-chiaro); border-color: rgba(217, 154, 43, .45); border-left-color: var(--ambra); }
