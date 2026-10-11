@@ -414,3 +414,8 @@ exports.spotifyCallback = onRequest({ region: REGIONE, maxInstances: 1 }, async 
 const telegram = require("./telegram");
 exports.telegram = telegram.telegram;
 exports.telegramOgniOra = telegram.telegramOgniOra;
+
+// ============================================================
+// Notifiche push ai telefoni della band: vedi notifiche.js
+// ============================================================
+exports.notifiche = require("./notifiche").crea({ cors, eBand, REGIONE }).notifiche;

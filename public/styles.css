@@ -710,3 +710,13 @@ button.ini.parte.on {
 body.con-mini { padding-bottom: calc(96px + 62px + env(safe-area-inset-bottom)); }
 body.con-mini .toast { bottom: calc(86px + 62px + env(safe-area-inset-bottom)); }
 body.con-mini .update-banner { bottom: calc(80px + 62px + env(safe-area-inset-bottom)); }
+
+/* ---------- notifiche (pagina personale) ---------- */
+.ntcard .pg-sec { padding-bottom: 12px; }
+.nt-txt { font-size: 13.5px; color: var(--muted); margin: 2px 0 10px; }
+.nt-row { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; border-top: 1px solid var(--rule); padding: 9px 0; text-align: left; font: 500 14px var(--sans); color: var(--legno); }
+.nt-row:first-child { border-top: none; }
+.nt-box { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--rule); border-radius: var(--r-tag); font-size: 13px; color: #fff; background: #fff; }
+.nt-row[aria-pressed="true"] .nt-box { background: var(--verde); border-color: var(--verde); }
+.nt-off { margin-top: 8px; font-size: 12.5px; padding: 6px 10px; }
+
