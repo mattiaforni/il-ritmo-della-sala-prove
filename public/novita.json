@@ -2,6 +2,13 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": null, "data": "2026-10-11", "titolo": "Riepiloghi del bot più leggibili",
+      "punti": [
+        "Nelle novità i voti sono solo i totali (👍 e 👎) delle proposte votate, senza nomi né commenti, in ordine di classifica.",
+        "In /proposte i commenti compaiono in un riquadro sotto la canzone, senza nomi; le proposte senza voti sono raccolte in fondo."
+      ]
+    },
+    {
       "versione": "26", "data": "2026-10-11", "titolo": "Notifiche sul telefono",
       "punti": [
         "Nella pagina Personale c'è «Attiva notifiche»: avvisi anche ad app chiusa per proposte nuove, task assegnate a te, registrazioni, diretta e passaggi in scaletta. Ognuno sceglie quali tenere.",

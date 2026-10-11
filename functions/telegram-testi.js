@@ -25,7 +25,6 @@ const votanti = (c, v) => Object.keys(c.reazioni || {}).filter(n => c.reazioni[n
 const commenti = (c) => Object.entries(c.commenti || {})
   .filter(([n, t]) => (c.reazioni || {})[n] && String(t || "").trim())
   .map(([n, t]) => [n, String(t).trim().slice(0, 100)]);
-const VOTO = { up: "👍", down: "👎" };
 
 const FMT_GIORNO = new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", weekday: "short", day: "numeric", month: "short" });
 const FMT_DATA = new Intl.DateTimeFormat("it-IT", { timeZone: "UTC", day: "numeric", month: "short" });
@@ -109,15 +108,31 @@ function elenco(righe, nome = "altri") {
 function sezione(titolo, righe, nome) {
   return righe.length ? `<b>${titolo}</b>\n${elenco(righe, nome).join("\n")}` : "";
 }
+// totali di una proposta, senza nomi: «👍 5 · 👎 1»
+const totaliVoti = (c) => `👍 ${votanti(c, "up").length} · 👎 ${votanti(c, "down").length}`;
+// classifica come nell'app: più 👍, a parità meno 👎, poi l'ordine
+const perClassifica = (a, b) =>
+  votanti(b, "up").length - votanti(a, "up").length || votanti(a, "down").length - votanti(b, "down").length || ordine(a) - ordine(b);
+const MAX_COMMENTI = 3;   // commenti mostrati per canzone, poi "… e altri N"
+// commenti come citazione (riquadro di Telegram), senza nome e senza pollice
+function righeCommenti(testi) {
+  if (!testi.length) return [];
+  const righe = testi.slice(0, MAX_COMMENTI).map(t => `«${esc(t)}»`);
+  if (testi.length > MAX_COMMENTI) righe.push(`<i>… e altri ${testi.length - MAX_COMMENTI}</i>`);
+  return [`<blockquote>${righe.join("\n")}</blockquote>`];
+}
 
 function taglia(testo) {
   if (testo.length <= MAX_TESTO) return testo;
   const righe = testo.split("\n");
   let out = "";
   for (const r of righe) {
-    if (out.length + r.length + 1 > MAX_TESTO - 60) break;
+    if (out.length + r.length + 1 > MAX_TESTO - 80) break;
     out += (out ? "\n" : "") + r;
   }
+  // un riquadro di citazione tagliato a metà va chiuso, altrimenti Telegram rifiuta il messaggio
+  const aperti = (out.match(/<blockquote>/g) || []).length - (out.match(/<\/blockquote>/g) || []).length;
+  if (aperti > 0) out += "</blockquote>";
   return out + "\n<i>… il resto è nell'app.</i>";
 }
 
@@ -142,7 +157,7 @@ function contesto(dati) {
 }
 
 const rigaDaVotare = (ctx) =>
-  ctx.daVotare.length ? `<b>Da votare</b>: ${ctx.daVotare.map(x => `${esc(x.n)} ${x.k}`).join(" · ")}` : "";
+  ctx.daVotare.length ? `🙋 <b>Ancora da votare</b>: ${ctx.daVotare.map(x => `${esc(x.n)} ${x.k}`).join(" · ")}` : "";
 
 // ---------- novità di un periodo ----------
 // opzioni: da, a (ms), titolo, registroDa (ms dal quale esiste il registro, o null)
@@ -155,60 +170,43 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   // canzoni
   const nuove = canzoni.filter(c => !isGenerale(c) && nelPeriodo(c.creato, da, a)).sort((x, y) => x.creato - y.creato);
   const eraProposta = (c) => c.stato === "proposta" || !!c.propostaDa;
-  const nomeArt = (c) => `<b>${esc(c.titolo)}</b>${c.artista ? " – " + esc(c.artista) : ""}`;
-  blocchi.push(sezione("Proposte nuove",
-    nuove.filter(eraProposta).map(c => `• ${nomeArt(c)}${c.propostaDa ? ` (${esc(c.propostaDa)})` : ""}`)));
-  blocchi.push(sezione("Aggiunte in scaletta", nuove.filter(c => !eraProposta(c)).map(c => `• ${nomeArt(c)}`)));
+  const nomeArt = (c) => `<b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}`;
+  const proposteNuove = nuove.filter(eraProposta);
+  blocchi.push(sezione(`🆕 Proposte nuove (${proposteNuove.length})`, proposteNuove.map(nomeArt)));
+  blocchi.push(sezione("🎼 Aggiunte in scaletta", nuove.filter(c => !eraProposta(c)).map(nomeArt)));
   const passate = [...new Map(eventi.filter(e => e.tipo === "in_scaletta").map(e => [e.canzoneId, e])).values()];
-  blocchi.push(sezione("Passate in scaletta", passate.map(e => `• <b>${esc((perId.get(e.canzoneId) || {}).titolo || e.titolo)}</b>`)));
-  const eliminate = eventi.filter(e => e.tipo === "eliminata");
-  blocchi.push(sezione("Eliminate", eliminate.map(e => `• ${esc(e.titolo)}${e.stato === "proposta" ? " <i>(proposta)</i>" : ""}`)));
+  blocchi.push(sezione("⬆️ Passate in scaletta", passate.map(e => `<b>${esc((perId.get(e.canzoneId) || {}).titolo || e.titolo)}</b>`)));
 
-  // voti: per ogni canzone vale l'ultimo voto di ciascuno nel periodo
-  const voti = new Map();
-  for (const e of eventi.filter(e => e.tipo === "voto")) {
-    if (!voti.has(e.canzoneId)) voti.set(e.canzoneId, { titolo: e.titolo, chi: new Map() });
-    voti.get(e.canzoneId).chi.set(e.chi, e.voto);
-  }
-  // commenti del periodo: per ogni canzone l'ultimo di ciascuno, se c'è ancora
-  const comm = new Map();
-  for (const e of eventi.filter(e => e.tipo === "commento")) {
-    if (!comm.has(e.canzoneId)) comm.set(e.canzoneId, { titolo: e.titolo, chi: new Map() });
-    comm.get(e.canzoneId).chi.set(e.chi, e);
-  }
-  const righeVoti = [];
-  for (const id of new Set([...voti.keys(), ...comm.keys()])) {
-    const v = voti.get(id) || { titolo: (comm.get(id) || {}).titolo, chi: new Map() };
-    const su = [...v.chi].filter(([, x]) => x === "up").map(([n]) => esc(n));
-    const giu = [...v.chi].filter(([, x]) => x === "down").map(([n]) => esc(n));
-    const c = perId.get(id);
-    const attuali = new Map(c ? commenti(c) : []);
-    const righeCom = [...((comm.get(id) || {}).chi || new Map()).keys()]
-      .filter(n => attuali.has(n))
-      .map(n => `   <i>${esc(n)} ${VOTO[(c.reazioni || {})[n]] || ""}: «${esc(attuali.get(n))}»</i>`);
-    if (!su.length && !giu.length && !righeCom.length) continue;
-    const parti = [su.length ? `👍 ${su.join(", ")}` : "", giu.length ? `👎 ${giu.join(", ")}` : ""].filter(Boolean).join(" · ");
-    const totale = c && c.stato === "proposta" ? ` <i>(ora 👍 ${votanti(c, "up").length} 👎 ${votanti(c, "down").length})</i>` : "";
-    righeVoti.push([`• <b>${esc(c ? c.titolo : v.titolo)}</b>${parti ? ": " + parti : ""}${totale}`, ...righeCom].join("\n"));
-  }
-  blocchi.push(sezione("Voti", righeVoti));
+  // voti: le proposte votate nel periodo, con i totali di adesso (niente nomi, niente commenti:
+  // i commenti si leggono in /proposte e nell'app), in ordine di classifica
+  const votate = new Map();
+  for (const e of eventi.filter(e => e.tipo === "voto")) votate.set(e.canzoneId, (votate.get(e.canzoneId) || 0) + 1);
+  const nVoti = [...votate.values()].reduce((s, x) => s + x, 0);
+  const ancoraProposte = [...votate.keys()].map(id => perId.get(id)).filter(c => c && c.stato === "proposta").sort(perClassifica);
+  const righeVoti = ancoraProposte.map(c => {
+    const pronta = votanti(c, "up").length >= SOGLIA_SCALETTA ? " · <i>pronta</i>" : "";
+    return `<b>${esc(c.titolo)}</b> · ${totaliVoti(c)}${pronta}`;
+  });
+  const testaVoti = nVoti ? `🗳 Voti <i>· ${nVoti} ${nVoti === 1 ? "nuovo" : "nuovi"}</i>` : "🗳 Voti";
+  blocchi.push(sezione(testaVoti, righeVoti));
+  const eliminate = eventi.filter(e => e.tipo === "eliminata");
+  blocchi.push(sezione("🗑 Tolte", eliminate.map(e => `${esc(e.titolo)}${e.stato === "proposta" ? " <i>(proposta)</i>" : ""}`)));
 
   // task
   const fatti = tasks.filter(t => t.fatto && nelPeriodo(t.fattoIl, da, a)).sort((x, y) => x.fattoIl - y.fattoIl);
-  const righeFatti = fatti.map(t =>
-    `✓ ${esc(t.titolo)} — <i>${esc(nomeCanzone(t.canzoneId))}</i>${t.fattoDa ? ` (${esc(t.fattoDa)})` : ""}`);
+  const righeFatti = fatti.map(t => `${esc(t.titolo)} · <i>${esc(nomeCanzone(t.canzoneId))}</i>`);
   const pronte = [...new Set(fatti.map(t => t.canzoneId))].filter(id => {
     const c = perId.get(id);
     if (!c || isGenerale(c)) return false;
     const ts = tasks.filter(t => t.canzoneId === id);
     return ts.length > 0 && ts.every(t => t.fatto);
   });
-  if (pronte.length) righeFatti.push(`★ Ora pronte: ${pronte.map(id => `<b>${esc(nomeCanzone(id))}</b>`).join(", ")}`);
-  blocchi.push(sezione("Task completati", righeFatti));
+  if (pronte.length) righeFatti.push(`⭐ Ora pronte: ${pronte.map(id => `<b>${esc(nomeCanzone(id))}</b>`).join(", ")}`);
+  blocchi.push(sezione("✅ Task fatti", righeFatti));
   const nuoviTask = tasks.filter(t => !t.fatto && nelPeriodo(t.creato, da, a)).sort((x, y) => x.creato - y.creato);
-  blocchi.push(sezione("Task nuovi", nuoviTask.map(t => {
+  blocchi.push(sezione("📝 Task nuovi", nuoviTask.map(t => {
     const chi = chiTask(t.assegnatari);
-    return `• ${esc(t.titolo)} — <i>${esc(nomeCanzone(t.canzoneId))}</i>${chi ? ` (${esc(chi)})` : ""}`;
+    return `${esc(t.titolo)} · <i>${esc(nomeCanzone(t.canzoneId))}</i>${chi ? ` → ${esc(chi)}` : ""}`;
   })));
 
   // setup
@@ -217,16 +215,16 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
     if (!setup.has(e.canzoneId)) setup.set(e.canzoneId, { titolo: e.titolo, str: new Set() });
     setup.get(e.canzoneId).str.add(STRUMENTI[e.strumento] || e.strumento);
   }
-  blocchi.push(sezione("Setup aggiornati", [...setup].map(([id, s]) =>
-    `• <b>${esc((perId.get(id) || {}).titolo || s.titolo)}</b>: ${esc([...s.str].join(", "))}`)));
+  blocchi.push(sezione("🎛 Setup aggiornati", [...setup].map(([id, s]) =>
+    `<b>${esc((perId.get(id) || {}).titolo || s.titolo)}</b> · ${esc([...s.str].join(", "))}`)));
 
   // registrazioni
   const reg = (dati.registrazioni || []).filter(r => nelPeriodo(r.creato, da, a)).sort((x, y) => x.creato - y.creato);
-  blocchi.push(sezione("Registrazioni", reg.map(r => {
+  blocchi.push(sezione("🎧 Registrazioni", reg.map(r => {
     const canzone = nomeCanzone(r.canzoneId);
     const nome = canzone ? `<b>${esc(canzone)}</b>${r.etichetta ? " · " + esc(r.etichetta) : ""}` : `<b>${esc(r.etichetta || "Registrazione")}</b>`;
     const d = durata(r.durata);
-    return `• ${nome}${d ? ` — ${d}` : ""}${r.caricatoDa ? ` (${esc(r.caricatoDa)})` : ""}`;
+    return `${nome}${d ? ` · ${d}` : ""}`;
   }), "altre"));
 
   // cassa
@@ -235,14 +233,14 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   if (mov.length) {
     const righe = mov.map(m => {
       const entrata = m.tipo === "versamento";
-      return `• ${entrata ? "+" : "−"} ${euro(m.importoCent)} · ${esc(m.descrizione)}${m.chi ? ` (${esc(m.chi)})` : ""}`;
+      return `${entrata ? "+" : "−"} ${euro(m.importoCent)} · ${esc(m.descrizione)}${m.chi ? ` <i>(${esc(m.chi)})</i>` : ""}`;
     });
-    blocchi.push(`${sezione("Cassa", righe)}\nSaldo: <b>${euro(saldo(tutti))}</b>`);
+    blocchi.push(`${sezione("💶 Cassa", righe)}\nSaldo: <b>${euro(saldo(tutti))}</b>`);
   }
 
   // persone
   const persone = ctx.membri.filter(m => nelPeriodo(m.creato, da, a));
-  blocchi.push(sezione("Nuovi nella band", persone.map(m => `• ${esc(m.nome)}`)));
+  blocchi.push(sezione("👋 Nuovi nella band", persone.map(m => esc(m.nome))));
 
   const pieni = blocchi.filter(Boolean);
   const vuoto = pieni.length === 0;
@@ -257,7 +255,7 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   if (!registroDa) coda.push("<i>Voti, passaggi in scaletta e setup si vedranno dalla prossima ora: il registro sta partendo.</i>");
   else if (da < registroDa - ORA) coda.push(`<i>Voti, passaggi in scaletta e setup sono registrati dal ${giorno(registroDa)}.</i>`);
 
-  const intestazione = `<b>${esc(titolo)}</b>`;
+  const intestazione = `<b>📰 ${esc(titolo)}</b>`;
   const corpo = vuoto ? "Nessuna novità nell'app in questo periodo." : pieni.join("\n\n");
   const testo = [intestazione, corpo, coda.join("\n")].filter(Boolean).join("\n\n");
   return { testo: taglia(testo), vuoto };
@@ -291,21 +289,21 @@ function scaletta(dati) {
 // ---------- proposte e voti ----------
 function proposte(dati) {
   const ctx = contesto(dati);
-  const lista = [...ctx.proposte].sort((a, b) =>
-    votanti(b, "up").length - votanti(a, "up").length || votanti(a, "down").length - votanti(b, "down").length || ordine(a) - ordine(b));
-  if (!lista.length) return "<b>Proposte</b>\n\nNessuna proposta aperta.";
-  const righe = lista.map(c => {
-    const su = votanti(c, "up").length, giu = votanti(c, "down").length;
-    const mancano = ctx.nomi.filter(n => !(c.reazioni || {})[n]);
-    let r = `• <b>${esc(c.titolo)}</b>${c.artista ? " – " + esc(c.artista) : ""} · 👍 ${su} 👎 ${giu}`;
-    if (c.propostaDa) r += ` · <i>da ${esc(c.propostaDa)}</i>`;
-    for (const [n, t] of commenti(c)) r += `\n   <i>${esc(n)} ${VOTO[c.reazioni[n]] || ""}: «${esc(t)}»</i>`;
-    if (su >= SOGLIA_SCALETTA) r += "\n   pronta per passare in scaletta";
-    if (mancano.length) r += `\n   manca il voto di: ${esc(mancano.join(", "))}`;
-    return r;
+  const tutte = [...ctx.proposte].sort(perClassifica);
+  if (!tutte.length) return "<b>🗳 Proposte</b>\n\nNessuna proposta aperta.";
+  // quelle senza nessun voto vanno in fondo, in una riga sola
+  const votate = tutte.filter(c => Object.keys(c.reazioni || {}).length);
+  const senza = tutte.filter(c => !Object.keys(c.reazioni || {}).length);
+  const righe = votate.map((c, i) => {
+    const pronta = votanti(c, "up").length >= SOGLIA_SCALETTA ? " · <i>pronta per la scaletta</i>" : "";
+    return [`${i + 1}. <b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}`, `${totaliVoti(c)}${pronta}`,
+      ...righeCommenti(commenti(c).map(([, t]) => t))].join("\n");
   });
-  const dv = rigaDaVotare(ctx);
-  return taglia(`<b>Proposte</b> · ${lista.length}, dalla più votata\n\n${righe.join("\n")}${dv ? "\n\n" + dv : ""}`);
+  const piede = [
+    senza.length ? `<b>Ancora senza voti</b>: ${senza.map(c => esc(c.titolo)).join(" · ")}` : "",
+    rigaDaVotare(ctx)
+  ].filter(Boolean).join("\n\n");
+  return taglia(`<b>🗳 Proposte</b> · ${tutte.length}, dalla più votata\n\n${righe.join("\n\n")}${piede ? "\n\n" + piede : ""}`);
 }
 
 // ---------- task aperti, per persona ----------
