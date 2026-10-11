@@ -177,21 +177,15 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   const passate = [...new Map(eventi.filter(e => e.tipo === "in_scaletta").map(e => [e.canzoneId, e])).values()];
   blocchi.push(sezione("⬆️ Passate in scaletta", passate.map(e => `<b>${esc((perId.get(e.canzoneId) || {}).titolo || e.titolo)}</b>`)));
 
-  // voti: le proposte che hanno avuto voti o commenti nel periodo, con i totali di adesso
-  // (niente nomi) in ordine di classifica; sotto, i commenti nuovi come citazioni
+  // voti: le proposte votate nel periodo, con i totali di adesso (niente nomi, niente commenti:
+  // i commenti si leggono in /proposte e nell'app), in ordine di classifica
   const votate = new Map();
-  for (const e of eventi.filter(e => e.tipo === "voto" || e.tipo === "commento")) {
-    if (!votate.has(e.canzoneId)) votate.set(e.canzoneId, { voti: 0, commentatori: new Set() });
-    const x = votate.get(e.canzoneId);
-    if (e.tipo === "voto") x.voti++; else x.commentatori.add(e.chi);
-  }
-  const nVoti = [...votate.values()].reduce((s, x) => s + x.voti, 0);
+  for (const e of eventi.filter(e => e.tipo === "voto")) votate.set(e.canzoneId, (votate.get(e.canzoneId) || 0) + 1);
+  const nVoti = [...votate.values()].reduce((s, x) => s + x, 0);
   const ancoraProposte = [...votate.keys()].map(id => perId.get(id)).filter(c => c && c.stato === "proposta").sort(perClassifica);
   const righeVoti = ancoraProposte.map(c => {
-    const attuali = new Map(commenti(c));
-    const nuoviCom = [...votate.get(c.id).commentatori].filter(n => attuali.has(n)).map(n => attuali.get(n));
     const pronta = votanti(c, "up").length >= SOGLIA_SCALETTA ? " · <i>pronta</i>" : "";
-    return [`<b>${esc(c.titolo)}</b> · ${totaliVoti(c)}${pronta}`, ...righeCommenti(nuoviCom)].join("\n");
+    return `<b>${esc(c.titolo)}</b> · ${totaliVoti(c)}${pronta}`;
   });
   const testaVoti = nVoti ? `🗳 Voti <i>· ${nVoti} ${nVoti === 1 ? "nuovo" : "nuovi"}</i>` : "🗳 Voti";
   blocchi.push(sezione(testaVoti, righeVoti));

@@ -4,8 +4,8 @@
     {
       "versione": null, "data": "2026-10-11", "titolo": "Riepiloghi del bot più leggibili",
       "punti": [
-        "Nelle novità e in /proposte i voti sono solo i totali (👍 e 👎), senza i nomi di chi ha votato, in ordine di classifica.",
-        "I commenti compaiono in un riquadro sotto la canzone; le proposte senza voti sono raccolte in fondo."
+        "Nelle novità i voti sono solo i totali (👍 e 👎) delle proposte votate, senza nomi né commenti, in ordine di classifica.",
+        "In /proposte i commenti compaiono in un riquadro sotto la canzone, senza nomi; le proposte senza voti sono raccolte in fondo."
       ]
     },
     {
