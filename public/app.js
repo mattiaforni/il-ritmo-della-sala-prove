@@ -1049,11 +1049,11 @@ function salta(sec) {
   if (!state.playId || !isFinite(player.duration)) return;
   player.currentTime = Math.max(0, Math.min(player.duration - 0.1, player.currentTime + sec));
 }
-// titolo della registrazione: la canzone (o l'etichetta), sotto etichetta, data e chi l'ha caricata
+// titolo della registrazione: la canzone (o l'etichetta), sotto etichetta e data
 function infoRegistrazione(r) {
   const song = state.canzoni.find(c => c.id === r.canzoneId);
   const titolo = song ? song.titolo : (r.etichetta || "Registrazione");
-  const sotto = [song && r.etichetta ? r.etichetta : "", fmtGiorno(r.data), r.caricatoDa].filter(Boolean).join(" · ");
+  const sotto = [song && r.etichetta ? r.etichetta : "", fmtGiorno(r.data)].filter(Boolean).join(" · ");
   return { titolo, sotto };
 }
 // comandi sullo schermo bloccato e nelle notifiche del telefono
@@ -1079,7 +1079,8 @@ if ("mediaSession" in navigator) {
 }
 // barra "in riproduzione" sopra la barra delle sezioni: c'è finché una registrazione è caricata
 // (anche in pausa); si chiude con lo stop o a fine brano
-const MINI_STILE = window.__miniStile || "a";
+const ICO_INDIETRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.5 6v12L3 12zM21 6v12l-8.5-6z"/></svg>`;
+const ICO_AVANTI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 6v12L21 12zM3 6v12l8.5-6z"/></svg>`;
 function renderMini() {
   const el = $("#mini");
   if (!el) return;
@@ -1088,27 +1089,18 @@ function renderMini() {
   if (!r) { el.classList.add("hidden"); el.innerHTML = ""; el.dataset.id = ""; return; }
   const { titolo, sotto } = infoRegistrazione(r);
   const chiave = `${r.id}|${titolo}|${sotto}`;
-  if (el.dataset.id !== chiave) {
-    el.dataset.id = chiave;
-    el.className = `mini ${MINI_STILE}`;
-    const testo = `
-      <button class="mini-txt" data-action="mini-vai" data-id="${r.id}" aria-label="Vai alla registrazione">
-        <b>${esc(titolo)}</b><span>${esc(sotto)}</span>
-      </button>`;
-    const play = `<button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">❚❚</button>`;
-    const stop = `<button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">${MINI_STILE === "a" ? "■" : "✕"}</button>`;
-    const linea = `<div class="line mini-line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>`;
-    el.innerHTML = MINI_STILE === "a"
-      ? `${play}${testo}<span class="time mini-time" data-time="${r.id}"></span>${stop}${linea}`
-      : `<div class="mini-top">${testo}${stop}</div>
-         <div class="mini-ctl">
-           <button class="mini-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro 10 secondi">−10</button>
-           ${play}
-           <button class="mini-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti 10 secondi">+10</button>
-           ${linea}
-           <span class="time mini-time" data-time="${r.id}"></span>
-         </div>`;
-  }
+  if (el.dataset.id === chiave) return;
+  el.dataset.id = chiave;
+  el.classList.remove("hidden");
+  el.innerHTML = `
+    <div class="line mini-line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
+    <button class="mini-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro di 10 secondi">${ICO_INDIETRO}</button>
+    <button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">❚❚</button>
+    <button class="mini-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti di 10 secondi">${ICO_AVANTI}</button>
+    <button class="mini-txt" data-action="mini-vai" data-id="${r.id}" aria-label="Vai alla registrazione">
+      <b>${esc(titolo)}</b><span class="mini-sub"><span class="mini-quando">${esc(sotto)}</span><span class="mini-time" data-time="${r.id}"></span></span>
+    </button>
+    <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">■</button>`;
 }
 function syncPlayer() {
   renderMini();
