@@ -292,7 +292,7 @@ function scaletta(dati) {
 function proposte(dati) {
   const ctx = contesto(dati);
   const lista = [...ctx.proposte].sort((a, b) =>
-    votanti(b, "up").length - votanti(a, "up").length || ordine(a) - ordine(b));
+    votanti(b, "up").length - votanti(a, "up").length || votanti(a, "down").length - votanti(b, "down").length || ordine(a) - ordine(b));
   if (!lista.length) return "<b>Proposte</b>\n\nNessuna proposta aperta.";
   const righe = lista.map(c => {
     const su = votanti(c, "up").length, giu = votanti(c, "down").length;

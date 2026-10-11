@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "23";
+const APP_VERSION = "24";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -223,6 +223,18 @@ function whoTags(nomi = []) {
 const isGenerale = (c) => c.id === GENERALE_ID || c.stato === "generale";
 const scaletta = () => state.canzoni.filter(c => !isGenerale(c) && c.stato !== "proposta");
 const proposte = () => state.canzoni.filter(c => c.stato === "proposta");
+// classifica delle proposte: più 👍 prima; a parità, meno 👎; poi la più vecchia
+const contaVoti = (c, v) => Object.values(c.reazioni || {}).filter(x => x === v).length;
+const perClassifica = (a, b) => contaVoti(b, "up") - contaVoti(a, "up") || contaVoti(a, "down") - contaVoti(b, "down") || (a.ordine || 0) - (b.ordine || 0);
+// dove finisce una proposta nella classifica di chi usa l'app dopo il suo voto
+function posizioneDopoVoto(id, voto) {
+  const me = state.user;
+  const lista = proposte()
+    .map(c => c.id === id ? { ...c, reazioni: { ...(c.reazioni || {}), [me]: voto } } : c)
+    .filter(c => (c.reazioni || {})[me]).sort(perClassifica);
+  return { pos: lista.findIndex(c => c.id === id) + 1, tot: lista.length };
+}
+const msgPosizione = (id, voto) => { const { pos, tot } = posizioneDopoVoto(id, voto); return pos ? ` Ora è ${pos}ª su ${tot}.` : ""; };
 const tasksOf = (id) => state.tasks.filter(t => t.canzoneId === id);
 // Task con più persone: ognuno spunta la sua parte (campo fattiDa, elenco di nomi);
 // la task è fatta quando l'hanno spuntata tutti. Task senza fattiDa (vecchie): vale "fatto".
@@ -899,8 +911,15 @@ function commentoForm(c) {
     </form>`;
 }
 function renderProposte() {
-  const lista = proposte();
-  const cards = lista.map(c => {
+  // in alto, evidenziate, quelle che chi usa l'app non ha ancora votato (dalla più recente);
+  // sotto la classifica. Dopo un 👍 la proposta resta in alto finché è aperto il campo del commento.
+  const tieni = (c) => state.commentoVoto && state.commentoVoto.tieni && state.commentoVoto.id === c.id;
+  const daVotare = (c) => state.user && (!(c.reazioni || {})[state.user] || tieni(c));
+  const tutte = proposte();
+  const nuove = tutte.filter(daVotare).sort((a, b) => (b.ordine || 0) - (a.ordine || 0));
+  const classifica = tutte.filter(c => !daVotare(c)).sort(perClassifica);
+  const lista = nuove.concat(classifica);
+  const card = (c) => {
     const r = c.reazioni || {};
     const su = Object.keys(r).filter(n => r[n] === "up");
     const giu = Object.keys(r).filter(n => r[n] === "down");
@@ -918,7 +937,7 @@ function renderProposte() {
         ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom"><span class="vl" aria-label="${r[n] === "down" ? "Non mi piace" : "Mi piace"}">${r[n] === "down" ? "👎" : "👍"}</span>${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
       </div>`;
     return `
-    <article class="card">
+    <article class="card${daVotare(c) ? " da-votare" : ""}">
       <div class="song-head" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${open}">
         <div class="song-row">
           <h2 class="song-title">${esc(c.titolo)}</h2>
@@ -938,7 +957,11 @@ function renderProposte() {
       ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
       ${voters}
     </article>`;
-  }).join("");
+  };
+  const cards = nuove.length
+    ? `<h3 class="prop-sez">Da votare <small>${nuove.length}</small></h3>${nuove.map(card).join("")}` +
+      (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map(card).join("")}` : "")
+    : classifica.map(card).join("");
   $("#view-proposte").innerHTML = plStrip("proposte") +
     (lista.length ? cards : `<p class="empty big">Nessuna proposta. Butta lì un pezzo da provare.</p>`) +
     addSongBlock("proposte", "Proponi un pezzo", "Proponi");
@@ -1399,16 +1422,22 @@ async function act(btn) {
         render();
         document.querySelector(`[data-keep="vc-${id}"]`)?.focus();
       } else {
-        // 👍: il voto vale subito, il commento è facoltativo (dalla pagina personale niente commento)
-        state.commentoVoto = btn.closest("#view-personale") ? null : { id, voto: "up" };
+        // 👍: il voto vale subito, il commento è facoltativo (dalla pagina personale niente commento).
+        // Se non l'aveva ancora votata, resta in alto finché il campo del commento è aperto.
+        const nuova = !(c.reazioni || {})[state.user];
+        state.commentoVoto = btn.closest("#view-personale") ? null : { id, voto: "up", tieni: nuova };
         await salvaVoto(c, "up", null);
         document.querySelector(`[data-keep="vc-${id}"]`)?.focus();
       }
       break;
     }
-    case "commento-chiudi":
+    case "commento-chiudi": {
+      const cv = state.commentoVoto;
       state.commentoVoto = null;
-      render(); break;
+      render();
+      if (cv && cv.tieni) toast("Voto 👍 salvato." + msgPosizione(cv.id, "up"));
+      break;
+    }
     case "promote": {
       const c = state.canzoni.find(x => x.id === id);
       const maxOrd = scaletta().reduce((m, x) => Math.max(m, x.ordine || 0), 0);
@@ -1632,9 +1661,12 @@ mainEl.addEventListener("submit", async e => {
     const testo = form.testo.value.trim().replace(/\s+/g, " ");
     if (voto === "down" && !testo) { toast("Per il 👎 serve una riga sul perché."); form.testo.focus(); return; }
     form.testo.value = "";
+    // se arrivava da "Da votare", si dice dove è finita nella classifica
+    const eraNuova = !(c.reazioni || {})[state.user] || (state.commentoVoto && state.commentoVoto.tieni);
+    const dove = eraNuova ? msgPosizione(c.id, voto) : "";
     state.commentoVoto = null;
     await salvaVoto(c, voto, testo);
-    toast(voto === "down" ? "Voto 👎 salvato." : (testo ? "Commento salvato." : "Salvato."));
+    toast((voto === "down" ? "Voto 👎 salvato." : (testo ? "Commento salvato." : "Salvato.")) + dove);
     render();
   }
 

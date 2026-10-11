@@ -271,15 +271,16 @@ async function cercaBrano(token, c) {
 }
 
 const voti = (c) => Object.values(c.reazioni || {}).filter(v => v === "up").length;
+const contro = (c) => Object.values(c.reazioni || {}).filter(v => v === "down").length;
 const ord = (c) => (typeof c.ordine === "number" ? c.ordine : 0);
 
 // stesse regole dell'app: scaletta = tutto ciò che non è proposta né Generale, nell'ordine dell'app;
-// proposte = dalla più votata, a parità nell'ordine dell'app
+// proposte = dalla più votata; a parità, meno 👎; poi nell'ordine dell'app
 function liste(canzoni) {
   const gen = (c) => c.id === "generale" || c.stato === "generale";
   return {
     scaletta: canzoni.filter(c => !gen(c) && c.stato !== "proposta").sort((a, b) => ord(a) - ord(b)),
-    proposte: canzoni.filter(c => c.stato === "proposta").sort((a, b) => voti(b) - voti(a) || ord(a) - ord(b))
+    proposte: canzoni.filter(c => c.stato === "proposta").sort((a, b) => voti(b) - voti(a) || contro(a) - contro(b) || ord(a) - ord(b))
   };
 }
 

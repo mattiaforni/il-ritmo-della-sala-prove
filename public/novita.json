@@ -2,6 +2,14 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "24", "data": "2026-10-11", "titolo": "Proposte in classifica",
+      "punti": [
+        "Le proposte sono in ordine di 👍; a parità, prima quella con meno 👎.",
+        "In alto, evidenziate, quelle che non hai ancora votato: appena voti vanno al loro posto e un avviso dice in che posizione sono finite.",
+        "Anche la playlist Spotify delle proposte e /proposte del bot seguono lo stesso ordine."
+      ]
+    },
+    {
       "versione": "23", "data": "2026-10-10", "titolo": "Pagina della canzone e parti libere",
       "punti": [
         "Toccando una canzone in Scaletta si apre la sua pagina: task, setup, registrazioni e Modifica. Si torna indietro con la freccia o con il tasto indietro del telefono.",
