@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "24";
+const APP_VERSION = "25";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -977,7 +977,7 @@ function recRow(r, mode) {
   else name = esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`;
   const meta = [r.caricatoDa, fmtMB(r.size)].filter(Boolean).map(esc).join(" · ");
   return `
-    <div class="rec">
+    <div class="rec" data-rec="${r.id}">
       <span class="rec-name">${name}</span>
       <span class="rec-meta">${meta}<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button></span>
       ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
@@ -1034,9 +1034,76 @@ function playToggle(id) {
   state.playId = id;
   player.src = r.url;
   player.play().catch(() => toast("Impossibile riprodurre questo file."));
+  infoSchermoBloccato(r);
   syncPlayer();
 }
+// stop: si ferma, si torna all'inizio e la barra in basso si chiude
+function fermaRiproduzione() {
+  player.pause();
+  try { player.currentTime = 0; } catch (e) { /* file non ancora caricato */ }
+  state.playId = null;
+  if ("mediaSession" in navigator) navigator.mediaSession.metadata = null;
+  syncPlayer();
+}
+function salta(sec) {
+  if (!state.playId || !isFinite(player.duration)) return;
+  player.currentTime = Math.max(0, Math.min(player.duration - 0.1, player.currentTime + sec));
+}
+// titolo della registrazione: la canzone (o l'etichetta), sotto etichetta e data
+function infoRegistrazione(r) {
+  const song = state.canzoni.find(c => c.id === r.canzoneId);
+  const titolo = song ? song.titolo : (r.etichetta || "Registrazione");
+  const sotto = [song && r.etichetta ? r.etichetta : "", fmtGiorno(r.data)].filter(Boolean).join(" · ");
+  return { titolo, sotto };
+}
+// comandi sullo schermo bloccato e nelle notifiche del telefono
+function infoSchermoBloccato(r) {
+  if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
+  const { titolo, sotto } = infoRegistrazione(r);
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: titolo, artist: sotto, album: "Il ritmo della sala prove",
+      artwork: [{ src: "icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }]
+    });
+  } catch (e) { /* browser senza supporto */ }
+}
+if ("mediaSession" in navigator) {
+  const ms = navigator.mediaSession;
+  const prova = (azione, fn) => { try { ms.setActionHandler(azione, fn); } catch (e) { /* azione non supportata */ } };
+  prova("play", () => player.play().catch(() => {}));
+  prova("pause", () => player.pause());
+  prova("stop", fermaRiproduzione);
+  prova("seekbackward", (d) => salta(-(d.seekOffset || 10)));
+  prova("seekforward", (d) => salta(d.seekOffset || 10));
+  prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
+}
+// barra "in riproduzione" sopra la barra delle sezioni: c'è finché una registrazione è caricata
+// (anche in pausa); si chiude con lo stop o a fine brano
+const ICO_INDIETRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.5 6v12L3 12zM21 6v12l-8.5-6z"/></svg>`;
+const ICO_AVANTI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 6v12L21 12zM3 6v12l8.5-6z"/></svg>`;
+function renderMini() {
+  const el = $("#mini");
+  if (!el) return;
+  const r = state.playId && state.registrazioni.find(x => x.id === state.playId);
+  document.body.classList.toggle("con-mini", !!r);
+  if (!r) { el.classList.add("hidden"); el.innerHTML = ""; el.dataset.id = ""; return; }
+  const { titolo, sotto } = infoRegistrazione(r);
+  const chiave = `${r.id}|${titolo}|${sotto}`;
+  if (el.dataset.id === chiave) return;
+  el.dataset.id = chiave;
+  el.classList.remove("hidden");
+  el.innerHTML = `
+    <div class="line mini-line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
+    <button class="mini-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro di 10 secondi">${ICO_INDIETRO}</button>
+    <button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">❚❚</button>
+    <button class="mini-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti di 10 secondi">${ICO_AVANTI}</button>
+    <button class="mini-txt" data-action="mini-vai" data-id="${r.id}" aria-label="Vai alla registrazione">
+      <b>${esc(titolo)}</b><span class="mini-sub"><span class="mini-quando">${esc(sotto)}</span><span class="mini-time" data-time="${r.id}"></span></span>
+    </button>
+    <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">■</button>`;
+}
 function syncPlayer() {
+  renderMini();
   const cur = state.playId, playing = cur && !player.paused, dur = player.duration;
   document.querySelectorAll(".play").forEach(b => {
     const isCur = b.dataset.id === cur;
@@ -1055,6 +1122,8 @@ function syncPlayer() {
   });
 }
 ["play", "pause", "timeupdate", "ended", "loadedmetadata"].forEach(ev => player.addEventListener(ev, syncPlayer));
+// a fine brano la barra si chiude (come con lo stop)
+player.addEventListener("ended", fermaRiproduzione);
 player.addEventListener("loadedmetadata", () => {
   const r = state.registrazioni.find(x => x.id === state.playId);
   if (r && !r.durata && isFinite(player.duration)) {
@@ -1447,6 +1516,19 @@ async function act(btn) {
       break;
     }
     case "play": playToggle(id); break;
+    case "mini-stop": fermaRiproduzione(); break;
+    case "mini-salta": salta(Number(btn.dataset.sec) || 0); break;
+    case "mini-vai": {
+      // si va alla registrazione nella sezione Audio
+      showTab("audio");
+      const riga = document.querySelector(`#view-audio [data-rec="${CSS.escape(id)}"]`);
+      if (riga) {
+        riga.scrollIntoView({ block: "center" });
+        riga.classList.add("evidenzia");
+        setTimeout(() => riga.classList.remove("evidenzia"), 1600);
+      }
+      break;
+    }
     case "seek": {
       if (state.playId !== id) { playToggle(id); break; }
       if (isFinite(player.duration)) {
@@ -1458,7 +1540,7 @@ async function act(btn) {
     case "del-rec": {
       const r = state.registrazioni.find(x => x.id === id);
       if (!r || !confirm("Eliminare questa registrazione?")) return;
-      if (state.playId === id) { player.pause(); state.playId = null; }
+      if (state.playId === id) fermaRiproduzione();
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
       await deleteDoc(doc(db, "registrazioni", id)).catch(erroreScrittura);
       break;
@@ -1547,6 +1629,11 @@ mainEl.addEventListener("click", e => {
   if (!btn || btn.disabled) return;
   // un click su un bottone interno non deve aprire/chiudere la scheda
   act(btn);
+});
+$("#mini")?.addEventListener("click", e => {
+  window.__lastX = e.clientX;
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
 });
 mainEl.addEventListener("keydown", e => {
   if (e.key !== "Enter" && e.key !== " ") return;

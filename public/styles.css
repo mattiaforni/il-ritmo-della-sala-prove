@@ -683,3 +683,30 @@ button.ini.parte.on {
 .prop-sez:first-of-type { margin-top: 4px; }
 .prop-sez small { font-weight: 500; }
 .card.da-votare { border-left: 3px solid var(--ambra); background: var(--ambra-chiaro); border-color: rgba(217, 154, 43, .45); border-left-color: var(--ambra); }
+
+/* ---------- barra "in riproduzione" (sopra la barra delle sezioni) ---------- */
+.mini {
+  position: fixed; left: 0; right: 0; bottom: calc(67px + env(safe-area-inset-bottom)); z-index: 41;
+  background: var(--legno); color: var(--calce);
+  display: grid; grid-template-columns: 32px 38px 32px 1fr 34px; gap: 8px; align-items: center;
+  padding: 12px 12px 10px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, .18);
+}
+.mini-line { position: absolute; left: 0; right: 0; top: 0; height: 12px; align-items: flex-start; }
+.mini-line > span { height: 3px; background: rgba(244, 239, 228, .18); }
+.mini-line i { background: var(--ambra); }
+.mini-play { width: 38px; height: 38px; font-size: 12px; background: var(--ambra); color: var(--legno); }
+.mini .play.on { background: var(--ambra); color: var(--legno); }
+.mini-salta { width: 32px; height: 34px; padding: 0; background: none; border: none; color: var(--calce); display: grid; place-items: center; border-radius: var(--r-tag); }
+.mini-salta svg { width: 20px; height: 20px; fill: currentColor; }
+.mini-salta:active { background: rgba(244, 239, 228, .12); }
+.mini-txt { background: none; border: none; padding: 0 0 0 4px; text-align: left; color: inherit; min-width: 0; display: grid; gap: 1px; }
+.mini-txt b { font: 600 14px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-sub { display: flex; gap: 8px; justify-content: space-between; font-size: 12px; color: rgba(244, 239, 228, .7); min-width: 0; }
+.mini-quando { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mini-time { font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.mini-stop { width: 34px; height: 34px; border: 1px solid rgba(244, 239, 228, .35); border-radius: var(--r-tag); background: none; color: var(--calce); font-size: 12px; padding: 0; }
+.rec.evidenzia { background: var(--ambra-chiaro); transition: background .3s; }
+body.con-mini { padding-bottom: calc(96px + 62px + env(safe-area-inset-bottom)); }
+body.con-mini .toast { bottom: calc(86px + 62px + env(safe-area-inset-bottom)); }
+body.con-mini .update-banner { bottom: calc(80px + 62px + env(safe-area-inset-bottom)); }
