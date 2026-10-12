@@ -23,7 +23,7 @@ const BITRATE = 128000;           // Opus stereo a 128 kbps: qualità musica, no
 const ATTESA_RISPOSTA_MS = 20000;
 const CHIAVE_INGRESSO = "prove_diretta_ingresso";
 
-export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, alAvvio }) {
+export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, alAvvio, primaDiAscoltare, ripristinaComandi }) {
   const supportata = typeof RTCPeerConnection !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
   const audioEl = document.getElementById("diretta-audio");
   const d = {
@@ -294,13 +294,58 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
     d.meter = null;
   }
 
+  // ---------- ascolto a schermo bloccato ----------
+  // Con lo schermo spento il telefono ferma l'audio di una pagina che non "sta riproducendo"
+  // niente: per lui una connessione WebRTC non è una riproduzione. Un file quasi muto in loop
+  // (−84 dB, non si sente), con titolo e comandi sullo schermo bloccato, fa risultare la pagina
+  // in riproduzione e la tiene sveglia mentre arriva l'audio della diretta.
+  const veglia = new Audio("silenzio.wav");
+  veglia.loop = true;
+  veglia.preload = "none";
+  function comandiDiretta() {
+    if (!("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    try {
+      ms.metadata = new MediaMetadata({
+        title: "Diretta dalla sala", artist: "Il ritmo della sala prove",
+        artwork: [{ src: "icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }]
+      });
+      ms.playbackState = "playing";
+    } catch (e) { /* browser senza supporto */ }
+    const prova = (azione, fn) => { try { ms.setActionHandler(azione, fn); } catch (e) { /* azione non supportata */ } };
+    prova("pause", () => smetti());
+    prova("stop", () => smetti());
+    prova("play", () => { veglia.play().catch(() => {}); audioEl.play().catch(() => {}); });
+    prova("seekbackward", null); prova("seekforward", null); prova("seekto", null);
+  }
+  function tieniSveglio() {
+    veglia.play().catch(() => {});
+    comandiDiretta();
+  }
+  function lasciaDormire() {
+    veglia.pause();
+    try { veglia.currentTime = 0; } catch (e) { /* non ancora caricato */ }
+    if ("mediaSession" in navigator) {
+      try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; } catch (e) { /* niente */ }
+    }
+    if (ripristinaComandi) ripristinaComandi();
+  }
+  // se il telefono ha messo in pausa l'audio passando in secondo piano, si riprova a farlo ripartire
+  document.addEventListener("visibilitychange", () => {
+    if (!d.ascolto || !audioEl.srcObject) return;
+    if (audioEl.paused) audioEl.play().catch(() => {});
+    if (veglia.paused) veglia.play().catch(() => {});
+  });
+
   // ---------- ascolto: i telefoni ----------
   async function ascolta(tentativi = 0) {
     const s = inOnda();
     if (!s) return;
     smettiLocale(true);
+    if (primaDiAscoltare) primaDiAscoltare();
     // va chiamato subito, nel tocco: sblocca la riproduzione su iPhone e su alcuni Android
     audioEl.play().catch(() => {});
+    tieniSveglio();
     const id = "ascolto-" + rnd();
     const pc = new RTCPeerConnection({ iceServers: ICE });
     const a = { id, sessione: s.sessione, pc, stato: "connessione", msg: "", tentativi };
@@ -344,7 +389,7 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
     d.ascolto = null;
     try { a.pc.close(); } catch {}
     deleteDoc(doc(db, "diretta", a.id)).catch(() => {});
-    if (!tieniAudio) { audioEl.pause(); audioEl.srcObject = null; }
+    if (!tieniAudio) { audioEl.pause(); audioEl.srcObject = null; lasciaDormire(); }
   }
   function smetti() { smettiLocale(false); render(); }
   // a ogni cambiamento dei dati: arriva la risposta del computer, oppure la diretta finisce o ricomincia
@@ -452,6 +497,7 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
       case "dir-ascolta": ascolta(); break;
       case "dir-smetti": smetti(); break;
       case "dir-riproduci":
+        veglia.play().catch(() => {});
         audioEl.play()
           .then(() => { if (d.ascolto) { d.ascolto.stato = "in-ascolto"; render(); } })
           .catch(() => toast("Il telefono non fa partire l'audio."));

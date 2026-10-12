@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "26";
+const APP_VERSION = "27";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -593,6 +593,9 @@ function rimetti(key, valore) {
 const diretta = creaDiretta({
   db, toast: (m) => toast(m), utente: () => state.user, esc, iniTag: (n) => iniTag(n),
   alAvvio: () => notifica("diretta"),
+  // ascoltando la diretta si ferma la registrazione eventualmente in riproduzione
+  primaDiAscoltare: () => { if (state.playId) fermaRiproduzione(); },
+  ripristinaComandi: () => comandiRegistrazioni(),
   isMobile: IS_ANDROID || IS_IOS, isIOS: IS_IOS
 });
 function subscribe() {
@@ -1179,6 +1182,7 @@ function playToggle(id) {
   state.playId = id;
   player.src = r.url;
   player.play().catch(() => toast("Impossibile riprodurre questo file."));
+  comandiRegistrazioni();
   infoSchermoBloccato(r);
   syncPlayer();
 }
@@ -1212,7 +1216,9 @@ function infoSchermoBloccato(r) {
     });
   } catch (e) { /* browser senza supporto */ }
 }
-if ("mediaSession" in navigator) {
+// comandi delle registrazioni (la diretta mette i suoi mentre si ascolta, poi li rimette questi)
+function comandiRegistrazioni() {
+  if (!("mediaSession" in navigator)) return;
   const ms = navigator.mediaSession;
   const prova = (azione, fn) => { try { ms.setActionHandler(azione, fn); } catch (e) { /* azione non supportata */ } };
   prova("play", () => player.play().catch(() => {}));
@@ -1222,6 +1228,7 @@ if ("mediaSession" in navigator) {
   prova("seekforward", (d) => salta(d.seekOffset || 10));
   prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
 }
+comandiRegistrazioni();
 // barra "in riproduzione" sopra la barra delle sezioni: c'è finché una registrazione è caricata
 // (anche in pausa); si chiude con lo stop o a fine brano
 const ICO_INDIETRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.5 6v12L3 12zM21 6v12l-8.5-6z"/></svg>`;
