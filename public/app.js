@@ -32,7 +32,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "27";
+const APP_VERSION = "28";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -157,6 +157,7 @@ const state = {
   pendingFiles: [],
   upload: { active: false, pct: 0, txt: "" },
   playId: null,
+  coda: null,                 // registrazioni da ascoltare di fila (id), quella in riproduzione compresa
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
@@ -262,6 +263,12 @@ function fattiDi(t) {
 const taskFatta = (t) => multipla(t) ? assegnati(t).every(n => fattiDi(t).includes(n)) : !!t.fatto;
 const parteFatta = (t, nome) => multipla(t) ? fattiDi(t).includes(nome) : !!t.fatto;
 const recsOf = (id) => state.registrazioni.filter(r => r.canzoneId === id);
+// dentro lo stesso giorno le registrazioni vanno nell'ordine in cui sono state caricate (l'ordine della prova)
+const msDi = (t) => (t && t.toMillis ? t.toMillis() : t && t.seconds ? t.seconds * 1000 : 0);
+const perOrdineDiProva = (a, b) => msDi(a.creato) - msDi(b.creato) || String(a.nomeFile || "").localeCompare(String(b.nomeFile || ""), "it", { numeric: true });
+// riproduzione di fila: le registrazioni dello stesso giorno (da Audio) o della stessa canzone (dalla sua pagina)
+const codaGiorno = (data) => state.registrazioni.filter(r => (r.data || "") === (data || "")).sort(perOrdineDiProva).map(r => r.id);
+const codaCanzone = (canzoneId) => recsOf(canzoneId).map(r => r.id);
 const pct = (d, t) => t ? Math.round(d / t * 100) : 0;
 const songQuery = (c) => c.titolo + (c.artista ? " " + c.artista : "");
 
@@ -1144,8 +1151,8 @@ function renderAudio() {
   });
   const lista = gruppi.map(g => `
     <section class="card rec-group">
-      <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small></h2>
-      ${g.items.map(r => recRow(r, "audio")).join("")}
+      <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small>${g.items.length > 1 ? `<button class="btn quiet tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">▶ Tutte</button>` : ""}</h2>
+      ${[...g.items].sort(perOrdineDiProva).map(r => recRow(r, "audio")).join("")}
     </section>`).join("");
   const opzioni = [...scaletta(), ...proposte()].map(c =>
     `<option value="${c.id}">${esc(c.titolo)}${c.artista ? " – " + esc(c.artista) : ""}</option>`).join("");
@@ -1175,10 +1182,12 @@ function renderAudio() {
 
 // player unico: la riproduzione continua anche quando la pagina si ridisegna
 const player = $("#player");
-function playToggle(id) {
+function playToggle(id, coda) {
   const r = state.registrazioni.find(x => x.id === id);
   if (!r) return;
   if (state.playId === id) { player.paused ? player.play().catch(() => {}) : player.pause(); return; }
+  if (coda) state.coda = coda;
+  if (!state.coda || !state.coda.includes(id)) state.coda = [id];
   state.playId = id;
   player.src = r.url;
   player.play().catch(() => toast("Impossibile riprodurre questo file."));
@@ -1191,8 +1200,25 @@ function fermaRiproduzione() {
   player.pause();
   try { player.currentTime = 0; } catch (e) { /* file non ancora caricato */ }
   state.playId = null;
+  state.coda = null;
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = null;
   syncPlayer();
+}
+// passa alla registrazione successiva (passo 1) o precedente (−1) della coda; false se non c'è
+function vaiInCoda(passo) {
+  const c = (state.coda || []).filter(id => state.registrazioni.some(r => r.id === id));
+  const i = c.indexOf(state.playId);
+  const j = i + passo;
+  if (i < 0 || j < 0 || j >= c.length) return false;
+  state.coda = c;
+  playToggle(c[j]);
+  return true;
+}
+// posizione nella coda, es. "2 di 7" (vuoto se si ascolta una registrazione sola)
+function posizioneInCoda() {
+  const c = (state.coda || []).filter(id => state.registrazioni.some(r => r.id === id));
+  const i = c.indexOf(state.playId);
+  return c.length > 1 && i >= 0 ? `${i + 1} di ${c.length}` : "";
 }
 function salta(sec) {
   if (!state.playId || !isFinite(player.duration)) return;
@@ -1209,9 +1235,10 @@ function infoRegistrazione(r) {
 function infoSchermoBloccato(r) {
   if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
   const { titolo, sotto } = infoRegistrazione(r);
+  const pos = posizioneInCoda();
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: titolo, artist: sotto, album: "Il ritmo della sala prove",
+      title: titolo, artist: [sotto, pos].filter(Boolean).join(" · "), album: "Il ritmo della sala prove",
       artwork: [{ src: "icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }]
     });
   } catch (e) { /* browser senza supporto */ }
@@ -1227,6 +1254,12 @@ function comandiRegistrazioni() {
   prova("seekbackward", (d) => salta(-(d.seekOffset || 10)));
   prova("seekforward", (d) => salta(d.seekOffset || 10));
   prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
+  // tasti avanti/indietro di brano (schermo bloccato, cuffie, volante dell'auto)
+  const c = state.coda || [], i = c.indexOf(state.playId);
+  prova("nexttrack", i >= 0 && i < c.length - 1 ? () => vaiInCoda(1) : null);
+  prova("previoustrack", () => {
+    if (player.currentTime > 3 || !vaiInCoda(-1)) { try { player.currentTime = 0; } catch (e) { /* niente */ } }
+  });
 }
 comandiRegistrazioni();
 // barra "in riproduzione" sopra la barra delle sezioni: c'è finché una registrazione è caricata
@@ -1239,7 +1272,9 @@ function renderMini() {
   const r = state.playId && state.registrazioni.find(x => x.id === state.playId);
   document.body.classList.toggle("con-mini", !!r);
   if (!r) { el.classList.add("hidden"); el.innerHTML = ""; el.dataset.id = ""; return; }
-  const { titolo, sotto } = infoRegistrazione(r);
+  const info = infoRegistrazione(r);
+  const titolo = info.titolo;
+  const sotto = [info.sotto, posizioneInCoda()].filter(Boolean).join(" · ");
   const chiave = `${r.id}|${titolo}|${sotto}`;
   if (el.dataset.id === chiave) return;
   el.dataset.id = chiave;
@@ -1275,7 +1310,7 @@ function syncPlayer() {
 }
 ["play", "pause", "timeupdate", "ended", "loadedmetadata"].forEach(ev => player.addEventListener(ev, syncPlayer));
 // a fine brano la barra si chiude (come con lo stop)
-player.addEventListener("ended", fermaRiproduzione);
+player.addEventListener("ended", () => { if (!vaiInCoda(1)) fermaRiproduzione(); });
 player.addEventListener("loadedmetadata", () => {
   const r = state.registrazioni.find(x => x.id === state.playId);
   if (r && !r.durata && isFinite(player.duration)) {
@@ -1669,7 +1704,17 @@ async function act(btn) {
       if (fatto) notifica("scaletta", { canzoneId: id });
       break;
     }
-    case "play": playToggle(id); break;
+    case "play": {
+      if (state.playId === id || btn.closest("#mini")) { playToggle(id); break; }
+      const r = state.registrazioni.find(x => x.id === id);
+      playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
+      break;
+    }
+    case "play-giorno": {
+      const coda = codaGiorno(btn.dataset.data);
+      if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      break;
+    }
     case "mini-stop": fermaRiproduzione(); break;
     case "push-attiva": attivaNotifiche(); break;
     case "push-disattiva": disattivaNotifiche(); break;
@@ -1697,7 +1742,11 @@ async function act(btn) {
       break;
     }
     case "seek": {
-      if (state.playId !== id) { playToggle(id); break; }
+      if (state.playId !== id) {
+        const r = state.registrazioni.find(x => x.id === id);
+        playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
+        break;
+      }
       if (isFinite(player.duration)) {
         const r = btn.getBoundingClientRect();
         player.currentTime = Math.max(0, Math.min(1, (window.__lastX - r.left) / r.width)) * player.duration;
