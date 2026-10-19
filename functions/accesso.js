@@ -4,11 +4,12 @@
 // La band (e solo la band) imposta, cambia o disattiva la password dei fan
 // dalla pagina Personale. L'account è fan@il-ritmo-della-sala-prove.web.app:
 // le regole di Firestore gli lasciano leggere scaletta, proposte, task,
-// registrazioni e diretta (non la cassa) e scrivere solo la propria richiesta
-// di ascolto della diretta. Il nome del fan sta solo sul suo telefono.
+// registrazioni, diretta e bacheca (non la cassa) e scrivere solo la propria
+// richiesta di ascolto della diretta. Il nome del fan sta solo sul suo telefono.
 //
-//   privato/fan             { attivo, password, generazione, aggiornata, da }
-//   privato/fan/messaggi/*  { nome, testo, creato, ua } — "Scrivi alla band"
+//   privato/fan   { attivo, password, generazione, aggiornata, da }
+//   bacheca/*     { nome, testo, band, creato } — i messaggi dei fan li scrive questa
+//                 funzione (op "messaggio"); la band scrive e toglie direttamente
 //
 // La password resta leggibile alla band (serve a mandare l'invito a chi arriva
 // dopo). "generazione" cresce a ogni cambio o disattivazione: le iscrizioni alle
@@ -16,15 +17,15 @@
 // Cambiando la password le sessioni aperte vengono revocate: le richieste alle
 // funzioni sono rifiutate subito, il database smette di rispondere entro un'ora.
 //
-// I messaggi dei fan finiscono anche nel gruppo Telegram della band, se il bot
-// è collegato (vedi telegram.js).
+// I messaggi dei fan in bacheca finiscono anche nel gruppo Telegram della band,
+// se il bot è collegato (vedi telegram.js).
 // ============================================================
 const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 
 const refFan = () => getFirestore().doc("privato/fan");
-const messaggi = () => refFan().collection("messaggi");
+const bacheca = () => getFirestore().collection("bacheca");
 const ms = (t) => (t && t.toMillis ? t.toMillis() : typeof t === "number" ? t : null);
 const MAX_MESSAGGI_ORA = 20;            // tutti i fan insieme: oltre, si aspetta
 const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -34,16 +35,11 @@ async function utenteFan(email) {
   catch (e) { if (e.code === "auth/user-not-found") return null; throw e; }
 }
 
-async function ultimiMessaggi(n = 5) {
-  const s = await messaggi().orderBy("creato", "desc").limit(n).get();
-  return s.docs.map(d => { const x = d.data(); return { nome: x.nome || "", testo: x.testo || "", creato: ms(x.creato) }; });
-}
-
 async function stato(email) {
-  const [snap, u, msg] = await Promise.all([refFan().get(), utenteFan(email), ultimiMessaggi()]);
+  const [snap, u] = await Promise.all([refFan().get(), utenteFan(email)]);
   const d = snap.exists ? snap.data() : {};
   const attivo = !!(d.attivo && u && !u.disabled);
-  return { attivo, password: attivo ? (d.password || "") : "", aggiornata: ms(d.aggiornata), da: d.da || "", messaggi: msg };
+  return { attivo, password: attivo ? (d.password || "") : "", aggiornata: ms(d.aggiornata), da: d.da || "" };
 }
 
 // generazione corrente delle iscrizioni dei fan (null = accesso spento)
@@ -60,7 +56,7 @@ function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, segreti =
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
     const chi = await ruolo(req);
     const b = req.body || {};
-    // i fan possono solo scrivere alla band; tutto il resto è della band
+    // i fan possono solo pubblicare in bacheca; tutto il resto è della band
     if (b.op === "messaggio" ? chi !== "fan" : chi !== "band") return res.status(403).json({ error: "accesso negato" });
     const da = String(b.da || "").trim().replace(/\s+/g, " ").slice(0, 40);
     try {
@@ -69,12 +65,13 @@ function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, segreti =
       if (b.op === "messaggio") {
         const testo = typeof b.testo === "string" ? b.testo.trim().slice(0, 500) : "";
         if (!testo) return res.status(200).json({ error: "messaggio vuoto" });
-        const recenti = await messaggi().where("creato", ">", new Date(Date.now() - 3600 * 1000)).get();
-        if (recenti.size >= MAX_MESSAGGI_ORA) return res.status(200).json({ error: "troppi messaggi in poco tempo, riprova più tardi" });
-        await messaggi().add({ nome: da || "Fan", testo, creato: FieldValue.serverTimestamp(), ua: String(req.get("User-Agent") || "").slice(0, 160) });
+        // limite per tutti i fan insieme (si contano solo i loro, la band non ha limiti)
+        const recenti = await bacheca().where("creato", ">", new Date(Date.now() - 3600 * 1000)).get();
+        if (recenti.docs.filter(d => !d.data().band).length >= MAX_MESSAGGI_ORA) return res.status(200).json({ error: "troppi messaggi in poco tempo, riprova più tardi" });
+        await bacheca().add({ nome: da || "Fan", testo, band: false, creato: FieldValue.serverTimestamp() });
         let telegram = false;
         if (mandaAlGruppo) {
-          try { telegram = await mandaAlGruppo(`💬 <b>${escHtml(da || "Un fan")}</b> (fan) scrive dall'app:\n<blockquote>${escHtml(testo)}</blockquote>`); }
+          try { telegram = await mandaAlGruppo(`💬 <b>${escHtml(da || "Un fan")}</b> in bacheca:\n<blockquote>${escHtml(testo)}</blockquote>`); }
           catch (e) { console.warn(`[accesso] messaggio non inoltrato su Telegram: ${e.message}`); }
         }
         console.log(`[accesso] messaggio da ${da || "?"} (${testo.length} caratteri, Telegram: ${telegram ? "sì" : "no"})`);

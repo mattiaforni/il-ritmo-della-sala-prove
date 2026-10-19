@@ -1,8 +1,9 @@
 // Regole Firestore — Console Firebase → Firestore Database → Regole
 // Account condiviso della band: legge e scrive tutto.
-// Account dei fan (sola lettura): legge scaletta, proposte, task, persone, registrazioni
-// e diretta, non la cassa; scrive solo la propria richiesta di ascolto della diretta,
-// che crea e cancella. La password dei fan la gestisce la band dall'app.
+// Account dei fan (sola lettura): legge scaletta, proposte, task, persone, registrazioni,
+// diretta e bacheca, non la cassa. Scrive solo la propria richiesta di ascolto della
+// diretta, che crea e cancella; i messaggi in bacheca li scrive per loro la funzione
+// "accesso". La password dei fan la gestisce la band dall'app.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -13,10 +14,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'fan@il-ritmo-della-sala-prove.web.app';
     }
     match /{collection}/{doc} {
-      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta'])
-        || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta']);
+      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'])
+        || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta', 'bacheca']);
       allow write: if band()
-        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta'];
+        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'];
     }
     match /diretta/{id} {
       allow create: if fan() && id != 'stato'

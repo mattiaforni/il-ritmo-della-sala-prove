@@ -23,7 +23,6 @@ const BAND_EMAIL = window.BAND_EMAIL || "band@il-ritmo-della-sala-prove.web.app"
 // Secondo account condiviso, per i fan: guardano scaletta e proposte e ascoltano, ma non modificano nulla
 // (lo impongono le regole del database) e non vedono cassa e pagine personali. La password la imposta la band da Personale.
 const FAN_EMAIL = window.FAN_EMAIL || "fan@il-ritmo-della-sala-prove.web.app";
-const SOLA_LETTURA = "Accesso da fan: puoi guardare e ascoltare, votare e modificare tocca alla band.";
 const GENERALE_ID = "generale";
 const SOGLIA_SCALETTA = 5;          // da quanti 👍 il bottone "In scaletta" diventa verde
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
@@ -146,12 +145,11 @@ const state = {
   fanNome: store.get("prove_fan_nome"),   // il nome del fan resta sul telefono, come quello della band
   fanMenu: false,             // pannello del fan (tocco sul nome in alto)
   fanCambia: false,           // nel pannello: campo per cambiare nome
-  fanInvio: false,
   user: store.get("prove_user"),
   userId: store.get("prove_user_id"),   // l'identità del telefono segue la persona anche se cambia nome
   renaming: null,                        // id della persona che si sta rinominando
-  membri: [], canzoni: [], tasks: [], registrazioni: [], movimenti: [],
-  ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false },
+  membri: [], canzoni: [], tasks: [], registrazioni: [], movimenti: [], bacheca: [],
+  ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false, bacheca: false },
   subscribed: false,
   generaleOk: false,
   tab: (store.get("prove_tab") || "scaletta").replace("persone", "personale"),
@@ -176,7 +174,7 @@ const state = {
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
-  accesso: null,              // per la band: { attivo, password, aggiornata, da, messaggi } dell'accesso dei fan
+  accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
   spIcon: "icons/spotify.png",
@@ -474,7 +472,7 @@ function notificheCard() {
     </article>`;
 }
 // ---------- accesso dei fan ----------
-// la band imposta la password e legge i messaggi; i fan mandano messaggi alla band
+// la band imposta la password; i fan pubblicano in Bacheca
 async function chiamaAccesso(op, extra = {}) {
   const token = await auth.currentUser.getIdToken();
   const r = await fetch(ACCESSO_FN, {
@@ -499,11 +497,13 @@ async function eLaPasswordDellaBand(pw) {
   try { await signInWithEmailAndPassword(prova, BAND_EMAIL, pw); await signOut(prova).catch(() => {}); return true; }
   catch (e) { return false; }
 }
+// link d'invito: contiene la password, così il fan scrive solo il nome
+const linkInvito = () => `${location.origin}/?fan=${encodeURIComponent((state.accesso && state.accesso.password) || "")}`;
 function invitoFan() {
-  const a = state.accesso;
-  return `Il ritmo della sala prove: scaletta, proposte, registrazioni e diretta della band.\n` +
-    `Apri ${location.origin}/ ed entra con la password da fan: ${a && a.password ? a.password : ""}\n` +
-    `Ascolti le registrazioni e la diretta, ricevi le notifiche e puoi scriverci dall'app.`;
+  const pw = (state.accesso && state.accesso.password) || "";
+  return `Il ritmo della sala prove: la scaletta, le registrazioni delle prove, la diretta dalla sala e una bacheca per scriverci.\n` +
+    `Entra da qui: ${linkInvito()}\n` +
+    `(se te la chiede, la password da fan è: ${pw})`;
 }
 const quandoGiorno = (t) => t ? new Date(t).toLocaleDateString("it-IT", { day: "numeric", month: "long" }) : "";
 function accessoCard() {
@@ -522,33 +522,27 @@ function accessoCard() {
       </form>
       <p class="am-hint">Almeno 6 caratteri, diversa da quella della band.${a.attivo ? " Chi usa quella di adesso esce entro un'ora." : ""}</p>`;
   } else if (!a.attivo) {
-    corpo = `<p class="nt-txt">Con una password loro, i fan entrano in sola lettura: vedono scaletta, proposte con i voti e task, ascoltano registrazioni e diretta, ricevono le notifiche e possono scrivervi. Non votano, non modificano e non vedono cassa e pagine personali.</p>
+    corpo = `<p class="nt-txt">Una seconda password per i fan, da mandare con il link d'invito. Entrano con il loro nome e vedono Scaletta, Proposte, Audio e Bacheca.</p>
       <button class="btn fill" data-action="accesso-apri">Imposta la password</button>`;
   } else {
     const pw = a.password || "";
     corpo = `
       <div class="am-row"><span class="am-lbl">Password</span><span class="am-pw">${state.accessoVedi ? esc(pw) : "•".repeat(Math.min(pw.length || 8, 12))}</span>
         <button class="btn quiet am-mini" data-action="accesso-vedi">${state.accessoVedi ? "nascondi" : "mostra"}</button></div>
-      <p class="am-meta">${a.aggiornata ? `Impostata il ${esc(quandoGiorno(a.aggiornata))}${a.da ? ` da ${esc(a.da)}` : ""}.` : ""} I fan guardano e ascoltano, non votano e non modificano.</p>
+      ${a.aggiornata ? `<p class="am-meta">Impostata il ${esc(quandoGiorno(a.aggiornata))}${a.da ? ` da ${esc(a.da)}` : ""}.</p>` : ""}
       <div class="am-actions">
         <button class="btn fill" data-action="accesso-invita">Manda l'invito</button>
         <button class="btn quiet" data-action="accesso-apri">Cambia</button>
         <button class="btn quiet" data-action="accesso-disattiva">Disattiva</button>
       </div>`;
   }
-  const msg = (a && a.messaggi) || [];
-  const messaggi = !msg.length ? "" : `
-      <div class="am-msgs">
-        <h4 class="am-sub">Messaggi dei fan</h4>
-        ${msg.map(m => `<div class="am-msg"><span class="am-chi"><b>${esc(m.nome || "Fan")}</b> · ${esc(quandoGiorno(m.creato))}</span><span class="am-txt">${esc(m.testo)}</span></div>`).join("")}
-      </div>`;
   return `
     <article class="card ntcard amcard">
       <h3 class="sec-title">Accesso fan <small>${a && a.attivo ? "attivo" : a ? "spento" : ""}</small></h3>
-      <div class="pg-sec">${corpo}${messaggi}</div>
+      <div class="pg-sec">${corpo}</div>
     </article>`;
 }
-// ---------- fan: nome sul telefono e pannello (tocco sul nome in alto) ----------
+// ---------- fan: nome (se manca) e pannello dal nome in alto ----------
 function renderFan() {
   const box = $("#fan-box");
   if (!box) return;
@@ -556,40 +550,28 @@ function renderFan() {
   const aperto = state.fan && state.account && (serveNome || state.fanMenu);
   box.classList.toggle("hidden", !aperto);
   if (!aperto) { box.dataset.vista = ""; return; }
-  const kept = { vals: {}, focus: null };
-  box.querySelectorAll("[data-keep]").forEach(el => { kept.vals[el.dataset.keep] = el.value; });
-  const puoNotifiche = PUSH_OK && !(IS_IOS && !IN_APP) && Notification.permission !== "denied";
+  const kept = {};
+  box.querySelectorAll("[data-keep]").forEach(el => { kept[el.dataset.keep] = el.value; });
   let html;
   if (serveNome || state.fanCambia) {
     html = `
-      <h2 class="overlay-title">${serveNome ? "Ciao! Come ti chiami?" : "Cambia nome"}</h2>
-      <p class="overlay-sub">${serveNome ? "Il nome resta su questo telefono: la band vede chi ascolta la diretta e chi le scrive. Con l'accesso da fan guardi scaletta e proposte e ascolti registrazioni e diretta." : "Il nome resta su questo telefono."}</p>
+      <h2 class="overlay-title">${serveNome ? "Come ti chiami?" : "Cambia nome"}</h2>
       <form class="fan-nome" data-form="fan-nome">
-        <input class="field" name="nome" data-keep="fan-nome" value="${esc(serveNome ? "" : state.fanNome || "")}" placeholder="Il tuo nome" maxlength="30" autocomplete="given-name" required>
-        ${serveNome && puoNotifiche && !state.push ? `<label class="fan-check"><input type="checkbox" name="notifiche" checked><span>Avvisami di registrazioni nuove, diretta e proposte</span></label>` : ""}
+        <input class="field" name="nome" data-keep="fan-nome" value="${esc(serveNome ? "" : state.fanNome || "")}" placeholder="Il tuo nome" maxlength="30" autocomplete="given-name" autocapitalize="words" required>
         <div class="fan-azioni">${serveNome ? "" : `<button type="button" class="btn quiet" data-action="fan-annulla">Annulla</button>`}<button class="btn amb" type="submit">${serveNome ? "Entra" : "Salva"}</button></div>
       </form>`;
   } else {
     html = `
       <div class="fan-top"><h2 class="overlay-title">${esc(state.fanNome)}</h2><button class="x" data-action="fan-chiudi" aria-label="Chiudi">✕</button></div>
-      <p class="overlay-sub">Accesso da fan: guardi e ascolti, votare e modificare tocca alla band.</p>
-      <section class="fan-sez">
-        <h3 class="fan-h">Scrivi alla band</h3>
-        <form class="fan-msg" data-form="fan-messaggio">
-          <textarea class="field" name="testo" data-keep="fan-msg" maxlength="500" rows="3" placeholder="Un'idea, un pezzo da suonare, un commento sull'app…" required></textarea>
-          <button class="btn fill" type="submit" ${state.fanInvio ? "disabled" : ""}>${state.fanInvio ? "Mando…" : "Manda"}</button>
-        </form>
-      </section>
       <section class="fan-sez">
         <h3 class="fan-h">Notifiche${state.push ? " <small>attive</small>" : ""}</h3>
         ${notificheCorpo()}
       </section>
       <div class="fan-fondo"><button class="btn quiet" data-action="fan-cambia">Cambia nome</button><button class="btn quiet" data-action="esci">Esci</button></div>`;
   }
-  const vista = (serveNome || state.fanCambia ? "nome" : "menu");
   $("#fan-card").innerHTML = html;
-  box.dataset.vista = vista;
-  Object.entries(kept.vals).forEach(([k, v]) => { const el = box.querySelector(`[data-keep="${k}"]`); if (el && v) el.value = v; });
+  box.dataset.vista = serveNome || state.fanCambia ? "nome" : "menu";
+  Object.entries(kept).forEach(([k, v]) => { const el = box.querySelector(`[data-keep="${k}"]`); if (el && v) el.value = v; });
 }
 function salvaNomeFan(nome) {
   state.fanNome = nome;
@@ -692,29 +674,80 @@ onAuthStateChanged(auth, (account) => {
     $("#overlay").classList.add("hidden");
     $("#user-chip").classList.add("hidden");
     renderFan();
-    setTimeout(() => $("#gate-pw")?.focus(), 50);
+    setTimeout(() => (gateModo === "fan" ? $("#gate-nome") : $("#gate-pw"))?.focus(), 50);
   }
 });
 
+// ingresso: "Band" (password della band) o "Fan" (nome e password da fan).
+// Il link d'invito dei fan (?fan=…) porta la password: al fan resta solo da scrivere il nome.
+const INVITO = (() => {
+  const q = new URLSearchParams(location.search);
+  const v = q.get("fan");
+  if (v === null) return "";
+  q.delete("fan");
+  history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+  return v.trim();
+})();
+let gateModo = INVITO ? "fan" : (store.get("prove_gate_modo") === "fan" ? "fan" : "band");
+let invitoValido = !!INVITO;
+function modoGate(m) {
+  gateModo = m;
+  const fan = m === "fan", conInvito = fan && invitoValido;
+  document.querySelectorAll(".gate-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.modo === m)));
+  $(".gate-seg").classList.toggle("hidden", conInvito);
+  $(".gate-nome").classList.toggle("hidden", !fan);
+  $(".gate-pw-row").classList.toggle("hidden", conInvito);
+  $("#gate-pw").placeholder = fan ? "Password da fan" : "Password della band";
+  $("#gate-user").value = fan ? "fan" : "band";
+  const puoNotifiche = PUSH_OK && !(IS_IOS && !IN_APP) && Notification.permission !== "denied";
+  $(".gate-check").classList.toggle("hidden", !fan || !puoNotifiche);
+  $("#gate-nota").textContent = conInvito ? "La band ti ha mandato l'invito. Come ti chiami?"
+    : fan ? "Il tuo nome e la password da fan che ti ha dato la band."
+    : "La password della band: il telefono la ricorda.";
+  $("#gate-err").textContent = "";
+}
+document.querySelectorAll(".gate-seg button").forEach(b => b.addEventListener("click", () => {
+  modoGate(b.dataset.modo);
+  (gateModo === "fan" ? $("#gate-nome") : $("#gate-pw")).focus();
+}));
+modoGate(gateModo);
+
 $("#gate-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const pw = $("#gate-pw").value;
   const err = $("#gate-err");
-  if (!pw) return;
+  const fan = gateModo === "fan";
+  const nome = $("#gate-nome").value.trim().replace(/\s+/g, " ").slice(0, 30);
+  const pw = fan && invitoValido ? INVITO : $("#gate-pw").value;
+  if (fan && !nome) { err.textContent = "Scrivi il tuo nome."; $("#gate-nome").focus(); return; }
+  if (!pw) { err.textContent = fan ? "Scrivi la password da fan." : "Scrivi la password della band."; $("#gate-pw").focus(); return; }
   err.textContent = "";
+  // il permesso per le notifiche va chiesto adesso, dentro il tocco su «Entra»
+  const conNotifiche = fan && !$(".gate-check").classList.contains("hidden") && $("#gate-notifiche").checked;
+  const permesso = conNotifiche ? Notification.requestPermission().catch(() => "default") : null;
   const btn = e.target.querySelector(".enter");
   btn.disabled = true; btn.textContent = "Accesso…";
   const sbagliata = (ex) => ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found", "auth/invalid-login-credentials"].includes(ex.code || "");
+  // il nome del fan si salva prima, così entrando non lo si chiede di nuovo
+  const nomePrima = state.fanNome;
+  if (fan) { state.fanNome = nome; store.set("prove_fan_nome", nome); }
   try {
-    // una sola casella: con la password della band si entra come band, con quella dei fan in sola lettura
-    try { await signInWithEmailAndPassword(auth, BAND_EMAIL, pw); }
-    catch (ex) { if (!sbagliata(ex)) throw ex; await signInWithEmailAndPassword(auth, FAN_EMAIL, pw); }
-    $("#gate-pw").value = "";
+    await signInWithEmailAndPassword(auth, fan ? FAN_EMAIL : BAND_EMAIL, pw);
+    store.set("prove_gate_modo", gateModo);
+    $("#gate-pw").value = ""; $("#gate-nome").value = "";
+    if (permesso && (await permesso) === "granted") attivaNotifiche();
+    else if (fan) toast(`Ciao ${nome}!`);
   } catch (ex) {
+    if (fan) { state.fanNome = nomePrima; if (nomePrima) store.set("prove_fan_nome", nomePrima); else store.del("prove_fan_nome"); }
     const code = ex.code || "";
+    if (fan && invitoValido && sbagliata(ex)) {
+      // la password è cambiata dopo l'invito: si chiede quella nuova
+      invitoValido = false; modoGate("fan");
+      err.textContent = "Questo invito non vale più: chiedi alla band la password nuova.";
+      return;
+    }
     err.textContent =
       sbagliata(ex) ? "Password non corretta." :
-      code === "auth/user-disabled" ? "L'accesso dei fan è stato disattivato dalla band." :
+      code === "auth/user-disabled" ? "L'ingresso dei fan per ora è chiuso." :
       code === "auth/too-many-requests" ? "Troppi tentativi. Riprova tra qualche minuto." :
       code === "auth/network-request-failed" ? "Nessuna connessione. Riprova quando sei online." :
       code === "auth/operation-not-allowed" ? "L'accesso con password non è ancora attivo su Firebase." :
@@ -784,6 +817,7 @@ function subscribe() {
   listen("canzoni", query(collection(db, "canzoni"), orderBy("ordine")), "canzoni", { includeMetadataChanges: true });
   listen("tasks", query(collection(db, "tasks"), orderBy("creato")), "tasks");
   listen("registrazioni", query(collection(db, "registrazioni"), orderBy("data", "desc")), "registrazioni");
+  listen("bacheca", query(collection(db, "bacheca"), orderBy("creato", "desc")), "bacheca");
   // la cassa i fan non la vedono (e il database non gliela darebbe)
   if (!state.fan) listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
   else state.ready.movimenti = true;
@@ -816,8 +850,8 @@ function ensureUser() {
   updateNavMe();
   if (state.fan) {
     overlay.classList.add("hidden");
-    chip.textContent = state.fanNome ? `${state.fanNome} · fan` : "Fan";
-    chip.title = "Notifiche, scrivi alla band, esci";
+    chip.textContent = state.fanNome || "Fan";
+    chip.title = "Notifiche, nome, esci";
     chip.classList.remove("hidden");
     renderFan();
     return;
@@ -890,6 +924,7 @@ function showTab(name) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   updateNavMe();
   window.scrollTo({ top: 0 });
+  if (name === "bacheca") segnaBachecaVista();
   if (name === "personale" && state.account && !state.fan && !state.accesso && !state.accessoStato) caricaAccesso();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
@@ -974,6 +1009,7 @@ function render() {
   renderScaletta();
   renderProposte();
   renderAudio();
+  renderBacheca();
   if (!state.fan) { renderCassa(); renderPersonale(); }
   restoreInputs(kept);
   renderFan();
@@ -1538,6 +1574,48 @@ function setUpload(patch) {
   }
 }
 
+// ---------- bacheca: messaggi dei fan e risposte della band ----------
+// I fan pubblicano passando dalla funzione "accesso" (che li gira anche nel gruppo Telegram);
+// la band scrive direttamente e può togliere i messaggi.
+const msMsg = (m) => msDi(m.creato) || Date.now();
+function quandoMsg(m) {
+  const d = new Date(msMsg(m));
+  const ora = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  if (new Date().toDateString() === d.toDateString()) return `oggi ${ora}`;
+  return d.toLocaleDateString("it-IT", { day: "numeric", month: "short", ...(d.getFullYear() !== annoCorrente ? { year: "numeric" } : {}) }) + ` ${ora}`;
+}
+const mioMsg = (m) => state.fan ? !m.band && m.nome === state.fanNome : m.band && m.nome === state.user;
+function segnaBachecaVista() {
+  const ultimo = state.bacheca.reduce((t, m) => Math.max(t, msMsg(m)), 0);
+  store.set("prove_bacheca_vista", String(Math.max(ultimo, Number(store.get("prove_bacheca_vista") || 0))));
+  aggiornaPuntoBacheca();
+}
+// pallino sulla sezione: messaggi di altri arrivati dopo l'ultima visita
+function aggiornaPuntoBacheca() {
+  const vista = Number(store.get("prove_bacheca_vista") || 0);
+  const nuovi = state.tab !== "bacheca" && state.bacheca.some(m => msMsg(m) > vista && !mioMsg(m));
+  document.querySelector('.tab[data-tab="bacheca"]')?.classList.toggle("nuovi", nuovi);
+}
+function renderBacheca() {
+  const view = $("#view-bacheca");
+  if (!view) return;
+  if (state.tab === "bacheca" && state.ready.bacheca) segnaBachecaVista(); else aggiornaPuntoBacheca();
+  const lista = state.bacheca.map(m => {
+    const chi = m.band ? `${iniTag(m.nome)}<b>${esc(m.nome)}</b><span class="msg-band">band</span>` : `<b>${esc(m.nome || "Fan")}</b>`;
+    return `
+      <article class="msg${m.band ? " band" : ""}">
+        <div class="msg-head"><span class="msg-chi">${chi}</span><span class="msg-quando">${esc(quandoMsg(m))}</span>${state.fan ? "" : `<button class="del-mini" data-action="del-msg" data-id="${m.id}" aria-label="Togli il messaggio">✕</button>`}</div>
+        <p class="msg-txt">${esc(m.testo)}</p>
+      </article>`;
+  }).join("");
+  view.innerHTML = `
+    <form class="msg-form card" data-form="bacheca">
+      <textarea class="field" name="testo" data-keep="bacheca-testo" maxlength="500" rows="3" placeholder="${state.fan ? "Scrivi alla band: un commento, un pezzo da suonare, un'idea per l'app…" : "Scrivi ai fan…"}" required></textarea>
+      <div class="msg-azioni"><span class="msg-come">${state.fan ? `come <b>${esc(state.fanNome || "Fan")}</b>` : state.user ? `come <b>${esc(state.user)}</b>` : ""}</span><button class="btn fill" type="submit">Pubblica</button></div>
+    </form>
+    ${lista || `<p class="empty big">Ancora nessun messaggio.</p>`}`;
+}
+
 // ---------- cassa ----------
 function parseImporto(s) {
   let t = String(s || "").replace(/[€\s]/g, "");
@@ -1753,11 +1831,11 @@ const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
   "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "add-open",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
-  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi"
+  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
-  if (state.fan && SCRITTURE.has(action)) { toast(SOLA_LETTURA); return; }
+  if (state.fan && SCRITTURE.has(action)) return;
   switch (action) {
     case "open-song":
       apriCanzone(id); break;
@@ -1935,6 +2013,12 @@ async function act(btn) {
       await signOut(auth).catch(() => {});
       location.reload();
       break;
+    case "del-msg": {
+      const m = state.bacheca.find(x => x.id === id);
+      if (!m || !confirm(`Togliere il messaggio di ${m.nome || "un fan"} dalla bacheca?`)) return;
+      await deleteDoc(doc(db, "bacheca", id)).catch(erroreScrittura);
+      break;
+    }
     case "fan-chiudi":
       state.fanMenu = false; state.fanCambia = false; renderFan(); break;
     case "fan-cambia":
@@ -2099,27 +2183,9 @@ $("#fan-box")?.addEventListener("submit", async e => {
   if (form.dataset.form === "fan-nome") {
     const nome = form.nome.value.trim().replace(/\s+/g, " ").slice(0, 30);
     if (!nome) return;
-    const conNotifiche = form.notifiche && form.notifiche.checked;
     form.nome.value = "";
     salvaNomeFan(nome);
-    // il permesso va chiesto dentro il tocco su «Entra»
-    if (conNotifiche) attivaNotifiche();
-    else toast(`Ciao ${nome}!`);
     return;
-  }
-  if (form.dataset.form === "fan-messaggio") {
-    const testo = form.testo.value.trim();
-    if (!testo) return;
-    state.fanInvio = true; renderFan();
-    try {
-      await chiamaAccesso("messaggio", { testo });
-      form.testo.value = "";
-      state.fanInvio = false; state.fanMenu = false; renderFan();
-      toast("Messaggio mandato alla band.");
-    } catch (ex) {
-      state.fanInvio = false; renderFan();
-      toast("Messaggio non mandato: " + ex.message);
-    }
   }
 });
 $("#mini")?.addEventListener("click", e => {
@@ -2146,7 +2212,29 @@ mainEl.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   const kind = form.dataset.form;
-  if (state.fan) { toast(SOLA_LETTURA); return; }
+  // i fan scrivono solo in Bacheca (passando dalla funzione, vedi functions/accesso.js)
+  if (state.fan && kind !== "bacheca") return;
+
+  if (kind === "bacheca") {
+    const area = form.testo;
+    const testo = area.value.trim().slice(0, 500);
+    if (!testo) return;
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      if (state.fan) await chiamaAccesso("messaggio", { testo });
+      else {
+        if (!state.user) { toast("Scegli prima il tuo nome."); return; }
+        await addDoc(collection(db, "bacheca"), { nome: state.user, testo, band: true, creato: serverTimestamp() });
+      }
+      area.value = "";
+      document.querySelectorAll('main [data-keep="bacheca-testo"]').forEach(el => { el.value = ""; });
+      segnaBachecaVista();
+    } catch (ex) {
+      toast(state.fan ? "Messaggio non pubblicato: " + ex.message : "Non pubblicato. Controlla la connessione e riprova.");
+    } finally { btn.disabled = false; }
+    return;
+  }
 
   if (kind === "accesso") {
     const pw = form.password.value.trim();
