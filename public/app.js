@@ -174,6 +174,7 @@ const state = {
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
+  commentaPost: null,         // bacheca: post con il campo del commento aperto
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
@@ -806,18 +807,25 @@ function subscribe() {
   if (state.subscribed) return;
   state.subscribed = true;
   diretta.subscribe();
-  const listen = (name, q, key, opts) => onSnapshot(q, opts || {}, snap => {
+  const listen = (name, q, key, opts, errore) => onSnapshot(q, opts || {}, snap => {
     state[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready[key] = true;
+    if (key === "bacheca") state.bachecaNegata = false;
     if (key === "membri") { computeSigle(); ensureUser(); }
     if (key === "canzoni") ensureGenerale(snap);
     render();
-  }, onDenied);
+  }, errore || onDenied);
   listen("membri", query(collection(db, "membri"), orderBy("creato")), "membri");
   listen("canzoni", query(collection(db, "canzoni"), orderBy("ordine")), "canzoni", { includeMetadataChanges: true });
   listen("tasks", query(collection(db, "tasks"), orderBy("creato")), "tasks");
   listen("registrazioni", query(collection(db, "registrazioni"), orderBy("data", "desc")), "registrazioni");
-  listen("bacheca", query(collection(db, "bacheca"), orderBy("creato", "desc")), "bacheca");
+  // finché le regole del database non includono la bacheca: avviso solo nella sezione, non la barra rossa
+  listen("bacheca", query(collection(db, "bacheca"), orderBy("creato", "desc")), "bacheca", null, err => {
+    console.warn("[bacheca]", err);
+    state.ready.bacheca = true;
+    state.bachecaNegata = !!err && err.code === "permission-denied";
+    render();
+  });
   // la cassa i fan non la vedono (e il database non gliela darebbe)
   if (!state.fan) listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
   else state.ready.movimenti = true;
@@ -1574,9 +1582,11 @@ function setUpload(patch) {
   }
 }
 
-// ---------- bacheca: messaggi dei fan e risposte della band ----------
+// ---------- bacheca: post, commenti sotto ai post, mi piace ----------
+// Documenti in "bacheca": post { nome, testo, band, creato, piace } e commenti con in più postId.
 // I fan pubblicano passando dalla funzione "accesso" (che li gira anche nel gruppo Telegram);
-// la band scrive direttamente e può togliere i messaggi.
+// la band scrive direttamente e può togliere post e commenti. I "mi piace" (campo piace:
+// chiave → true) li scrivono tutti direttamente: per i fan le regole permettono solo quel campo.
 const msMsg = (m) => msDi(m.creato) || Date.now();
 function quandoMsg(m) {
   const d = new Date(msMsg(m));
@@ -1585,35 +1595,71 @@ function quandoMsg(m) {
   return d.toLocaleDateString("it-IT", { day: "numeric", month: "short", ...(d.getFullYear() !== annoCorrente ? { year: "numeric" } : {}) }) + ` ${ora}`;
 }
 const mioMsg = (m) => state.fan ? !m.band && m.nome === state.fanNome : m.band && m.nome === state.user;
+// chi mette mi piace: la persona della band, o il telefono del fan (due fan con lo stesso nome restano distinti)
+function chiavePiace() {
+  if (!state.fan) return "b:" + (state.userId || state.user || "band");
+  let id = store.get("prove_fan_id");
+  if (!id) { id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); store.set("prove_fan_id", id); }
+  return "f:" + id;
+}
+const quantiPiace = (m) => Object.keys(m.piace || {}).length;
 function segnaBachecaVista() {
   const ultimo = state.bacheca.reduce((t, m) => Math.max(t, msMsg(m)), 0);
   store.set("prove_bacheca_vista", String(Math.max(ultimo, Number(store.get("prove_bacheca_vista") || 0))));
   aggiornaPuntoBacheca();
 }
-// pallino sulla sezione: messaggi di altri arrivati dopo l'ultima visita
+// pallino sulla sezione: post o commenti di altri arrivati dopo l'ultima visita
 function aggiornaPuntoBacheca() {
   const vista = Number(store.get("prove_bacheca_vista") || 0);
   const nuovi = state.tab !== "bacheca" && state.bacheca.some(m => msMsg(m) > vista && !mioMsg(m));
   document.querySelector('.tab[data-tab="bacheca"]')?.classList.toggle("nuovi", nuovi);
 }
+function chiMsg(m) {
+  return m.band ? `${iniTag(m.nome)}<b>${esc(m.nome)}</b><span class="msg-band">band</span>` : `<b>${esc(m.nome || "Fan")}</b>`;
+}
+function bottonePiace(m) {
+  const n = quantiPiace(m), mio = !!(m.piace || {})[chiavePiace()];
+  return `<button class="piace${mio ? " on" : ""}" data-action="piace" data-id="${m.id}" aria-pressed="${mio}" aria-label="Mi piace${n ? ", " + n : ""}">♥${n ? ` ${n}` : ""}</button>`;
+}
 function renderBacheca() {
   const view = $("#view-bacheca");
   if (!view) return;
+  if (state.bachecaNegata) {
+    view.innerHTML = `<p class="empty big">${state.fan ? "La bacheca non è ancora pronta." : "La bacheca si attiva quando le regole del database includono «bacheca» (file firestore.rules del progetto, da incollare in Console Firebase → Firestore Database → Regole)."}</p>`;
+    return;
+  }
   if (state.tab === "bacheca" && state.ready.bacheca) segnaBachecaVista(); else aggiornaPuntoBacheca();
-  const lista = state.bacheca.map(m => {
-    const chi = m.band ? `${iniTag(m.nome)}<b>${esc(m.nome)}</b><span class="msg-band">band</span>` : `<b>${esc(m.nome || "Fan")}</b>`;
+  const togli = (m, cosa) => state.fan ? "" : `<button class="del-mini" data-action="del-msg" data-id="${m.id}" aria-label="Togli ${cosa}">✕</button>`;
+  const posts = state.bacheca.filter(m => !m.postId);
+  const commentiDi = (id) => state.bacheca.filter(m => m.postId === id).sort((a, b) => msMsg(a) - msMsg(b));
+  const lista = posts.map(p => {
+    const cs = commentiDi(p.id);
+    const aperto = state.commentaPost === p.id;
     return `
-      <article class="msg${m.band ? " band" : ""}">
-        <div class="msg-head"><span class="msg-chi">${chi}</span><span class="msg-quando">${esc(quandoMsg(m))}</span>${state.fan ? "" : `<button class="del-mini" data-action="del-msg" data-id="${m.id}" aria-label="Togli il messaggio">✕</button>`}</div>
-        <p class="msg-txt">${esc(m.testo)}</p>
+      <article class="msg${p.band ? " band" : ""}" data-post="${p.id}">
+        <div class="msg-head"><span class="msg-chi">${chiMsg(p)}</span><span class="msg-quando">${esc(quandoMsg(p))}</span>${togli(p, "il post e i suoi commenti")}</div>
+        <p class="msg-txt">${esc(p.testo)}</p>
+        <div class="msg-piede">${bottonePiace(p)}<button class="msg-commenta" data-action="commenta" data-id="${p.id}" aria-expanded="${aperto}">Commenta</button></div>
+        ${cs.length || aperto ? `<div class="cmts">
+          ${cs.map(c => `
+            <div class="cmt">
+              <div class="cmt-riga"><span class="cmt-chi">${chiMsg(c)}</span><span class="msg-quando">${esc(quandoMsg(c))}</span>${togli(c, "il commento")}</div>
+              <div class="cmt-corpo"><span class="cmt-txt">${esc(c.testo)}</span>${bottonePiace(c)}</div>
+            </div>`).join("")}
+          ${aperto ? `
+            <form class="cmt-form" data-form="bacheca-commento" data-post="${p.id}">
+              <input class="field" name="testo" data-keep="cmt-${p.id}" maxlength="300" placeholder="Scrivi un commento…" autocomplete="off" required>
+              <button class="btn fill" type="submit">Invia</button>
+            </form>` : ""}
+        </div>` : ""}
       </article>`;
   }).join("");
   view.innerHTML = `
     <form class="msg-form card" data-form="bacheca">
-      <textarea class="field" name="testo" data-keep="bacheca-testo" maxlength="500" rows="3" placeholder="${state.fan ? "Scrivi alla band: un commento, un pezzo da suonare, un'idea per l'app…" : "Scrivi ai fan…"}" required></textarea>
+      <textarea class="field" name="testo" data-keep="bacheca-testo" maxlength="500" rows="3" placeholder="${state.fan ? "Scrivi un post per la band: un commento, un pezzo da suonare, un'idea per l'app…" : "Scrivi un post…"}" required></textarea>
       <div class="msg-azioni"><span class="msg-come">${state.fan ? `come <b>${esc(state.fanNome || "Fan")}</b>` : state.user ? `come <b>${esc(state.user)}</b>` : ""}</span><button class="btn fill" type="submit">Pubblica</button></div>
     </form>
-    ${lista || `<p class="empty big">Ancora nessun messaggio.</p>`}`;
+    ${lista || `<p class="empty big">Ancora nessun post.</p>`}`;
 }
 
 // ---------- cassa ----------
@@ -2015,10 +2061,29 @@ async function act(btn) {
       break;
     case "del-msg": {
       const m = state.bacheca.find(x => x.id === id);
-      if (!m || !confirm(`Togliere il messaggio di ${m.nome || "un fan"} dalla bacheca?`)) return;
-      await deleteDoc(doc(db, "bacheca", id)).catch(erroreScrittura);
+      if (!m) return;
+      const cs = m.postId ? [] : state.bacheca.filter(x => x.postId === id);
+      const cosa = m.postId ? `il commento di ${m.nome || "un fan"}` : `il post di ${m.nome || "un fan"}${cs.length ? ` e ${cs.length === 1 ? "il suo commento" : `i suoi ${cs.length} commenti`}` : ""}`;
+      if (!confirm(`Togliere ${cosa}?`)) return;
+      const batch = writeBatch(db);
+      cs.forEach(c => batch.delete(doc(db, "bacheca", c.id)));
+      batch.delete(doc(db, "bacheca", id));
+      await batch.commit().catch(erroreScrittura);
       break;
     }
+    case "piace": {
+      const m = state.bacheca.find(x => x.id === id);
+      if (!m) return;
+      const k = chiavePiace();
+      const gia = !!(m.piace || {})[k];
+      await updateDoc(doc(db, "bacheca", id), new FieldPath("piace", k), gia ? deleteField() : true).catch(erroreScrittura);
+      break;
+    }
+    case "commenta":
+      state.commentaPost = state.commentaPost === id ? null : id;
+      render();
+      if (state.commentaPost) document.querySelector(`[data-keep="cmt-${CSS.escape(id)}"]`)?.focus();
+      break;
     case "fan-chiudi":
       state.fanMenu = false; state.fanCambia = false; renderFan(); break;
     case "fan-cambia":
@@ -2213,25 +2278,27 @@ mainEl.addEventListener("submit", async e => {
   e.preventDefault();
   const kind = form.dataset.form;
   // i fan scrivono solo in Bacheca (passando dalla funzione, vedi functions/accesso.js)
-  if (state.fan && kind !== "bacheca") return;
+  if (state.fan && kind !== "bacheca" && kind !== "bacheca-commento") return;
 
-  if (kind === "bacheca") {
-    const area = form.testo;
-    const testo = area.value.trim().slice(0, 500);
+  if (kind === "bacheca" || kind === "bacheca-commento") {
+    const campo = form.testo;
+    const postId = kind === "bacheca-commento" ? form.dataset.post : null;
+    const testo = campo.value.trim().slice(0, postId ? 300 : 500);
     if (!testo) return;
     const btn = form.querySelector("button[type=submit]");
     btn.disabled = true;
     try {
-      if (state.fan) await chiamaAccesso("messaggio", { testo });
+      if (state.fan) await chiamaAccesso("messaggio", postId ? { testo, postId } : { testo });
       else {
         if (!state.user) { toast("Scegli prima il tuo nome."); return; }
-        await addDoc(collection(db, "bacheca"), { nome: state.user, testo, band: true, creato: serverTimestamp() });
+        await addDoc(collection(db, "bacheca"), { nome: state.user, testo, band: true, creato: serverTimestamp(), ...(postId ? { postId } : {}) });
       }
-      area.value = "";
-      document.querySelectorAll('main [data-keep="bacheca-testo"]').forEach(el => { el.value = ""; });
+      campo.value = "";
+      document.querySelectorAll(`main [data-keep="${postId ? "cmt-" + postId : "bacheca-testo"}"]`).forEach(el => { el.value = ""; });
+      if (postId) { state.commentaPost = null; render(); }
       segnaBachecaVista();
     } catch (ex) {
-      toast(state.fan ? "Messaggio non pubblicato: " + ex.message : "Non pubblicato. Controlla la connessione e riprova.");
+      toast(state.fan ? "Non pubblicato: " + ex.message : "Non pubblicato. Controlla la connessione e riprova.");
     } finally { btn.disabled = false; }
     return;
   }

@@ -8,8 +8,9 @@
 // richiesta di ascolto della diretta. Il nome del fan sta solo sul suo telefono.
 //
 //   privato/fan   { attivo, password, generazione, aggiornata, da }
-//   bacheca/*     { nome, testo, band, creato } — i messaggi dei fan li scrive questa
-//                 funzione (op "messaggio"); la band scrive e toglie direttamente
+//   bacheca/*     post { nome, testo, band, creato, piace } e commenti (in più postId).
+//                 Post e commenti dei fan li scrive questa funzione (op "messaggio");
+//                 la band scrive e toglie direttamente; i "mi piace" li scrivono tutti.
 //
 // La password resta leggibile alla band (serve a mandare l'invito a chi arriva
 // dopo). "generazione" cresce a ogni cambio o disattivazione: le iscrizioni alle
@@ -63,18 +64,27 @@ function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, segreti =
       if (b.op === "stato") return res.status(200).json(await stato(FAN_EMAIL));
 
       if (b.op === "messaggio") {
-        const testo = typeof b.testo === "string" ? b.testo.trim().slice(0, 500) : "";
+        // un post, oppure un commento a un post esistente (postId)
+        const postId = typeof b.postId === "string" && b.postId ? b.postId : null;
+        const testo = typeof b.testo === "string" ? b.testo.trim().slice(0, postId ? 300 : 500) : "";
         if (!testo) return res.status(200).json({ error: "messaggio vuoto" });
+        let post = null;
+        if (postId) {
+          const ps = await bacheca().doc(postId).get();
+          post = ps.exists ? ps.data() : null;
+          if (!post || post.postId) return res.status(200).json({ error: "il post non c'è più" });
+        }
         // limite per tutti i fan insieme (si contano solo i loro, la band non ha limiti)
         const recenti = await bacheca().where("creato", ">", new Date(Date.now() - 3600 * 1000)).get();
         if (recenti.docs.filter(d => !d.data().band).length >= MAX_MESSAGGI_ORA) return res.status(200).json({ error: "troppi messaggi in poco tempo, riprova più tardi" });
-        await bacheca().add({ nome: da || "Fan", testo, band: false, creato: FieldValue.serverTimestamp() });
+        await bacheca().add({ nome: da || "Fan", testo, band: false, creato: FieldValue.serverTimestamp(), ...(postId ? { postId } : {}) });
         let telegram = false;
         if (mandaAlGruppo) {
-          try { telegram = await mandaAlGruppo(`💬 <b>${escHtml(da || "Un fan")}</b> in bacheca:\n<blockquote>${escHtml(testo)}</blockquote>`); }
+          const dove = post ? ` commenta il post di ${escHtml(post.nome || "un fan")}` : " in bacheca";
+          try { telegram = await mandaAlGruppo(`💬 <b>${escHtml(da || "Un fan")}</b>${dove}:\n<blockquote>${escHtml(testo)}</blockquote>`); }
           catch (e) { console.warn(`[accesso] messaggio non inoltrato su Telegram: ${e.message}`); }
         }
-        console.log(`[accesso] messaggio da ${da || "?"} (${testo.length} caratteri, Telegram: ${telegram ? "sì" : "no"})`);
+        console.log(`[accesso] ${post ? "commento" : "post"} da ${da || "?"} (${testo.length} caratteri, Telegram: ${telegram ? "sì" : "no"})`);
         return res.status(200).json({ ok: true });
       }
 

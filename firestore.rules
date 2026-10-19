@@ -2,8 +2,8 @@
 // Account condiviso della band: legge e scrive tutto.
 // Account dei fan (sola lettura): legge scaletta, proposte, task, persone, registrazioni,
 // diretta e bacheca, non la cassa. Scrive solo la propria richiesta di ascolto della
-// diretta, che crea e cancella; i messaggi in bacheca li scrive per loro la funzione
-// "accesso". La password dei fan la gestisce la band dall'app.
+// diretta, che crea e cancella, e i "mi piace" in bacheca; post e commenti in bacheca
+// li scrive per loro la funzione "accesso". La password dei fan la gestisce la band dall'app.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -24,6 +24,10 @@ service cloud.firestore {
         && request.resource.data.tipo == 'ascolto'
         && request.resource.data.keys().hasOnly(['tipo', 'sessione', 'chi', 'offer', 'creato']);
       allow delete: if fan() && resource.data.tipo == 'ascolto';
+    }
+    match /bacheca/{id} {
+      allow update: if fan()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['piace']);
     }
   }
 }
