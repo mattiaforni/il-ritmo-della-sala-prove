@@ -20,6 +20,10 @@ import { creaDiretta } from "./diretta.js";
 // Email dell'unico account condiviso della band (creato in Console Firebase → Authentication).
 // Non è una casella vera: serve solo a Firebase. La password non sta nel codice.
 const BAND_EMAIL = window.BAND_EMAIL || "band@il-ritmo-della-sala-prove.web.app";
+// Secondo account condiviso, per gli amici: vedono e ascoltano tutto ma non modificano nulla
+// (lo impongono le regole del database). La password la imposta la band da Personale.
+const AMICI_EMAIL = window.AMICI_EMAIL || "amici@il-ritmo-della-sala-prove.web.app";
+const SOLA_LETTURA = "Accesso da amici: puoi guardare e ascoltare, non modificare.";
 const GENERALE_ID = "generale";
 const SOGLIA_SCALETTA = 5;          // da quanti 👍 il bottone "In scaletta" diventa verde
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
@@ -32,7 +36,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "28";
+const APP_VERSION = "29";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -77,6 +81,8 @@ const normalizzaSongsterr = (u) => String(u || "").replace(/^https:\/\/songsterr
 const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/playlist";
 // notifiche push (vedi functions/notifiche.js): ognuno sceglie sul suo telefono quali ricevere
 const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/notifiche";
+// password degli amici: la imposta, cambia o disattiva la band (vedi functions/accesso.js)
+const ACCESSO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/accesso";
 const EVENTI_PUSH = [
   { key: "proposta", nome: "Nuove proposte da votare" },
   { key: "task", nome: "Task assegnate a te" },
@@ -84,6 +90,10 @@ const EVENTI_PUSH = [
   { key: "diretta", nome: "Diretta dalla sala avviata" },
   { key: "scaletta", nome: "Proposte passate in scaletta" }
 ];
+// gli amici non hanno task e non votano: le proposte arrivano solo come novità
+const eventiPush = () => state.ospite
+  ? EVENTI_PUSH.filter(e => e.key !== "task").map(e => e.key === "proposta" ? { ...e, nome: "Nuove proposte" } : e)
+  : EVENTI_PUSH;
 const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 const IN_APP = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 
@@ -132,6 +142,7 @@ const MIGRAZIONI = {
 
 const state = {
   account: null,
+  ospite: false,              // entrato con la password degli amici: sola lettura
   user: store.get("prove_user"),
   userId: store.get("prove_user_id"),   // l'identità del telefono segue la persona anche se cambia nome
   renaming: null,                        // id della persona che si sta rinominando
@@ -161,6 +172,9 @@ const state = {
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
+  amici: null,                // per la band: { attivo, password, aggiornata, da } dell'accesso degli amici
+  amiciStato: "",             // "" | "carico" | "errore"
+  amiciForm: false, amiciOcc: false, amiciVedi: false,
   spIcon: "icons/spotify.png",
   sigle: {},
   deniedShown: false
@@ -371,11 +385,11 @@ const chiaveInByte = (b64) => {
 };
 // segnala un evento: le notifiche le prepara e le manda la funzione (chi fa l'azione non la riceve)
 function notifica(tipo, extra = {}) {
-  if (!auth.currentUser) return;
+  if (!auth.currentUser || state.ospite) return;
   chiamaNotifiche("evento", { tipo, da: state.user || "", ...extra }, true).catch(e => console.warn("[notifiche]", e.message));
 }
 async function attivaNotifiche() {
-  if (!state.userId) { toast("Scegli prima il tuo nome."); return; }
+  if (!state.userId && !state.ospite) { toast("Scegli prima il tuo nome."); return; }
   state.pushOcc = true; render();
   try {
     // il permesso va chiesto subito, dentro il tocco sul pulsante
@@ -388,9 +402,10 @@ async function attivaNotifiche() {
     const { publicKey } = await chiamaNotifiche("chiave");
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiaveInByte(publicKey) });
-    const eventi = EVENTI_PUSH.map(e => e.key);
-    await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId: state.userId, eventi });
-    salvaPush({ endpoint: sub.endpoint, membroId: state.userId, eventi });
+    const eventi = eventiPush().map(e => e.key);
+    const membroId = state.ospite ? null : state.userId;
+    await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
+    salvaPush({ endpoint: sub.endpoint, membroId, ospite: state.ospite, eventi });
     toast("Notifiche attive su questo telefono.");
   } catch (e) {
     toast("Notifiche non attivate: " + (e.message || e));
@@ -410,18 +425,23 @@ async function disattivaNotifiche() {
   render();
   toast("Notifiche disattivate su questo telefono.");
 }
-// tiene allineata l'iscrizione: persona cambiata sul telefono, permesso tolto, iscrizione rinnovata dal browser
+// tiene allineata l'iscrizione: persona cambiata sul telefono, permesso tolto, iscrizione rinnovata dal browser.
+// Gli amici si riscrivono a ogni apertura: se la band ha cambiato la password, l'iscrizione passa a quella nuova.
 async function riallineaNotifiche() {
   if (!state.push || !PUSH_OK || !auth.currentUser) return;
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub || Notification.permission !== "granted") { salvaPush(null); render(); return; }
-    if (sub.endpoint !== state.push.endpoint || state.push.membroId !== state.userId) {
-      if (!state.userId) return;
-      await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId: state.userId, eventi: state.push.eventi });
+    const membroId = state.ospite ? null : state.userId;
+    const cambiata = sub.endpoint !== state.push.endpoint || (state.push.membroId || null) !== membroId || !!state.push.ospite !== state.ospite;
+    if (cambiata || state.ospite) {
+      if (!membroId && !state.ospite) return;
+      const ammessi = eventiPush().map(e => e.key);
+      const eventi = state.push.eventi.filter(k => ammessi.includes(k));
+      await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
       if (sub.endpoint !== state.push.endpoint) chiamaNotifiche("disiscrivi", { endpoint: state.push.endpoint }).catch(() => {});
-      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId: state.userId });
+      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId, ospite: state.ospite, eventi });
     }
   } catch (e) { console.warn("[notifiche] riallineamento", e.message); }
 }
@@ -434,10 +454,10 @@ function notificheCard() {
   } else if (Notification.permission === "denied" && !state.push) {
     corpo = `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
   } else if (!state.push) {
-    corpo = `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, task assegnate a te, registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
+    corpo = `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.ospite ? "" : "task assegnate a te, "}registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
       <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
   } else {
-    corpo = EVENTI_PUSH.map(e => {
+    corpo = eventiPush().map(e => {
       const on = state.push.eventi.includes(e.key);
       return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? "✓" : ""}</span><span>${e.nome}</span></button>`;
     }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
@@ -448,6 +468,86 @@ function notificheCard() {
       <div class="pg-sec">${corpo}</div>
     </article>`;
 }
+// ---------- accesso degli amici (solo la band lo vede e lo gestisce) ----------
+async function chiamaAccesso(op, extra = {}) {
+  const token = await auth.currentUser.getIdToken();
+  const r = await fetch(ACCESSO_FN, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ op, da: state.user || "", ...extra })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+  return j;
+}
+async function caricaAmici() {
+  if (state.ospite || state.amiciStato === "carico") return;
+  state.amiciStato = "carico";
+  try { state.amici = await chiamaAccesso("stato"); state.amiciStato = ""; }
+  catch (e) { console.warn("[accesso]", e.message); state.amiciStato = "errore"; }
+  render();
+}
+// la password degli amici non può essere quella della band: si prova a entrare come band con un'app separata
+async function eLaPasswordDellaBand(pw) {
+  const prova = getAuth(initializeApp(cfg, "verifica-" + Date.now()));
+  try { await signInWithEmailAndPassword(prova, BAND_EMAIL, pw); await signOut(prova).catch(() => {}); return true; }
+  catch (e) { return false; }
+}
+function invitoAmici() {
+  const a = state.amici;
+  return `Il ritmo della sala prove: scaletta, proposte, registrazioni e diretta della band.\n` +
+    `Apri ${location.origin}/ ed entra con la password: ${a && a.password ? a.password : ""}\n` +
+    `Puoi guardare e ascoltare tutto e attivare le notifiche; non si vota e non si modifica niente.`;
+}
+function amiciCard() {
+  const a = state.amici;
+  const quando = (t) => t ? new Date(t).toLocaleDateString("it-IT", { day: "numeric", month: "long" }) : "";
+  let corpo;
+  if (!a) {
+    corpo = state.amiciStato === "errore"
+      ? `<p class="nt-txt">Non riesco a leggere l'accesso degli amici.</p><button class="btn quiet" data-action="amici-riprova">Riprova</button>`
+      : `<p class="nt-txt">Controllo l'accesso degli amici…</p>`;
+  } else if (state.amiciForm) {
+    corpo = `
+      <form class="am-form" data-form="amici">
+        <input class="field" name="password" data-keep="amici-pw" placeholder="Password per gli amici" minlength="6" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        <button class="btn fill" type="submit" ${state.amiciOcc ? "disabled" : ""}>${state.amiciOcc ? "Salvo…" : "Salva"}</button>
+        <button type="button" class="btn quiet" data-action="amici-annulla">Annulla</button>
+      </form>
+      <p class="am-hint">Almeno 6 caratteri, diversa da quella della band.${a.attivo ? " Chi usa quella di adesso esce entro un'ora." : ""}</p>`;
+  } else if (!a.attivo) {
+    corpo = `<p class="nt-txt">Con una password loro, gli amici entrano in sola lettura: vedono tutto, ascoltano registrazioni e diretta e ricevono le notifiche, ma non votano e non modificano niente.</p>
+      <button class="btn fill" data-action="amici-apri">Imposta la password</button>`;
+  } else {
+    const pw = a.password || "";
+    corpo = `
+      <div class="am-row"><span class="am-lbl">Password</span><span class="am-pw">${state.amiciVedi ? esc(pw) : "•".repeat(Math.min(pw.length || 8, 12))}</span>
+        <button class="btn quiet am-mini" data-action="amici-vedi">${state.amiciVedi ? "nascondi" : "mostra"}</button></div>
+      <p class="am-meta">${a.aggiornata ? `Impostata il ${esc(quando(a.aggiornata))}${a.da ? ` da ${esc(a.da)}` : ""}.` : ""} Vedono e ascoltano tutto, non votano e non modificano.</p>
+      <div class="am-actions">
+        <button class="btn fill" data-action="amici-invita">Manda l'invito</button>
+        <button class="btn quiet" data-action="amici-apri">Cambia</button>
+        <button class="btn quiet" data-action="amici-disattiva">Disattiva</button>
+      </div>`;
+  }
+  return `
+    <article class="card ntcard amcard">
+      <h3 class="sec-title">Accesso amici <small>${a && a.attivo ? "attivo" : a ? "spento" : ""}</small></h3>
+      <div class="pg-sec">${corpo}</div>
+    </article>`;
+}
+// per gli amici, in Personale: cosa possono fare e come uscire
+function ospiteCard() {
+  return `
+    <article class="card ntcard">
+      <h3 class="sec-title">Accesso da amici</h3>
+      <div class="pg-sec">
+        <p class="nt-txt">Puoi guardare scaletta, proposte, task e cassa, ascoltare le registrazioni e la diretta. Votare e modificare tocca alla band.</p>
+        <button class="btn quiet nt-off" data-action="esci">Esci</button>
+      </div>
+    </article>`;
+}
+
 // tocco su una notifica: la pagina giusta (?vai=proposte|audio|canzone&id=…)
 function vaiA(url) {
   let q;
@@ -517,12 +617,19 @@ function spotifyCard() {
 // ---------- accesso ----------
 onAuthStateChanged(auth, (account) => {
   // un accesso rimasto da versioni precedenti (es. login Google) non vale:
-  // si esce e si chiede la password della band
-  if (account && (account.email || "").toLowerCase() !== BAND_EMAIL.toLowerCase()) {
+  // si esce e si chiede la password
+  const email = ((account && account.email) || "").toLowerCase();
+  if (account && email !== BAND_EMAIL.toLowerCase() && email !== AMICI_EMAIL.toLowerCase()) {
     signOut(auth).catch(() => {});
     return;
   }
   state.account = account;
+  // gli amici non hanno un nome nella band: niente firma, niente voti
+  state.ospite = !!account && email === AMICI_EMAIL.toLowerCase();
+  document.body.classList.toggle("ospite", state.ospite);
+  if (state.ospite) { state.user = null; state.userId = null; }
+  else { state.user = store.get("prove_user"); state.userId = store.get("prove_user_id"); }
+  state.amici = null; state.amiciStato = "";
   if (account) {
     $("#gate").classList.add("hidden");
     subscribe();
@@ -545,13 +652,17 @@ $("#gate-form").addEventListener("submit", async (e) => {
   err.textContent = "";
   const btn = e.target.querySelector(".enter");
   btn.disabled = true; btn.textContent = "Accesso…";
+  const sbagliata = (ex) => ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found", "auth/invalid-login-credentials"].includes(ex.code || "");
   try {
-    await signInWithEmailAndPassword(auth, BAND_EMAIL, pw);
+    // una sola casella: con la password della band si entra come band, con quella degli amici in sola lettura
+    try { await signInWithEmailAndPassword(auth, BAND_EMAIL, pw); }
+    catch (ex) { if (!sbagliata(ex)) throw ex; await signInWithEmailAndPassword(auth, AMICI_EMAIL, pw); }
     $("#gate-pw").value = "";
   } catch (ex) {
     const code = ex.code || "";
     err.textContent =
-      ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found", "auth/invalid-login-credentials"].includes(code) ? "Password non corretta." :
+      sbagliata(ex) ? "Password non corretta." :
+      code === "auth/user-disabled" ? "L'accesso per gli amici è stato disattivato dalla band." :
       code === "auth/too-many-requests" ? "Troppi tentativi. Riprova tra qualche minuto." :
       code === "auth/network-request-failed" ? "Nessuna connessione. Riprova quando sei online." :
       code === "auth/operation-not-allowed" ? "L'accesso con password non è ancora attivo su Firebase." :
@@ -598,7 +709,8 @@ function rimetti(key, valore) {
 }
 // diretta dalla sala (vedi diretta.js): ha i suoi dati e la sua scheda in cima ad Audio
 const diretta = creaDiretta({
-  db, toast: (m) => toast(m), utente: () => state.user, esc, iniTag: (n) => iniTag(n),
+  db, toast: (m) => toast(m), utente: () => state.ospite ? "Amici" : state.user, esc, iniTag: (n) => iniTag(n),
+  puoTrasmettere: () => !state.ospite,
   alAvvio: () => notifica("diretta"),
   // ascoltando la diretta si ferma la registrazione eventualmente in riproduzione
   primaDiAscoltare: () => { if (state.playId) fermaRiproduzione(); },
@@ -624,7 +736,7 @@ function subscribe() {
 }
 // la scheda Generale è un documento con id fisso: crearla due volte non produce doppioni
 function ensureGenerale(snap) {
-  if (state.generaleOk) return;
+  if (state.generaleOk || state.ospite) return;
   if (state.canzoni.some(c => c.id === GENERALE_ID)) { state.generaleOk = true; return; }
   if (snap.metadata.fromCache) return; // aspetta la risposta del server
   state.generaleOk = true;
@@ -648,6 +760,12 @@ function ensureUser() {
     if (me) { state.userId = me.id; store.set("prove_user_id", me.id); }
   }
   updateNavMe();
+  if (state.ospite) {
+    overlay.classList.add("hidden");
+    chip.textContent = "Amici · sola lettura";
+    chip.classList.remove("hidden");
+    return;
+  }
   if (state.user && state.membri.some(m => m.nome === state.user)) {
     overlay.classList.add("hidden");
     chip.textContent = state.user;
@@ -664,10 +782,10 @@ function updateNavMe() {
   const el = document.getElementById("nav-me");
   if (!el) return;
   const known = state.user && state.membri.some(m => m.nome === state.user);
-  el.textContent = known ? siglaOf(state.user) : "—";
-  const col = known ? colorOf(state.user) : "";
-  el.style.background = known && state.tab === "personale" ? col : "";
-  el.style.color = known && state.tab === "personale" && LIGHT_BG.has(col) ? "var(--legno)" : "";
+  el.textContent = state.ospite ? "AMI" : known ? siglaOf(state.user) : "—";
+  const col = state.ospite ? "#8a7d70" : known ? colorOf(state.user) : "";
+  el.style.background = col && state.tab === "personale" ? col : "";
+  el.style.color = col && state.tab === "personale" && LIGHT_BG.has(col) ? "var(--legno)" : "";
 }
 function setUser(nome) {
   state.user = nome;
@@ -686,6 +804,7 @@ $("#member-picker").addEventListener("click", e => {
 });
 $("#new-member-form").addEventListener("submit", async e => {
   e.preventDefault();
+  if (state.ospite) return;
   const input = $("#new-member-name");
   const nome = input.value.trim().replace(/\s+/g, " ");
   if (!nome) return;
@@ -696,6 +815,7 @@ $("#new-member-form").addEventListener("submit", async e => {
   setUser(state.membri.find(m => m.nome.toLowerCase() === nome.toLowerCase())?.nome || nome);
 });
 $("#user-chip").addEventListener("click", () => {
+  if (state.ospite) { toast(SOLA_LETTURA); return; }
   store.del("prove_user");
   store.del("prove_user_id");
   state.user = null;
@@ -713,6 +833,7 @@ function showTab(name) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   updateNavMe();
   window.scrollTo({ top: 0 });
+  if (name === "personale" && state.account && !state.ospite && !state.amici && !state.amiciStato) caricaAmici();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 // ritorno dalla pagina di consenso di Spotify (?spotify=ok|annullato|errore)
@@ -812,8 +933,8 @@ function renderScaletta() {
   const lista = scaletta();
   let html = plStrip("scaletta") + (gen ? songCard(gen) : "");
   html += lista.map(c => songCard(c)).join("");
-  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta. Aggiungine una qui sotto.</p>`;
-  html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
+  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.ospite ? "" : " Aggiungine una qui sotto."}</p>`;
+  if (!state.ospite) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
   $("#view-scaletta").innerHTML = html;
 }
 function statoTask(c) {
@@ -874,7 +995,7 @@ function songPage(c) {
     const on = sel.has(m.nome), col = colorOf(m.nome);
     return `<button type="button" class="ini${on ? " on" : ""}${on && LIGHT_BG.has(col) ? " light" : ""}" data-action="pick" data-song="${c.id}" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${on}" style="${on ? `background:${col}` : ""}">${esc(siglaOf(m.nome))}</button>`;
   }).join("");
-  const nuovoTask = state.addTaskOpen === c.id ? `
+  const nuovoTask = state.ospite ? "" : state.addTaskOpen === c.id ? `
       <form class="newtask" data-form="add-task" data-song="${c.id}">
         <div class="inrow">
           <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
@@ -904,21 +1025,22 @@ function songPage(c) {
         ${nuovoTask}
       </div>
     </article>
-    ${gen ? "" : setupCard(c) + recsCard(c) + `
+    ${gen ? "" : setupCard(c) + recsCard(c) + (state.ospite ? "" : `
     <div class="actions pg-actions">
       <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta">↑</button>
       <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta">↓</button>
       <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">Modifica</button>
       <span class="sp"></span>
       <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone">✕</button>
-    </div>`}
+    </div>`)}
   </div>`;
 }
 function taskRow(t) {
-  const del = `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button>`;
+  const ro = state.ospite;   // amici: si vede lo stato, non si tocca
+  const del = ro ? "" : `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button>`;
   if (!multipla(t)) return `
     <div class="task${t.fatto ? " fatto" : ""}">
-      <button class="chk" data-action="check" data-id="${t.id}" aria-label="${t.fatto ? "Segna da fare" : "Segna fatto"}">${t.fatto ? "✓" : ""}</button>
+      <button class="chk" data-action="check" data-id="${t.id}" ${ro ? `disabled aria-label="${t.fatto ? "Fatto" : "Da fare"}"` : `aria-label="${t.fatto ? "Segna da fare" : "Segna fatto"}"`}>${t.fatto ? "✓" : ""}</button>
       <span><span class="tt">${esc(t.titolo)}</span>${t.fatto && t.fattoDa ? `<span class="by">fatto da ${esc(t.fattoDa)}</span>` : ""}</span>
       <span class="task-side">${whoTags(t.assegnatari)}${del}</span>
     </div>`;
@@ -927,7 +1049,7 @@ function taskRow(t) {
   const fatti = fattiDi(t), tutta = taskFatta(t);
   const parti = assegnati(t).map(n => {
     const on = fatti.includes(n), col = colorOf(n);
-    return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}" aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}" aria-label="${esc(n)}: ${on ? "fatto, tocca per segnare da fare" : "da fare, tocca per segnare fatto"}">${esc(siglaOf(n))}</button>`;
+    return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}"${ro ? " disabled" : ""} aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}" aria-label="${esc(n)}: ${on ? "fatto, tocca per segnare da fare" : "da fare, tocca per segnare fatto"}">${esc(siglaOf(n))}</button>`;
   }).join("");
   const stato = tutta
     ? `<span class="chk stato" aria-label="Fatto da tutti">✓</span>`
@@ -977,8 +1099,10 @@ function setupCard(c) {
   const rows = parti.map(k => {
     const testo = (setup[k] || "").trim();
     const nome = esc(nomeParte(k));
-    if (inModifica(k)) return `
+    if (inModifica(k) && !state.ospite) return `
       <div class="setup-row editing"><span class="setup-parte">${nome}</span>${setupEditor(c.id, k, testo)}</div>`;
+    if (state.ospite) return `
+      <div class="setup-row sola"><span class="setup-parte">${nome}</span><span class="setup-txt">${testo ? esc(testo) : `<span class="empty">—</span>`}</span></div>`;
     return `
       <div class="setup-row">
         <span class="setup-parte">${nome}</span>
@@ -987,7 +1111,9 @@ function setupCard(c) {
       </div>`;
   }).join("");
   let add;
-  if (state.partePicker !== c.id) {
+  if (state.ospite) {
+    add = "";
+  } else if (state.partePicker !== c.id) {
     add = `<button class="addline" data-action="parte-picker" data-id="${c.id}"><span class="plus">+</span>Aggiungi parte</button>`;
   } else {
     const libere = STRUMENTI.map(s => s.key).concat(partiLibere()).filter(k => !parti.includes(k));
@@ -1006,7 +1132,7 @@ function setupCard(c) {
     <article class="card">
       <h3 class="sec-title">Setup <small>${parti.length ? `${parti.length} ${parti.length === 1 ? "parte" : "parti"}${scritte < parti.length ? `, ${scritte} con appunti` : ""}` : ""}</small></h3>
       <div class="pg-sec">
-        ${rows || `<p class="empty">Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo.</p>`}
+        ${rows || `<p class="empty">${state.ospite ? "Nessun appunto di setup per questo pezzo." : "Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo."}</p>`}
         ${add}
       </div>
     </article>`;
@@ -1100,13 +1226,16 @@ function renderProposte() {
           <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
         </div>
       </div>
-      <div class="prop-bar">
+      <div class="prop-bar">${state.ospite ? `
+        <span class="vote sola" aria-label="Mi piace: ${su.length}">👍 ${su.length}</span>
+        <span class="vote sola" aria-label="Non mi piace: ${giu.length}">👎 ${giu.length}</span>
+        <span class="sp"></span>` : `
         <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">👍 ${su.length}</button>
         <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">👎 ${giu.length}</button>
         <span class="sp"></span>
         <button class="ico-btn" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica"><svg class="ico" aria-hidden="true"><use href="#ico-matita"/></svg></button>
         <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">↑ In scaletta</button>
-        <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>
+        <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>`}
       </div>
       ${commentoForm(c)}
       ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
@@ -1118,8 +1247,8 @@ function renderProposte() {
       (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map(card).join("")}` : "")
     : classifica.map(card).join("");
   $("#view-proposte").innerHTML = plStrip("proposte") +
-    (lista.length ? cards : `<p class="empty big">Nessuna proposta. Butta lì un pezzo da provare.</p>`) +
-    addSongBlock("proposte", "Proponi un pezzo", "Proponi");
+    (lista.length ? cards : `<p class="empty big">Nessuna proposta${state.ospite ? " per ora." : ". Butta lì un pezzo da provare."}</p>`) +
+    (state.ospite ? "" : addSongBlock("proposte", "Proponi un pezzo", "Proponi"));
 }
 
 // ---------- registrazioni ----------
@@ -1134,7 +1263,7 @@ function recRow(r, mode) {
   return `
     <div class="rec" data-rec="${r.id}">
       <span class="rec-name">${name}</span>
-      <span class="rec-meta">${meta}<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button></span>
+      <span class="rec-meta">${meta}${state.ospite ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
       ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
       <div class="player">
         <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">▶</button>
@@ -1161,8 +1290,8 @@ function renderAudio() {
   const up = state.upload;
   $("#view-audio").innerHTML = `
     <div id="diretta-box"></div>
-    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione. Carica l'audio delle prove qui sotto.</p>`}
-    <form class="upload" data-form="upload">
+    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.ospite ? " per ora." : ". Carica l'audio delle prove qui sotto."}</p>`}
+    ${state.ospite ? "" : `<form class="upload" data-form="upload">
       <h3>+ Carica registrazione</h3>
       <div class="upload-grid">
         <select class="field wide" name="canzoneId" data-keep="up-song" aria-label="Canzone">
@@ -1176,7 +1305,7 @@ function renderAudio() {
       <div class="upload-progress${up.active ? "" : " hidden"}" id="up-prog">
         <div class="bar"><i style="width:${up.pct}%"></i></div><span class="upload-txt">${esc(up.txt)}</span>
       </div>
-    </form>`;
+    </form>`}`;
   diretta.render();
 }
 
@@ -1313,7 +1442,7 @@ function syncPlayer() {
 player.addEventListener("ended", () => { if (!vaiInCoda(1)) fermaRiproduzione(); });
 player.addEventListener("loadedmetadata", () => {
   const r = state.registrazioni.find(x => x.id === state.playId);
-  if (r && !r.durata && isFinite(player.duration)) {
+  if (r && !r.durata && isFinite(player.duration) && !state.ospite) {
     updateDoc(doc(db, "registrazioni", r.id), { durata: Math.round(player.duration) }).catch(() => {});
   }
 });
@@ -1375,7 +1504,7 @@ function renderCassa() {
         <span><span class="what">${esc(m.descrizione)}</span><span class="w">${esc(m.chi || "")}</span></span>
         <span class="amt${entrata ? " in" : ""}">${entrata ? "+" : "−"} ${NUM.format((m.importoCent || 0) / 100)}</span>
         ${open ? `<div class="mov-detail"><span>Registrato da ${esc(m.registratoDa || "—")}${quando ? ` il ${esc(quando)}` : ""}</span><span class="sp"></span>
-          <button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento">✕</button></div>` : ""}
+          ${state.ospite ? "" : `<button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento">✕</button>`}</div>` : ""}
       </div>`;
   }).join("");
   const spesa = state.tipoMov === "spesa";
@@ -1388,8 +1517,8 @@ function renderCassa() {
         <span class="tot">versato <b>${euro(versato)}</b><br>speso <b>${euro(speso)}</b></span>
         <span class="big${saldo < 0 ? " neg" : ""}">${euro(saldo)}</span>
       </div>
-      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento. Registra il primo qui sotto.</div>`}
-      <form class="cassa-form" data-form="mov">
+      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento${state.ospite ? "." : ". Registra il primo qui sotto."}</div>`}
+      ${state.ospite ? "" : `<form class="cassa-form" data-form="mov">
         <div class="seg" role="group" aria-label="Tipo di movimento">
           <button type="button" class="${spesa ? "on" : ""}" data-action="tipo" data-tipo="spesa" aria-pressed="${spesa}">Spesa</button>
           <button type="button" class="${spesa ? "" : "on"}" data-action="tipo" data-tipo="versamento" aria-pressed="${!spesa}">Versamento</button>
@@ -1399,7 +1528,7 @@ function renderCassa() {
         <input class="field wide" name="descrizione" data-keep="mov-desc" placeholder="${spesa ? "Cosa è stato comprato" : "Per cosa, es. quota di ottobre"}" maxlength="80" autocomplete="off" required aria-label="Descrizione">
         <select class="field wide" name="chi" data-keep="mov-chi" aria-label="${spesa ? "Chi ha comprato" : "Chi ha versato"}">${chiOpts}</select>
         <button class="btn fill wide" type="submit">Registra ${spesa ? "spesa" : "versamento"}</button>
-      </form>
+      </form>`}
     </article>`;
 }
 
@@ -1473,7 +1602,8 @@ function renderPersonale() {
   let nome = state.viewPerson && state.membri.some(m => m.nome === state.viewPerson) ? state.viewPerson : meName;
   if (!nome || !state.membri.some(m => m.nome === nome)) nome = state.membri[0].nome;
   const persona = state.membri.find(m => m.nome === nome);
-  const mia = nome === meName;
+  const ro = state.ospite;
+  const mia = !ro && nome === meName;
 
   const whoBar = `<div class="who-bar"><span class="lbl">Pagina di</span>${state.membri.map(m => {
     const col = colorOf(m.nome);
@@ -1487,7 +1617,7 @@ function renderPersonale() {
     const gen = song && isGenerale(song);
     return `
       <div class="ptask">
-        <button class="chk" data-action="check" data-id="${t.id}" data-nome="${esc(nome)}" aria-label="Segna fatto"></button>
+        <button class="chk" data-action="check" data-id="${t.id}" data-nome="${esc(nome)}" ${ro ? `disabled aria-label="Da fare"` : `aria-label="Segna fatto"`}></button>
         <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}${multipla(t) ? (fattiDi(t).length ? ` · fatto da ${fattiDi(t).length} su ${assegnati(t).length}` : ` · con altri ${assegnati(t).length - 1}`) : ""}</span><span class="tt">${esc(t.titolo)}</span></span>
       </div>`;
   }).join("");
@@ -1518,13 +1648,15 @@ function renderPersonale() {
         </form>`).join("")}
     </article>`;
 
-  const add = state.addOpen.personale
+  const add = ro ? "" : state.addOpen.personale
     ? `<form class="inline-form add-person" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
     : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">+</span>Aggiungi una persona</button>`;
 
+  // l'accesso degli amici si legge dalla funzione solo quando si apre Personale
+  if (mia && state.tab === "personale" && !state.amici && !state.amiciStato) setTimeout(caricaAmici, 0);
   view.innerHTML = `
     ${whoBar}
-    ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
+    ${mia || ro ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
     ${orfaniHtml}
     ${state.renaming === persona.id ? `
     <form class="rename-form" data-form="rename" data-id="${persona.id}">
@@ -1533,15 +1665,17 @@ function renderPersonale() {
     </form>
     <p class="rename-hint">Il nome cambia anche in voti, task, spese e registrazioni. La sigla si aggiorna da sola.</p>` : `
     <div class="me-head"><h2>${esc(nome)}</h2>
-      <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button></div>`}
+      ${ro ? "" : `<button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button>`}</div>`}
     <p class="me-stats">${stats}</p>
     <article class="card">
       <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
-    ${mia ? notificheCard() : ""}
+    ${mia || ro ? notificheCard() : ""}
+    ${mia ? amiciCard() : ""}
     ${mia ? spotifyCard() : ""}
+    ${ro ? ospiteCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
 }
@@ -1559,8 +1693,16 @@ async function aggiungiParte(songId, key) {
   render();
   document.querySelector(`[data-keep="${CSS.escape(`setup-${songId}-${key}`)}"]`)?.focus();
 }
+// azioni che scrivono nel database: agli amici non arrivano (e il database le rifiuterebbe comunque)
+const SCRITTURE = new Set([
+  "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
+  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "add-open",
+  "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
+  "amici-apri", "amici-disattiva", "amici-invita", "amici-vedi"
+]);
 async function act(btn) {
   const { action, id } = btn.dataset;
+  if (state.ospite && SCRITTURE.has(action)) { toast(SOLA_LETTURA); return; }
   switch (action) {
     case "open-song":
       apriCanzone(id); break;
@@ -1730,6 +1872,37 @@ async function act(btn) {
       break;
     }
     case "mini-salta": salta(Number(btn.dataset.sec) || 0); break;
+    case "esci":
+      if (state.playId) fermaRiproduzione();
+      await signOut(auth).catch(() => {});
+      break;
+    case "amici-riprova":
+      state.amiciStato = ""; caricaAmici(); break;
+    case "amici-apri":
+      state.amiciForm = true; render();
+      document.querySelector('[data-keep="amici-pw"]')?.focus();
+      break;
+    case "amici-annulla":
+      state.amiciForm = false; render(); break;
+    case "amici-vedi":
+      state.amiciVedi = !state.amiciVedi; render(); break;
+    case "amici-invita": {
+      const testo = invitoAmici();
+      try {
+        if (navigator.share) { await navigator.share({ text: testo }); break; }
+      } catch (e) { if (e && e.name === "AbortError") break; }
+      try { await navigator.clipboard.writeText(testo); toast("Invito copiato: incollalo nel messaggio."); }
+      catch (e) { state.amiciVedi = true; render(); toast("Non riesco a copiare: la password ora è visibile."); }
+      break;
+    }
+    case "amici-disattiva": {
+      if (!confirm("Disattivare l'accesso degli amici? Chi è dentro esce entro un'ora e smette di ricevere notifiche.")) return;
+      btn.disabled = true;
+      try { state.amici = await chiamaAccesso("disattiva"); state.amiciVedi = false; toast("Accesso degli amici disattivato."); }
+      catch (e) { toast("Non disattivato: " + e.message); }
+      render();
+      break;
+    }
     case "mini-vai": {
       // si va alla registrazione nella sezione Audio
       showTab("audio");
@@ -1870,6 +2043,26 @@ mainEl.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   const kind = form.dataset.form;
+  if (state.ospite) { toast(SOLA_LETTURA); return; }
+
+  if (kind === "amici") {
+    const pw = form.password.value.trim();
+    if (pw.length < 6) { toast("Almeno 6 caratteri."); return; }
+    state.amiciOcc = true; render();
+    try {
+      if (await eLaPasswordDellaBand(pw)) { toast("È la password della band: scegline un'altra per gli amici."); return; }
+      const prima = state.amici && state.amici.attivo;
+      state.amici = await chiamaAccesso("imposta", { password: pw });
+      state.amiciForm = false; state.amiciVedi = true;
+      document.querySelectorAll('main [data-keep="amici-pw"]').forEach(el => { el.value = ""; });
+      toast(prima ? "Password degli amici cambiata." : "Accesso degli amici attivo.");
+    } catch (ex) {
+      toast("Non salvata: " + ex.message);
+    } finally {
+      state.amiciOcc = false; render();
+    }
+    return;
+  }
 
   if (kind === "add-song") {
     const titolo = form.titolo.value.trim();
@@ -2082,7 +2275,7 @@ async function enrichLink(songId, titolo, artista, cosa) {
   } catch (e) { /* resta il link di ricerca */ }
 }
 function enrichSong(c) {
-  if (!c || isGenerale(c) || state.enrichTried.has(c.id)) return;
+  if (!c || isGenerale(c) || state.enrichTried.has(c.id) || state.ospite) return;
   state.enrichTried.add(c.id);
   // con le playlist collegate il link Spotify lo cerca la funzione delle playlist, direttamente su Spotify
   if (!c.spotifyUrl && !playlistInfo()?.scaletta) enrichLink(c.id, c.titolo, c.artista, "spotify");

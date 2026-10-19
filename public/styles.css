@@ -721,3 +721,19 @@ body.con-mini .update-banner { bottom: calc(80px + 62px + env(safe-area-inset-bo
 .nt-off { margin-top: 8px; font-size: 12.5px; padding: 6px 10px; }
 .rec-date .tutte { margin-left: auto; padding: 4px 10px; font: 600 12.5px var(--sans); color: var(--legno); align-self: center; }
 
+
+/* ---------- accesso degli amici ---------- */
+.vote.sola { background: transparent; border-color: transparent; padding-left: 2px; padding-right: 10px; cursor: default; color: var(--muted); }
+.chk:disabled { cursor: default; border-color: var(--rule); }
+.ini.parte:disabled { cursor: default; }
+.setup-row.sola { grid-template-columns: 82px 1fr; }
+.setup-row.sola .setup-txt { cursor: default; }
+.am-row { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
+.am-lbl { font: 600 12px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; flex: none; }
+.am-pw { font: 600 15px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.am-mini { padding: 4px 9px; font-size: 12.5px; }
+.am-meta { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+.am-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.am-form { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.am-form .field { min-width: 0; }
+.am-hint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }

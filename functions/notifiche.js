@@ -8,6 +8,11 @@
 //
 //   privato/push                  { vapid: { publicKey, privateKey }, ultimi: { <evento>: ms } }
 //   privato/push/iscrizioni/<id>  { sub, membroId, eventi[], aggiornata, ua }
+//                                 amici: { sub, ospite: true, membroId: null, generazione, eventi[], … }
+//
+// Anche gli amici (accesso in sola lettura, vedi accesso.js) possono iscriversi:
+// ricevono proposte, registrazioni, diretta e passaggi in scaletta, mai le task.
+// Valgono solo le iscrizioni fatte con la password degli amici di adesso.
 //
 // Le chiavi VAPID (che firmano le notifiche) si creano da sole alla prima
 // richiesta: nessun segreto da impostare a mano.
@@ -19,8 +24,10 @@ const crypto = require("crypto");
 const webpush = require("web-push");
 const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { generazioneAmici } = require("./accesso");
 
 const EVENTI = ["proposta", "task", "registrazione", "diretta", "scaletta"];
+const EVENTI_AMICI = ["proposta", "registrazione", "diretta", "scaletta"];
 const RIPETIZIONE_MS = { diretta: 15 * 60 * 1000 };   // la stessa diretta non si annuncia due volte
 const RIPETIZIONE_STANDARD_MS = 10 * 60 * 1000;      // stesso evento sulla stessa cosa: una volta ogni 10 minuti
 const TTL = 6 * 60 * 60;                              // una notifica non consegnata dopo 6 ore si butta
@@ -55,7 +62,7 @@ function subValida(sub) {
   return sub && typeof sub.endpoint === "string" && /^https:\/\//.test(sub.endpoint) &&
     sub.keys && typeof sub.keys.p256dh === "string" && typeof sub.keys.auth === "string";
 }
-const soloEventi = (lista) => (Array.isArray(lista) ? lista : EVENTI).filter(e => EVENTI.includes(e));
+const soloEventi = (lista, ammessi = EVENTI) => (Array.isArray(lista) ? lista : ammessi).filter(e => ammessi.includes(e));
 
 async function membri() {
   const snap = await db().collection("membri").get();
@@ -80,7 +87,7 @@ async function preparaEvento(corpo, persone) {
     const chi = c.propostaDa || da;
     return {
       chiave: `proposta:${c.id}`, idDa: (persone.find(p => p.nome === chi) || {}).id || idDa,
-      titolo: "Nuova proposta da votare",
+      titolo: "Nuova proposta da votare", titoloAmici: "Nuova proposta",
       testo: `${chi ? chi + " ha proposto" : "Proposta"} ${conArtista(c)}`,
       url: "./?vai=proposte", tag: `proposta-${c.id}`
     };
@@ -153,9 +160,13 @@ async function preparaEvento(corpo, persone) {
 
 async function invia(ev, tipo, persone) {
   const esistenti = new Set(persone.map(p => p.id));
-  const snap = await iscrizioni().get();
+  const [snap, gen] = await Promise.all([iscrizioni().get(), generazioneAmici()]);
   const dest = snap.docs.filter(d => {
     const x = d.data();
+    if (x.ospite) {
+      // amici: solo con l'accesso attivo e la password di adesso; niente task
+      return gen !== null && x.generazione === gen && !ev.soloA && soloEventi(x.eventi, EVENTI_AMICI).includes(tipo);
+    }
     if (!soloEventi(x.eventi).includes(tipo)) return false;
     if (!esistenti.has(x.membroId)) return false;
     if (ev.idDa && x.membroId === ev.idDa) return false;          // chi fa l'azione non la riceve
@@ -164,11 +175,11 @@ async function invia(ev, tipo, persone) {
   });
   if (!dest.length) return { inviate: 0, tolte: 0 };
   const v = await chiavi();
-  const payload = JSON.stringify({ titolo: ev.titolo, testo: ev.testo, url: ev.url, tag: ev.tag });
+  const payload = (ospite) => JSON.stringify({ titolo: ospite && ev.titoloAmici ? ev.titoloAmici : ev.titolo, testo: ev.testo, url: ev.url, tag: ev.tag });
   let inviate = 0, tolte = 0;
   await Promise.all(dest.map(async (d) => {
     try {
-      await webpush.sendNotification(d.data().sub, payload, {
+      await webpush.sendNotification(d.data().sub, payload(!!d.data().ospite), {
         TTL, urgency: "high",
         vapidDetails: { subject: "https://il-ritmo-della-sala-prove.web.app", publicKey: v.publicKey, privateKey: v.privateKey }
       });
@@ -207,13 +218,17 @@ async function evento(corpo) {
   return esito;
 }
 
-function crea({ cors, eBand, REGIONE }) {
+function crea({ cors, ruolo, REGIONE }) {
   const notifiche = onRequest({ region: REGIONE, maxInstances: 2 }, async (req, res) => {
     cors(req, res);
     if (req.method === "OPTIONS") return res.status(204).send("");
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-    if (!(await eBand(req))) return res.status(403).json({ error: "accesso negato" });
+    const chi = await ruolo(req);
+    if (!chi) return res.status(403).json({ error: "accesso negato" });
     const b = req.body || {};
+    const amici = chi === "amici";
+    // gli amici si iscrivono e scelgono gli eventi, ma non ne segnalano
+    if (amici && !["chiave", "iscrivi", "preferenze", "disiscrivi"].includes(b.op)) return res.status(403).json({ error: "accesso negato" });
     try {
       if (b.op === "chiave") {
         const v = await chiavi();
@@ -221,6 +236,16 @@ function crea({ cors, eBand, REGIONE }) {
       }
       if (b.op === "iscrivi") {
         if (!subValida(b.sub)) return res.status(400).json({ error: "iscrizione non valida" });
+        if (amici) {
+          const gen = await generazioneAmici();
+          if (gen === null) return res.status(200).json({ error: "accesso degli amici spento" });
+          await iscrizioni().doc(idIscrizione(b.sub.endpoint)).set({
+            sub: { endpoint: b.sub.endpoint, keys: { p256dh: b.sub.keys.p256dh, auth: b.sub.keys.auth } },
+            ospite: true, membroId: null, generazione: gen, eventi: soloEventi(b.eventi, EVENTI_AMICI),
+            ua: String(req.get("User-Agent") || "").slice(0, 160), aggiornata: FieldValue.serverTimestamp()
+          });
+          return res.status(200).json({ ok: true });
+        }
         const persone = await membri();
         if (!persone.some(p => p.id === b.membroId)) return res.status(400).json({ error: "persona sconosciuta" });
         await iscrizioni().doc(idIscrizione(b.sub.endpoint)).set({
@@ -233,12 +258,16 @@ function crea({ cors, eBand, REGIONE }) {
       if (b.op === "preferenze") {
         const ref = iscrizioni().doc(idIscrizione(b.endpoint));
         const s = await ref.get();
-        if (!s.exists) return res.status(200).json({ error: "iscrizione non trovata" });
-        await ref.update({ eventi: soloEventi(b.eventi), aggiornata: FieldValue.serverTimestamp() });
+        if (!s.exists || (amici && !s.data().ospite)) return res.status(200).json({ error: "iscrizione non trovata" });
+        await ref.update({ eventi: soloEventi(b.eventi, s.data().ospite ? EVENTI_AMICI : EVENTI), aggiornata: FieldValue.serverTimestamp() });
         return res.status(200).json({ ok: true });
       }
       if (b.op === "disiscrivi") {
-        if (b.endpoint) await iscrizioni().doc(idIscrizione(b.endpoint)).delete();
+        if (b.endpoint) {
+          const ref = iscrizioni().doc(idIscrizione(b.endpoint));
+          // gli amici tolgono solo iscrizioni da amici
+          if (!amici || ((await ref.get()).data() || {}).ospite) await ref.delete();
+        }
         return res.status(200).json({ ok: true });
       }
       if (b.op === "evento") {
@@ -253,4 +282,4 @@ function crea({ cors, eBand, REGIONE }) {
   return { notifiche };
 }
 
-module.exports = { crea, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, EVENTI } };
+module.exports = { crea, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, EVENTI, EVENTI_AMICI } };
