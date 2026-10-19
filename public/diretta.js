@@ -469,7 +469,7 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
       </article>`;
     }
 
-    // dal telefono, o con l'accesso degli amici, la diretta si ascolta soltanto
+    // dal telefono, o con l'accesso dei fan, la diretta si ascolta soltanto
     if (isMobile || !puoTrasmettere()) {
       return `<article class="card dircard spenta"><p class="dir-txt">Diretta dalla sala: <b>spenta</b>. Si avvia dal computer della sala.</p></article>`;
     }

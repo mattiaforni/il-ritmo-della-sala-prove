@@ -16,6 +16,7 @@ self.addEventListener("fetch", e => {
   if (url.origin !== location.origin) return; // Firestore, font, SDK: rete diretta
   if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return; // funzioni: mai in cache
   if (url.pathname.endsWith("/version.json")) return;                             // controllo versione: sempre dalla rete
+  if (url.searchParams.has("fan")) return;                                       // link d'invito: contiene la password, niente cache
   // network-first: prendi sempre l'ultima versione, cache come ripiego offline
   e.respondWith(
     fetch(e.request).then(res => {
