@@ -2,10 +2,11 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
-      "versione": "29", "data": "2026-10-19", "titolo": "Accesso per gli amici",
+      "versione": "29", "data": "2026-10-19", "titolo": "Accesso per i fan",
       "punti": [
-        "Gli amici entrano con una password loro: vedono tutto, ascoltano registrazioni e diretta e possono attivare le notifiche, ma non votano e non modificano niente.",
-        "La password degli amici la imposta chiunque della band da Personale, card «Accesso amici»: da lì si manda l'invito, si cambia o si disattiva. Cambiandola, chi ha quella vecchia esce entro un'ora.",
+        "I fan entrano con una password loro e scelgono un nome, che resta sul telefono. Vedono scaletta, proposte con i voti e task, ascoltano registrazioni e diretta e possono attivare le notifiche; non votano, non modificano e non vedono cassa e pagine personali.",
+        "Toccando il loro nome in alto i fan possono scrivere alla band: il messaggio arriva nel gruppo Telegram e nella card «Accesso fan» in Personale.",
+        "La password dei fan la imposta chiunque della band da Personale, card «Accesso fan»: da lì si manda l'invito, si cambia o si disattiva. Cambiandola, chi ha quella vecchia esce entro un'ora.",
         "La schermata d'ingresso è sempre una sola: con la password della band si entra come prima."
       ]
     },

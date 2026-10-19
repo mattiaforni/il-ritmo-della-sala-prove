@@ -20,10 +20,10 @@ import { creaDiretta } from "./diretta.js";
 // Email dell'unico account condiviso della band (creato in Console Firebase → Authentication).
 // Non è una casella vera: serve solo a Firebase. La password non sta nel codice.
 const BAND_EMAIL = window.BAND_EMAIL || "band@il-ritmo-della-sala-prove.web.app";
-// Secondo account condiviso, per gli amici: vedono e ascoltano tutto ma non modificano nulla
-// (lo impongono le regole del database). La password la imposta la band da Personale.
-const AMICI_EMAIL = window.AMICI_EMAIL || "amici@il-ritmo-della-sala-prove.web.app";
-const SOLA_LETTURA = "Accesso da amici: puoi guardare e ascoltare, non modificare.";
+// Secondo account condiviso, per i fan: guardano scaletta e proposte e ascoltano, ma non modificano nulla
+// (lo impongono le regole del database) e non vedono cassa e pagine personali. La password la imposta la band da Personale.
+const FAN_EMAIL = window.FAN_EMAIL || "fan@il-ritmo-della-sala-prove.web.app";
+const SOLA_LETTURA = "Accesso da fan: puoi guardare e ascoltare, votare e modificare tocca alla band.";
 const GENERALE_ID = "generale";
 const SOGLIA_SCALETTA = 5;          // da quanti 👍 il bottone "In scaletta" diventa verde
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
@@ -81,7 +81,7 @@ const normalizzaSongsterr = (u) => String(u || "").replace(/^https:\/\/songsterr
 const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/playlist";
 // notifiche push (vedi functions/notifiche.js): ognuno sceglie sul suo telefono quali ricevere
 const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/notifiche";
-// password degli amici: la imposta, cambia o disattiva la band (vedi functions/accesso.js)
+// password dei fan (la imposta, cambia o disattiva la band) e messaggi dei fan alla band: vedi functions/accesso.js
 const ACCESSO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/accesso";
 const EVENTI_PUSH = [
   { key: "proposta", nome: "Nuove proposte da votare" },
@@ -90,8 +90,8 @@ const EVENTI_PUSH = [
   { key: "diretta", nome: "Diretta dalla sala avviata" },
   { key: "scaletta", nome: "Proposte passate in scaletta" }
 ];
-// gli amici non hanno task e non votano: le proposte arrivano solo come novità
-const eventiPush = () => state.ospite
+// i fan non hanno task e non votano: le proposte arrivano solo come novità
+const eventiPush = () => state.fan
   ? EVENTI_PUSH.filter(e => e.key !== "task").map(e => e.key === "proposta" ? { ...e, nome: "Nuove proposte" } : e)
   : EVENTI_PUSH;
 const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -142,7 +142,11 @@ const MIGRAZIONI = {
 
 const state = {
   account: null,
-  ospite: false,              // entrato con la password degli amici: sola lettura
+  fan: false,                 // entrato con la password dei fan: sola lettura, niente cassa e pagine personali
+  fanNome: store.get("prove_fan_nome"),   // il nome del fan resta sul telefono, come quello della band
+  fanMenu: false,             // pannello del fan (tocco sul nome in alto)
+  fanCambia: false,           // nel pannello: campo per cambiare nome
+  fanInvio: false,
   user: store.get("prove_user"),
   userId: store.get("prove_user_id"),   // l'identità del telefono segue la persona anche se cambia nome
   renaming: null,                        // id della persona che si sta rinominando
@@ -172,9 +176,9 @@ const state = {
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
-  amici: null,                // per la band: { attivo, password, aggiornata, da } dell'accesso degli amici
-  amiciStato: "",             // "" | "carico" | "errore"
-  amiciForm: false, amiciOcc: false, amiciVedi: false,
+  accesso: null,              // per la band: { attivo, password, aggiornata, da, messaggi } dell'accesso dei fan
+  accessoStato: "",             // "" | "carico" | "errore"
+  accessoForm: false, accessoOcc: false, accessoVedi: false,
   spIcon: "icons/spotify.png",
   sigle: {},
   deniedShown: false
@@ -385,11 +389,11 @@ const chiaveInByte = (b64) => {
 };
 // segnala un evento: le notifiche le prepara e le manda la funzione (chi fa l'azione non la riceve)
 function notifica(tipo, extra = {}) {
-  if (!auth.currentUser || state.ospite) return;
+  if (!auth.currentUser || state.fan) return;
   chiamaNotifiche("evento", { tipo, da: state.user || "", ...extra }, true).catch(e => console.warn("[notifiche]", e.message));
 }
 async function attivaNotifiche() {
-  if (!state.userId && !state.ospite) { toast("Scegli prima il tuo nome."); return; }
+  if (!state.userId && !state.fan) { toast("Scegli prima il tuo nome."); return; }
   state.pushOcc = true; render();
   try {
     // il permesso va chiesto subito, dentro il tocco sul pulsante
@@ -403,9 +407,9 @@ async function attivaNotifiche() {
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiaveInByte(publicKey) });
     const eventi = eventiPush().map(e => e.key);
-    const membroId = state.ospite ? null : state.userId;
+    const membroId = state.fan ? null : state.userId;
     await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
-    salvaPush({ endpoint: sub.endpoint, membroId, ospite: state.ospite, eventi });
+    salvaPush({ endpoint: sub.endpoint, membroId, fan: state.fan, eventi });
     toast("Notifiche attive su questo telefono.");
   } catch (e) {
     toast("Notifiche non attivate: " + (e.message || e));
@@ -426,126 +430,173 @@ async function disattivaNotifiche() {
   toast("Notifiche disattivate su questo telefono.");
 }
 // tiene allineata l'iscrizione: persona cambiata sul telefono, permesso tolto, iscrizione rinnovata dal browser.
-// Gli amici si riscrivono a ogni apertura: se la band ha cambiato la password, l'iscrizione passa a quella nuova.
+// I fan si riscrivono a ogni apertura: se la band ha cambiato la password, l'iscrizione passa a quella nuova.
 async function riallineaNotifiche() {
   if (!state.push || !PUSH_OK || !auth.currentUser) return;
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub || Notification.permission !== "granted") { salvaPush(null); render(); return; }
-    const membroId = state.ospite ? null : state.userId;
-    const cambiata = sub.endpoint !== state.push.endpoint || (state.push.membroId || null) !== membroId || !!state.push.ospite !== state.ospite;
-    if (cambiata || state.ospite) {
-      if (!membroId && !state.ospite) return;
+    const membroId = state.fan ? null : state.userId;
+    const cambiata = sub.endpoint !== state.push.endpoint || (state.push.membroId || null) !== membroId || !!state.push.fan !== state.fan;
+    if (cambiata || state.fan) {
+      if (!membroId && !state.fan) return;
       const ammessi = eventiPush().map(e => e.key);
       const eventi = state.push.eventi.filter(k => ammessi.includes(k));
       await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
       if (sub.endpoint !== state.push.endpoint) chiamaNotifiche("disiscrivi", { endpoint: state.push.endpoint }).catch(() => {});
-      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId, ospite: state.ospite, eventi });
+      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId, fan: state.fan, eventi });
     }
   } catch (e) { console.warn("[notifiche] riallineamento", e.message); }
 }
-function notificheCard() {
-  let corpo;
+function notificheCorpo() {
   if (IS_IOS && !IN_APP) {
-    corpo = `<p class="nt-txt">Su iPhone le notifiche arrivano solo all'app aggiunta alla schermata Home. In Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, poi apri l'app da lì e torna qui.</p>`;
-  } else if (!PUSH_OK) {
-    corpo = `<p class="nt-txt">Questo browser non riceve notifiche.</p>`;
-  } else if (Notification.permission === "denied" && !state.push) {
-    corpo = `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
-  } else if (!state.push) {
-    corpo = `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.ospite ? "" : "task assegnate a te, "}registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
-      <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
-  } else {
-    corpo = eventiPush().map(e => {
-      const on = state.push.eventi.includes(e.key);
-      return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? "✓" : ""}</span><span>${e.nome}</span></button>`;
-    }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
+    return `<p class="nt-txt">Su iPhone le notifiche arrivano solo all'app aggiunta alla schermata Home. In Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, poi apri l'app da lì e torna qui.</p>`;
   }
+  if (!PUSH_OK) return `<p class="nt-txt">Questo browser non riceve notifiche.</p>`;
+  if (Notification.permission === "denied" && !state.push) {
+    return `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
+  }
+  if (!state.push) {
+    return `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.fan ? "" : "task assegnate a te, "}registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
+      <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
+  }
+  return eventiPush().map(e => {
+    const on = state.push.eventi.includes(e.key);
+    return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? "✓" : ""}</span><span>${e.nome}</span></button>`;
+  }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
+}
+function notificheCard() {
   return `
     <article class="card ntcard">
       <h3 class="sec-title">Notifiche <small>${state.push ? "attive su questo telefono" : ""}</small></h3>
-      <div class="pg-sec">${corpo}</div>
+      <div class="pg-sec">${notificheCorpo()}</div>
     </article>`;
 }
-// ---------- accesso degli amici (solo la band lo vede e lo gestisce) ----------
+// ---------- accesso dei fan ----------
+// la band imposta la password e legge i messaggi; i fan mandano messaggi alla band
 async function chiamaAccesso(op, extra = {}) {
   const token = await auth.currentUser.getIdToken();
   const r = await fetch(ACCESSO_FN, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-    body: JSON.stringify({ op, da: state.user || "", ...extra })
+    body: JSON.stringify({ op, da: state.fan ? (state.fanNome || "") : (state.user || ""), ...extra })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
   return j;
 }
-async function caricaAmici() {
-  if (state.ospite || state.amiciStato === "carico") return;
-  state.amiciStato = "carico";
-  try { state.amici = await chiamaAccesso("stato"); state.amiciStato = ""; }
-  catch (e) { console.warn("[accesso]", e.message); state.amiciStato = "errore"; }
+async function caricaAccesso() {
+  if (state.fan || state.accessoStato === "carico") return;
+  state.accessoStato = "carico";
+  try { state.accesso = await chiamaAccesso("stato"); state.accessoStato = ""; }
+  catch (e) { console.warn("[accesso]", e.message); state.accessoStato = "errore"; }
   render();
 }
-// la password degli amici non può essere quella della band: si prova a entrare come band con un'app separata
+// la password dei fan non può essere quella della band: si prova a entrare come band con un'app separata
 async function eLaPasswordDellaBand(pw) {
   const prova = getAuth(initializeApp(cfg, "verifica-" + Date.now()));
   try { await signInWithEmailAndPassword(prova, BAND_EMAIL, pw); await signOut(prova).catch(() => {}); return true; }
   catch (e) { return false; }
 }
-function invitoAmici() {
-  const a = state.amici;
+function invitoFan() {
+  const a = state.accesso;
   return `Il ritmo della sala prove: scaletta, proposte, registrazioni e diretta della band.\n` +
-    `Apri ${location.origin}/ ed entra con la password: ${a && a.password ? a.password : ""}\n` +
-    `Puoi guardare e ascoltare tutto e attivare le notifiche; non si vota e non si modifica niente.`;
+    `Apri ${location.origin}/ ed entra con la password da fan: ${a && a.password ? a.password : ""}\n` +
+    `Ascolti le registrazioni e la diretta, ricevi le notifiche e puoi scriverci dall'app.`;
 }
-function amiciCard() {
-  const a = state.amici;
-  const quando = (t) => t ? new Date(t).toLocaleDateString("it-IT", { day: "numeric", month: "long" }) : "";
+const quandoGiorno = (t) => t ? new Date(t).toLocaleDateString("it-IT", { day: "numeric", month: "long" }) : "";
+function accessoCard() {
+  const a = state.accesso;
   let corpo;
   if (!a) {
-    corpo = state.amiciStato === "errore"
-      ? `<p class="nt-txt">Non riesco a leggere l'accesso degli amici.</p><button class="btn quiet" data-action="amici-riprova">Riprova</button>`
-      : `<p class="nt-txt">Controllo l'accesso degli amici…</p>`;
-  } else if (state.amiciForm) {
+    corpo = state.accessoStato === "errore"
+      ? `<p class="nt-txt">Non riesco a leggere l'accesso dei fan.</p><button class="btn quiet" data-action="accesso-riprova">Riprova</button>`
+      : `<p class="nt-txt">Controllo l'accesso dei fan…</p>`;
+  } else if (state.accessoForm) {
     corpo = `
-      <form class="am-form" data-form="amici">
-        <input class="field" name="password" data-keep="amici-pw" placeholder="Password per gli amici" minlength="6" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-        <button class="btn fill" type="submit" ${state.amiciOcc ? "disabled" : ""}>${state.amiciOcc ? "Salvo…" : "Salva"}</button>
-        <button type="button" class="btn quiet" data-action="amici-annulla">Annulla</button>
+      <form class="am-form" data-form="accesso">
+        <input class="field" name="password" data-keep="accesso-pw" placeholder="Password per i fan" minlength="6" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        <button class="btn fill" type="submit" ${state.accessoOcc ? "disabled" : ""}>${state.accessoOcc ? "Salvo…" : "Salva"}</button>
+        <button type="button" class="btn quiet" data-action="accesso-annulla">Annulla</button>
       </form>
       <p class="am-hint">Almeno 6 caratteri, diversa da quella della band.${a.attivo ? " Chi usa quella di adesso esce entro un'ora." : ""}</p>`;
   } else if (!a.attivo) {
-    corpo = `<p class="nt-txt">Con una password loro, gli amici entrano in sola lettura: vedono tutto, ascoltano registrazioni e diretta e ricevono le notifiche, ma non votano e non modificano niente.</p>
-      <button class="btn fill" data-action="amici-apri">Imposta la password</button>`;
+    corpo = `<p class="nt-txt">Con una password loro, i fan entrano in sola lettura: vedono scaletta, proposte con i voti e task, ascoltano registrazioni e diretta, ricevono le notifiche e possono scrivervi. Non votano, non modificano e non vedono cassa e pagine personali.</p>
+      <button class="btn fill" data-action="accesso-apri">Imposta la password</button>`;
   } else {
     const pw = a.password || "";
     corpo = `
-      <div class="am-row"><span class="am-lbl">Password</span><span class="am-pw">${state.amiciVedi ? esc(pw) : "•".repeat(Math.min(pw.length || 8, 12))}</span>
-        <button class="btn quiet am-mini" data-action="amici-vedi">${state.amiciVedi ? "nascondi" : "mostra"}</button></div>
-      <p class="am-meta">${a.aggiornata ? `Impostata il ${esc(quando(a.aggiornata))}${a.da ? ` da ${esc(a.da)}` : ""}.` : ""} Vedono e ascoltano tutto, non votano e non modificano.</p>
+      <div class="am-row"><span class="am-lbl">Password</span><span class="am-pw">${state.accessoVedi ? esc(pw) : "•".repeat(Math.min(pw.length || 8, 12))}</span>
+        <button class="btn quiet am-mini" data-action="accesso-vedi">${state.accessoVedi ? "nascondi" : "mostra"}</button></div>
+      <p class="am-meta">${a.aggiornata ? `Impostata il ${esc(quandoGiorno(a.aggiornata))}${a.da ? ` da ${esc(a.da)}` : ""}.` : ""} I fan guardano e ascoltano, non votano e non modificano.</p>
       <div class="am-actions">
-        <button class="btn fill" data-action="amici-invita">Manda l'invito</button>
-        <button class="btn quiet" data-action="amici-apri">Cambia</button>
-        <button class="btn quiet" data-action="amici-disattiva">Disattiva</button>
+        <button class="btn fill" data-action="accesso-invita">Manda l'invito</button>
+        <button class="btn quiet" data-action="accesso-apri">Cambia</button>
+        <button class="btn quiet" data-action="accesso-disattiva">Disattiva</button>
       </div>`;
   }
+  const msg = (a && a.messaggi) || [];
+  const messaggi = !msg.length ? "" : `
+      <div class="am-msgs">
+        <h4 class="am-sub">Messaggi dei fan</h4>
+        ${msg.map(m => `<div class="am-msg"><span class="am-chi"><b>${esc(m.nome || "Fan")}</b> · ${esc(quandoGiorno(m.creato))}</span><span class="am-txt">${esc(m.testo)}</span></div>`).join("")}
+      </div>`;
   return `
     <article class="card ntcard amcard">
-      <h3 class="sec-title">Accesso amici <small>${a && a.attivo ? "attivo" : a ? "spento" : ""}</small></h3>
-      <div class="pg-sec">${corpo}</div>
+      <h3 class="sec-title">Accesso fan <small>${a && a.attivo ? "attivo" : a ? "spento" : ""}</small></h3>
+      <div class="pg-sec">${corpo}${messaggi}</div>
     </article>`;
 }
-// per gli amici, in Personale: cosa possono fare e come uscire
-function ospiteCard() {
-  return `
-    <article class="card ntcard">
-      <h3 class="sec-title">Accesso da amici</h3>
-      <div class="pg-sec">
-        <p class="nt-txt">Puoi guardare scaletta, proposte, task e cassa, ascoltare le registrazioni e la diretta. Votare e modificare tocca alla band.</p>
-        <button class="btn quiet nt-off" data-action="esci">Esci</button>
-      </div>
-    </article>`;
+// ---------- fan: nome sul telefono e pannello (tocco sul nome in alto) ----------
+function renderFan() {
+  const box = $("#fan-box");
+  if (!box) return;
+  const serveNome = state.fan && state.account && !state.fanNome;
+  const aperto = state.fan && state.account && (serveNome || state.fanMenu);
+  box.classList.toggle("hidden", !aperto);
+  if (!aperto) { box.dataset.vista = ""; return; }
+  const kept = { vals: {}, focus: null };
+  box.querySelectorAll("[data-keep]").forEach(el => { kept.vals[el.dataset.keep] = el.value; });
+  const puoNotifiche = PUSH_OK && !(IS_IOS && !IN_APP) && Notification.permission !== "denied";
+  let html;
+  if (serveNome || state.fanCambia) {
+    html = `
+      <h2 class="overlay-title">${serveNome ? "Ciao! Come ti chiami?" : "Cambia nome"}</h2>
+      <p class="overlay-sub">${serveNome ? "Il nome resta su questo telefono: la band vede chi ascolta la diretta e chi le scrive. Con l'accesso da fan guardi scaletta e proposte e ascolti registrazioni e diretta." : "Il nome resta su questo telefono."}</p>
+      <form class="fan-nome" data-form="fan-nome">
+        <input class="field" name="nome" data-keep="fan-nome" value="${esc(serveNome ? "" : state.fanNome || "")}" placeholder="Il tuo nome" maxlength="30" autocomplete="given-name" required>
+        ${serveNome && puoNotifiche && !state.push ? `<label class="fan-check"><input type="checkbox" name="notifiche" checked><span>Avvisami di registrazioni nuove, diretta e proposte</span></label>` : ""}
+        <div class="fan-azioni">${serveNome ? "" : `<button type="button" class="btn quiet" data-action="fan-annulla">Annulla</button>`}<button class="btn amb" type="submit">${serveNome ? "Entra" : "Salva"}</button></div>
+      </form>`;
+  } else {
+    html = `
+      <div class="fan-top"><h2 class="overlay-title">${esc(state.fanNome)}</h2><button class="x" data-action="fan-chiudi" aria-label="Chiudi">✕</button></div>
+      <p class="overlay-sub">Accesso da fan: guardi e ascolti, votare e modificare tocca alla band.</p>
+      <section class="fan-sez">
+        <h3 class="fan-h">Scrivi alla band</h3>
+        <form class="fan-msg" data-form="fan-messaggio">
+          <textarea class="field" name="testo" data-keep="fan-msg" maxlength="500" rows="3" placeholder="Un'idea, un pezzo da suonare, un commento sull'app…" required></textarea>
+          <button class="btn fill" type="submit" ${state.fanInvio ? "disabled" : ""}>${state.fanInvio ? "Mando…" : "Manda"}</button>
+        </form>
+      </section>
+      <section class="fan-sez">
+        <h3 class="fan-h">Notifiche${state.push ? " <small>attive</small>" : ""}</h3>
+        ${notificheCorpo()}
+      </section>
+      <div class="fan-fondo"><button class="btn quiet" data-action="fan-cambia">Cambia nome</button><button class="btn quiet" data-action="esci">Esci</button></div>`;
+  }
+  const vista = (serveNome || state.fanCambia ? "nome" : "menu");
+  $("#fan-card").innerHTML = html;
+  box.dataset.vista = vista;
+  Object.entries(kept.vals).forEach(([k, v]) => { const el = box.querySelector(`[data-keep="${k}"]`); if (el && v) el.value = v; });
+}
+function salvaNomeFan(nome) {
+  state.fanNome = nome;
+  store.set("prove_fan_nome", nome);
+  state.fanCambia = false;
+  ensureUser();
+  render();
 }
 
 // tocco su una notifica: la pagina giusta (?vai=proposte|audio|canzone&id=…)
@@ -619,17 +670,17 @@ onAuthStateChanged(auth, (account) => {
   // un accesso rimasto da versioni precedenti (es. login Google) non vale:
   // si esce e si chiede la password
   const email = ((account && account.email) || "").toLowerCase();
-  if (account && email !== BAND_EMAIL.toLowerCase() && email !== AMICI_EMAIL.toLowerCase()) {
+  if (account && email !== BAND_EMAIL.toLowerCase() && email !== FAN_EMAIL.toLowerCase()) {
     signOut(auth).catch(() => {});
     return;
   }
   state.account = account;
-  // gli amici non hanno un nome nella band: niente firma, niente voti
-  state.ospite = !!account && email === AMICI_EMAIL.toLowerCase();
-  document.body.classList.toggle("ospite", state.ospite);
-  if (state.ospite) { state.user = null; state.userId = null; }
+  // i fan non sono nella band: il loro nome sta solo sul telefono, niente firma e niente voti
+  state.fan = !!account && email === FAN_EMAIL.toLowerCase();
+  document.body.classList.toggle("fan", state.fan);
+  if (state.fan) { state.user = null; state.userId = null; if (state.tab === "cassa" || state.tab === "personale") showTab("scaletta"); }
   else { state.user = store.get("prove_user"); state.userId = store.get("prove_user_id"); }
-  state.amici = null; state.amiciStato = "";
+  state.accesso = null; state.accessoStato = ""; state.fanMenu = false; state.fanCambia = false;
   if (account) {
     $("#gate").classList.add("hidden");
     subscribe();
@@ -640,6 +691,7 @@ onAuthStateChanged(auth, (account) => {
     $("#gate").classList.remove("hidden");
     $("#overlay").classList.add("hidden");
     $("#user-chip").classList.add("hidden");
+    renderFan();
     setTimeout(() => $("#gate-pw")?.focus(), 50);
   }
 });
@@ -654,15 +706,15 @@ $("#gate-form").addEventListener("submit", async (e) => {
   btn.disabled = true; btn.textContent = "Accesso…";
   const sbagliata = (ex) => ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found", "auth/invalid-login-credentials"].includes(ex.code || "");
   try {
-    // una sola casella: con la password della band si entra come band, con quella degli amici in sola lettura
+    // una sola casella: con la password della band si entra come band, con quella dei fan in sola lettura
     try { await signInWithEmailAndPassword(auth, BAND_EMAIL, pw); }
-    catch (ex) { if (!sbagliata(ex)) throw ex; await signInWithEmailAndPassword(auth, AMICI_EMAIL, pw); }
+    catch (ex) { if (!sbagliata(ex)) throw ex; await signInWithEmailAndPassword(auth, FAN_EMAIL, pw); }
     $("#gate-pw").value = "";
   } catch (ex) {
     const code = ex.code || "";
     err.textContent =
       sbagliata(ex) ? "Password non corretta." :
-      code === "auth/user-disabled" ? "L'accesso per gli amici è stato disattivato dalla band." :
+      code === "auth/user-disabled" ? "L'accesso dei fan è stato disattivato dalla band." :
       code === "auth/too-many-requests" ? "Troppi tentativi. Riprova tra qualche minuto." :
       code === "auth/network-request-failed" ? "Nessuna connessione. Riprova quando sei online." :
       code === "auth/operation-not-allowed" ? "L'accesso con password non è ancora attivo su Firebase." :
@@ -709,8 +761,8 @@ function rimetti(key, valore) {
 }
 // diretta dalla sala (vedi diretta.js): ha i suoi dati e la sua scheda in cima ad Audio
 const diretta = creaDiretta({
-  db, toast: (m) => toast(m), utente: () => state.ospite ? "Amici" : state.user, esc, iniTag: (n) => iniTag(n),
-  puoTrasmettere: () => !state.ospite,
+  db, toast: (m) => toast(m), utente: () => state.fan ? (state.fanNome || "Fan") : state.user, esc, iniTag: (n) => iniTag(n),
+  puoTrasmettere: () => !state.fan,
   alAvvio: () => notifica("diretta"),
   // ascoltando la diretta si ferma la registrazione eventualmente in riproduzione
   primaDiAscoltare: () => { if (state.playId) fermaRiproduzione(); },
@@ -732,11 +784,13 @@ function subscribe() {
   listen("canzoni", query(collection(db, "canzoni"), orderBy("ordine")), "canzoni", { includeMetadataChanges: true });
   listen("tasks", query(collection(db, "tasks"), orderBy("creato")), "tasks");
   listen("registrazioni", query(collection(db, "registrazioni"), orderBy("data", "desc")), "registrazioni");
-  listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
+  // la cassa i fan non la vedono (e il database non gliela darebbe)
+  if (!state.fan) listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
+  else state.ready.movimenti = true;
 }
 // la scheda Generale è un documento con id fisso: crearla due volte non produce doppioni
 function ensureGenerale(snap) {
-  if (state.generaleOk || state.ospite) return;
+  if (state.generaleOk || state.fan) return;
   if (state.canzoni.some(c => c.id === GENERALE_ID)) { state.generaleOk = true; return; }
   if (snap.metadata.fromCache) return; // aspetta la risposta del server
   state.generaleOk = true;
@@ -760,10 +814,12 @@ function ensureUser() {
     if (me) { state.userId = me.id; store.set("prove_user_id", me.id); }
   }
   updateNavMe();
-  if (state.ospite) {
+  if (state.fan) {
     overlay.classList.add("hidden");
-    chip.textContent = "Amici · sola lettura";
+    chip.textContent = state.fanNome ? `${state.fanNome} · fan` : "Fan";
+    chip.title = "Notifiche, scrivi alla band, esci";
     chip.classList.remove("hidden");
+    renderFan();
     return;
   }
   if (state.user && state.membri.some(m => m.nome === state.user)) {
@@ -782,8 +838,8 @@ function updateNavMe() {
   const el = document.getElementById("nav-me");
   if (!el) return;
   const known = state.user && state.membri.some(m => m.nome === state.user);
-  el.textContent = state.ospite ? "AMI" : known ? siglaOf(state.user) : "—";
-  const col = state.ospite ? "#8a7d70" : known ? colorOf(state.user) : "";
+  el.textContent = known ? siglaOf(state.user) : "—";
+  const col = known ? colorOf(state.user) : "";
   el.style.background = col && state.tab === "personale" ? col : "";
   el.style.color = col && state.tab === "personale" && LIGHT_BG.has(col) ? "var(--legno)" : "";
 }
@@ -804,7 +860,7 @@ $("#member-picker").addEventListener("click", e => {
 });
 $("#new-member-form").addEventListener("submit", async e => {
   e.preventDefault();
-  if (state.ospite) return;
+  if (state.fan) return;
   const input = $("#new-member-name");
   const nome = input.value.trim().replace(/\s+/g, " ");
   if (!nome) return;
@@ -815,7 +871,7 @@ $("#new-member-form").addEventListener("submit", async e => {
   setUser(state.membri.find(m => m.nome.toLowerCase() === nome.toLowerCase())?.nome || nome);
 });
 $("#user-chip").addEventListener("click", () => {
-  if (state.ospite) { toast(SOLA_LETTURA); return; }
+  if (state.fan) { state.fanMenu = true; state.fanCambia = false; renderFan(); return; }
   store.del("prove_user");
   store.del("prove_user_id");
   state.user = null;
@@ -826,6 +882,7 @@ $("#user-chip").addEventListener("click", () => {
 // ---------- tab ----------
 function showTab(name) {
   if (!document.getElementById("view-" + name)) name = "scaletta";
+  if (state.fan && (name === "cassa" || name === "personale")) name = "scaletta";
   if (state.songPage) { lasciaCanzone(); if (history.state && history.state.canzone) history.back(); render(); }
   state.tab = name;
   store.set("prove_tab", name);
@@ -833,7 +890,7 @@ function showTab(name) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   updateNavMe();
   window.scrollTo({ top: 0 });
-  if (name === "personale" && state.account && !state.ospite && !state.amici && !state.amiciStato) caricaAmici();
+  if (name === "personale" && state.account && !state.fan && !state.accesso && !state.accessoStato) caricaAccesso();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 // ritorno dalla pagina di consenso di Spotify (?spotify=ok|annullato|errore)
@@ -917,9 +974,9 @@ function render() {
   renderScaletta();
   renderProposte();
   renderAudio();
-  renderCassa();
-  renderPersonale();
+  if (!state.fan) { renderCassa(); renderPersonale(); }
   restoreInputs(kept);
+  renderFan();
   updateNavMe();
   syncPlayer();
 }
@@ -933,8 +990,8 @@ function renderScaletta() {
   const lista = scaletta();
   let html = plStrip("scaletta") + (gen ? songCard(gen) : "");
   html += lista.map(c => songCard(c)).join("");
-  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.ospite ? "" : " Aggiungine una qui sotto."}</p>`;
-  if (!state.ospite) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
+  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una qui sotto."}</p>`;
+  if (!state.fan) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
   $("#view-scaletta").innerHTML = html;
 }
 function statoTask(c) {
@@ -995,7 +1052,7 @@ function songPage(c) {
     const on = sel.has(m.nome), col = colorOf(m.nome);
     return `<button type="button" class="ini${on ? " on" : ""}${on && LIGHT_BG.has(col) ? " light" : ""}" data-action="pick" data-song="${c.id}" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${on}" style="${on ? `background:${col}` : ""}">${esc(siglaOf(m.nome))}</button>`;
   }).join("");
-  const nuovoTask = state.ospite ? "" : state.addTaskOpen === c.id ? `
+  const nuovoTask = state.fan ? "" : state.addTaskOpen === c.id ? `
       <form class="newtask" data-form="add-task" data-song="${c.id}">
         <div class="inrow">
           <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
@@ -1025,7 +1082,7 @@ function songPage(c) {
         ${nuovoTask}
       </div>
     </article>
-    ${gen ? "" : setupCard(c) + recsCard(c) + (state.ospite ? "" : `
+    ${gen ? "" : setupCard(c) + recsCard(c) + (state.fan ? "" : `
     <div class="actions pg-actions">
       <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta">↑</button>
       <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta">↓</button>
@@ -1036,7 +1093,7 @@ function songPage(c) {
   </div>`;
 }
 function taskRow(t) {
-  const ro = state.ospite;   // amici: si vede lo stato, non si tocca
+  const ro = state.fan;   // fan: si vede lo stato, non si tocca
   const del = ro ? "" : `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button>`;
   if (!multipla(t)) return `
     <div class="task${t.fatto ? " fatto" : ""}">
@@ -1099,9 +1156,9 @@ function setupCard(c) {
   const rows = parti.map(k => {
     const testo = (setup[k] || "").trim();
     const nome = esc(nomeParte(k));
-    if (inModifica(k) && !state.ospite) return `
+    if (inModifica(k) && !state.fan) return `
       <div class="setup-row editing"><span class="setup-parte">${nome}</span>${setupEditor(c.id, k, testo)}</div>`;
-    if (state.ospite) return `
+    if (state.fan) return `
       <div class="setup-row sola"><span class="setup-parte">${nome}</span><span class="setup-txt">${testo ? esc(testo) : `<span class="empty">—</span>`}</span></div>`;
     return `
       <div class="setup-row">
@@ -1111,7 +1168,7 @@ function setupCard(c) {
       </div>`;
   }).join("");
   let add;
-  if (state.ospite) {
+  if (state.fan) {
     add = "";
   } else if (state.partePicker !== c.id) {
     add = `<button class="addline" data-action="parte-picker" data-id="${c.id}"><span class="plus">+</span>Aggiungi parte</button>`;
@@ -1132,7 +1189,7 @@ function setupCard(c) {
     <article class="card">
       <h3 class="sec-title">Setup <small>${parti.length ? `${parti.length} ${parti.length === 1 ? "parte" : "parti"}${scritte < parti.length ? `, ${scritte} con appunti` : ""}` : ""}</small></h3>
       <div class="pg-sec">
-        ${rows || `<p class="empty">${state.ospite ? "Nessun appunto di setup per questo pezzo." : "Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo."}</p>`}
+        ${rows || `<p class="empty">${state.fan ? "Nessun appunto di setup per questo pezzo." : "Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo."}</p>`}
         ${add}
       </div>
     </article>`;
@@ -1226,7 +1283,7 @@ function renderProposte() {
           <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
         </div>
       </div>
-      <div class="prop-bar">${state.ospite ? `
+      <div class="prop-bar">${state.fan ? `
         <span class="vote sola" aria-label="Mi piace: ${su.length}">👍 ${su.length}</span>
         <span class="vote sola" aria-label="Non mi piace: ${giu.length}">👎 ${giu.length}</span>
         <span class="sp"></span>` : `
@@ -1247,8 +1304,8 @@ function renderProposte() {
       (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map(card).join("")}` : "")
     : classifica.map(card).join("");
   $("#view-proposte").innerHTML = plStrip("proposte") +
-    (lista.length ? cards : `<p class="empty big">Nessuna proposta${state.ospite ? " per ora." : ". Butta lì un pezzo da provare."}</p>`) +
-    (state.ospite ? "" : addSongBlock("proposte", "Proponi un pezzo", "Proponi"));
+    (lista.length ? cards : `<p class="empty big">Nessuna proposta${state.fan ? " per ora." : ". Butta lì un pezzo da provare."}</p>`) +
+    (state.fan ? "" : addSongBlock("proposte", "Proponi un pezzo", "Proponi"));
 }
 
 // ---------- registrazioni ----------
@@ -1263,7 +1320,7 @@ function recRow(r, mode) {
   return `
     <div class="rec" data-rec="${r.id}">
       <span class="rec-name">${name}</span>
-      <span class="rec-meta">${meta}${state.ospite ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
+      <span class="rec-meta">${meta}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
       ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
       <div class="player">
         <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">▶</button>
@@ -1290,8 +1347,8 @@ function renderAudio() {
   const up = state.upload;
   $("#view-audio").innerHTML = `
     <div id="diretta-box"></div>
-    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.ospite ? " per ora." : ". Carica l'audio delle prove qui sotto."}</p>`}
-    ${state.ospite ? "" : `<form class="upload" data-form="upload">
+    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.fan ? " per ora." : ". Carica l'audio delle prove qui sotto."}</p>`}
+    ${state.fan ? "" : `<form class="upload" data-form="upload">
       <h3>+ Carica registrazione</h3>
       <div class="upload-grid">
         <select class="field wide" name="canzoneId" data-keep="up-song" aria-label="Canzone">
@@ -1442,7 +1499,7 @@ function syncPlayer() {
 player.addEventListener("ended", () => { if (!vaiInCoda(1)) fermaRiproduzione(); });
 player.addEventListener("loadedmetadata", () => {
   const r = state.registrazioni.find(x => x.id === state.playId);
-  if (r && !r.durata && isFinite(player.duration) && !state.ospite) {
+  if (r && !r.durata && isFinite(player.duration) && !state.fan) {
     updateDoc(doc(db, "registrazioni", r.id), { durata: Math.round(player.duration) }).catch(() => {});
   }
 });
@@ -1504,7 +1561,7 @@ function renderCassa() {
         <span><span class="what">${esc(m.descrizione)}</span><span class="w">${esc(m.chi || "")}</span></span>
         <span class="amt${entrata ? " in" : ""}">${entrata ? "+" : "−"} ${NUM.format((m.importoCent || 0) / 100)}</span>
         ${open ? `<div class="mov-detail"><span>Registrato da ${esc(m.registratoDa || "—")}${quando ? ` il ${esc(quando)}` : ""}</span><span class="sp"></span>
-          ${state.ospite ? "" : `<button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento">✕</button>`}</div>` : ""}
+          <button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento">✕</button></div>` : ""}
       </div>`;
   }).join("");
   const spesa = state.tipoMov === "spesa";
@@ -1517,8 +1574,8 @@ function renderCassa() {
         <span class="tot">versato <b>${euro(versato)}</b><br>speso <b>${euro(speso)}</b></span>
         <span class="big${saldo < 0 ? " neg" : ""}">${euro(saldo)}</span>
       </div>
-      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento${state.ospite ? "." : ". Registra il primo qui sotto."}</div>`}
-      ${state.ospite ? "" : `<form class="cassa-form" data-form="mov">
+      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento. Registra il primo qui sotto.</div>`}
+      <form class="cassa-form" data-form="mov">
         <div class="seg" role="group" aria-label="Tipo di movimento">
           <button type="button" class="${spesa ? "on" : ""}" data-action="tipo" data-tipo="spesa" aria-pressed="${spesa}">Spesa</button>
           <button type="button" class="${spesa ? "" : "on"}" data-action="tipo" data-tipo="versamento" aria-pressed="${!spesa}">Versamento</button>
@@ -1528,7 +1585,7 @@ function renderCassa() {
         <input class="field wide" name="descrizione" data-keep="mov-desc" placeholder="${spesa ? "Cosa è stato comprato" : "Per cosa, es. quota di ottobre"}" maxlength="80" autocomplete="off" required aria-label="Descrizione">
         <select class="field wide" name="chi" data-keep="mov-chi" aria-label="${spesa ? "Chi ha comprato" : "Chi ha versato"}">${chiOpts}</select>
         <button class="btn fill wide" type="submit">Registra ${spesa ? "spesa" : "versamento"}</button>
-      </form>`}
+      </form>
     </article>`;
 }
 
@@ -1602,8 +1659,7 @@ function renderPersonale() {
   let nome = state.viewPerson && state.membri.some(m => m.nome === state.viewPerson) ? state.viewPerson : meName;
   if (!nome || !state.membri.some(m => m.nome === nome)) nome = state.membri[0].nome;
   const persona = state.membri.find(m => m.nome === nome);
-  const ro = state.ospite;
-  const mia = !ro && nome === meName;
+  const mia = nome === meName;
 
   const whoBar = `<div class="who-bar"><span class="lbl">Pagina di</span>${state.membri.map(m => {
     const col = colorOf(m.nome);
@@ -1617,7 +1673,7 @@ function renderPersonale() {
     const gen = song && isGenerale(song);
     return `
       <div class="ptask">
-        <button class="chk" data-action="check" data-id="${t.id}" data-nome="${esc(nome)}" ${ro ? `disabled aria-label="Da fare"` : `aria-label="Segna fatto"`}></button>
+        <button class="chk" data-action="check" data-id="${t.id}" data-nome="${esc(nome)}" aria-label="Segna fatto"></button>
         <span><span class="ptask-song${gen ? " gen" : ""}">${gen ? "Generale" : esc(song?.titolo || "—")}${multipla(t) ? (fattiDi(t).length ? ` · fatto da ${fattiDi(t).length} su ${assegnati(t).length}` : ` · con altri ${assegnati(t).length - 1}`) : ""}</span><span class="tt">${esc(t.titolo)}</span></span>
       </div>`;
   }).join("");
@@ -1648,15 +1704,15 @@ function renderPersonale() {
         </form>`).join("")}
     </article>`;
 
-  const add = ro ? "" : state.addOpen.personale
+  const add = state.addOpen.personale
     ? `<form class="inline-form add-person" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
     : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">+</span>Aggiungi una persona</button>`;
 
-  // l'accesso degli amici si legge dalla funzione solo quando si apre Personale
-  if (mia && state.tab === "personale" && !state.amici && !state.amiciStato) setTimeout(caricaAmici, 0);
+  // l'accesso dei fan si legge dalla funzione solo quando si apre Personale
+  if (mia && state.tab === "personale" && !state.accesso && !state.accessoStato) setTimeout(caricaAccesso, 0);
   view.innerHTML = `
     ${whoBar}
-    ${mia || ro ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
+    ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
     ${orfaniHtml}
     ${state.renaming === persona.id ? `
     <form class="rename-form" data-form="rename" data-id="${persona.id}">
@@ -1665,17 +1721,16 @@ function renderPersonale() {
     </form>
     <p class="rename-hint">Il nome cambia anche in voti, task, spese e registrazioni. La sigla si aggiorna da sola.</p>` : `
     <div class="me-head"><h2>${esc(nome)}</h2>
-      ${ro ? "" : `<button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button>`}</div>`}
+      <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button></div>`}
     <p class="me-stats">${stats}</p>
     <article class="card">
       <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
-    ${mia || ro ? notificheCard() : ""}
-    ${mia ? amiciCard() : ""}
+    ${mia ? notificheCard() : ""}
+    ${mia ? accessoCard() : ""}
     ${mia ? spotifyCard() : ""}
-    ${ro ? ospiteCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
 }
@@ -1693,16 +1748,16 @@ async function aggiungiParte(songId, key) {
   render();
   document.querySelector(`[data-keep="${CSS.escape(`setup-${songId}-${key}`)}"]`)?.focus();
 }
-// azioni che scrivono nel database: agli amici non arrivano (e il database le rifiuterebbe comunque)
+// azioni che scrivono nel database: ai fan non arrivano (e il database le rifiuterebbe comunque)
 const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
   "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "add-open",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
-  "amici-apri", "amici-disattiva", "amici-invita", "amici-vedi"
+  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
-  if (state.ospite && SCRITTURE.has(action)) { toast(SOLA_LETTURA); return; }
+  if (state.fan && SCRITTURE.has(action)) { toast(SOLA_LETTURA); return; }
   switch (action) {
     case "open-song":
       apriCanzone(id); break;
@@ -1873,32 +1928,44 @@ async function act(btn) {
     }
     case "mini-salta": salta(Number(btn.dataset.sec) || 0); break;
     case "esci":
+      // si esce e si ricarica: chi entra dopo (band o fan) riparte pulito
       if (state.playId) fermaRiproduzione();
+      if (state.push) await disattivaNotifiche();
+      store.del("prove_fan_nome");
       await signOut(auth).catch(() => {});
+      location.reload();
       break;
-    case "amici-riprova":
-      state.amiciStato = ""; caricaAmici(); break;
-    case "amici-apri":
-      state.amiciForm = true; render();
-      document.querySelector('[data-keep="amici-pw"]')?.focus();
+    case "fan-chiudi":
+      state.fanMenu = false; state.fanCambia = false; renderFan(); break;
+    case "fan-cambia":
+      state.fanCambia = true; renderFan();
+      $("#fan-box [data-keep='fan-nome']")?.select();
       break;
-    case "amici-annulla":
-      state.amiciForm = false; render(); break;
-    case "amici-vedi":
-      state.amiciVedi = !state.amiciVedi; render(); break;
-    case "amici-invita": {
-      const testo = invitoAmici();
+    case "fan-annulla":
+      state.fanCambia = false; renderFan(); break;
+    case "accesso-riprova":
+      state.accessoStato = ""; caricaAccesso(); break;
+    case "accesso-apri":
+      state.accessoForm = true; render();
+      document.querySelector('[data-keep="accesso-pw"]')?.focus();
+      break;
+    case "accesso-annulla":
+      state.accessoForm = false; render(); break;
+    case "accesso-vedi":
+      state.accessoVedi = !state.accessoVedi; render(); break;
+    case "accesso-invita": {
+      const testo = invitoFan();
       try {
         if (navigator.share) { await navigator.share({ text: testo }); break; }
       } catch (e) { if (e && e.name === "AbortError") break; }
       try { await navigator.clipboard.writeText(testo); toast("Invito copiato: incollalo nel messaggio."); }
-      catch (e) { state.amiciVedi = true; render(); toast("Non riesco a copiare: la password ora è visibile."); }
+      catch (e) { state.accessoVedi = true; render(); toast("Non riesco a copiare: la password ora è visibile."); }
       break;
     }
-    case "amici-disattiva": {
-      if (!confirm("Disattivare l'accesso degli amici? Chi è dentro esce entro un'ora e smette di ricevere notifiche.")) return;
+    case "accesso-disattiva": {
+      if (!confirm("Disattivare l'accesso dei fan? Chi è dentro esce entro un'ora e smette di ricevere notifiche.")) return;
       btn.disabled = true;
-      try { state.amici = await chiamaAccesso("disattiva"); state.amiciVedi = false; toast("Accesso degli amici disattivato."); }
+      try { state.accesso = await chiamaAccesso("disattiva"); state.accessoVedi = false; toast("Accesso dei fan disattivato."); }
       catch (e) { toast("Non disattivato: " + e.message); }
       render();
       break;
@@ -2019,6 +2086,42 @@ mainEl.addEventListener("click", e => {
   // un click su un bottone interno non deve aprire/chiudere la scheda
   act(btn);
 });
+// pannello del fan: nome, messaggio alla band, notifiche, esci
+$("#fan-box")?.addEventListener("click", e => {
+  if (e.target.id === "fan-box" && state.fanNome) { state.fanMenu = false; state.fanCambia = false; renderFan(); return; }
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
+$("#fan-box")?.addEventListener("submit", async e => {
+  const form = e.target.closest("form[data-form]");
+  if (!form) return;
+  e.preventDefault();
+  if (form.dataset.form === "fan-nome") {
+    const nome = form.nome.value.trim().replace(/\s+/g, " ").slice(0, 30);
+    if (!nome) return;
+    const conNotifiche = form.notifiche && form.notifiche.checked;
+    form.nome.value = "";
+    salvaNomeFan(nome);
+    // il permesso va chiesto dentro il tocco su «Entra»
+    if (conNotifiche) attivaNotifiche();
+    else toast(`Ciao ${nome}!`);
+    return;
+  }
+  if (form.dataset.form === "fan-messaggio") {
+    const testo = form.testo.value.trim();
+    if (!testo) return;
+    state.fanInvio = true; renderFan();
+    try {
+      await chiamaAccesso("messaggio", { testo });
+      form.testo.value = "";
+      state.fanInvio = false; state.fanMenu = false; renderFan();
+      toast("Messaggio mandato alla band.");
+    } catch (ex) {
+      state.fanInvio = false; renderFan();
+      toast("Messaggio non mandato: " + ex.message);
+    }
+  }
+});
 $("#mini")?.addEventListener("click", e => {
   window.__lastX = e.clientX;
   const btn = e.target.closest("[data-action]");
@@ -2043,23 +2146,23 @@ mainEl.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   const kind = form.dataset.form;
-  if (state.ospite) { toast(SOLA_LETTURA); return; }
+  if (state.fan) { toast(SOLA_LETTURA); return; }
 
-  if (kind === "amici") {
+  if (kind === "accesso") {
     const pw = form.password.value.trim();
     if (pw.length < 6) { toast("Almeno 6 caratteri."); return; }
-    state.amiciOcc = true; render();
+    state.accessoOcc = true; render();
     try {
-      if (await eLaPasswordDellaBand(pw)) { toast("È la password della band: scegline un'altra per gli amici."); return; }
-      const prima = state.amici && state.amici.attivo;
-      state.amici = await chiamaAccesso("imposta", { password: pw });
-      state.amiciForm = false; state.amiciVedi = true;
-      document.querySelectorAll('main [data-keep="amici-pw"]').forEach(el => { el.value = ""; });
-      toast(prima ? "Password degli amici cambiata." : "Accesso degli amici attivo.");
+      if (await eLaPasswordDellaBand(pw)) { toast("È la password della band: scegline un'altra per i fan."); return; }
+      const prima = state.accesso && state.accesso.attivo;
+      state.accesso = await chiamaAccesso("imposta", { password: pw });
+      state.accessoForm = false; state.accessoVedi = true;
+      document.querySelectorAll('main [data-keep="accesso-pw"]').forEach(el => { el.value = ""; });
+      toast(prima ? "Password dei fan cambiata." : "Accesso dei fan attivo.");
     } catch (ex) {
       toast("Non salvata: " + ex.message);
     } finally {
-      state.amiciOcc = false; render();
+      state.accessoOcc = false; render();
     }
     return;
   }
@@ -2275,7 +2378,7 @@ async function enrichLink(songId, titolo, artista, cosa) {
   } catch (e) { /* resta il link di ricerca */ }
 }
 function enrichSong(c) {
-  if (!c || isGenerale(c) || state.enrichTried.has(c.id) || state.ospite) return;
+  if (!c || isGenerale(c) || state.enrichTried.has(c.id) || state.fan) return;
   state.enrichTried.add(c.id);
   // con le playlist collegate il link Spotify lo cerca la funzione delle playlist, direttamente su Spotify
   if (!c.spotifyUrl && !playlistInfo()?.scaletta) enrichLink(c.id, c.titolo, c.artista, "spotify");
