@@ -1,6 +1,6 @@
 // Service worker minimale: rende l'app installabile e apre anche offline.
 // Le richieste a Firestore NON passano di qui (le gestisce l'SDK con la sua cache).
-const CACHE = "prove-v28";
+const CACHE = "prove-v29";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "diretta.js", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/badge-96.png"];
 
 self.addEventListener("install", e => {
@@ -16,6 +16,7 @@ self.addEventListener("fetch", e => {
   if (url.origin !== location.origin) return; // Firestore, font, SDK: rete diretta
   if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return; // funzioni: mai in cache
   if (url.pathname.endsWith("/version.json")) return;                             // controllo versione: sempre dalla rete
+  if (url.searchParams.has("fan")) return;                                       // link d'invito: contiene la password, niente cache
   // network-first: prendi sempre l'ultima versione, cache come ripiego offline
   e.respondWith(
     fetch(e.request).then(res => {

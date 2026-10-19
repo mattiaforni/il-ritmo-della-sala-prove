@@ -91,6 +91,14 @@ async function invia(chatId, testo, { menu = true } = {}) {
   }
 }
 
+// messaggio nel gruppo collegato (usato dai messaggi dei fan, vedi accesso.js); false se il bot non è collegato
+async function mandaAlGruppo(testo) {
+  const st = (await refStato().get()).data() || {};
+  if (!st.chatId) return false;
+  await invia(st.chatId, testo, { menu: false });
+  return true;
+}
+
 // webhook e comandi: li imposta solo se mancano o se il token è cambiato
 async function configura({ forza = false } = {}) {
   const st = (await refStato().get()).data() || {};
@@ -408,3 +416,7 @@ exports.telegramOgniOra = onSchedule(
 
 // per le prove
 exports._interni = { gestisci, riepilogoAutomatico, aggiornaRegistro, leggiDati, segreto, WEBHOOK_URL, leggiNovitaApp };
+
+// per accesso.js: scrivere nel gruppo della band (la funzione che lo usa deve dichiarare il secret)
+exports.mandaAlGruppo = mandaAlGruppo;
+exports.TELEGRAM_TOKEN = TELEGRAM_TOKEN;

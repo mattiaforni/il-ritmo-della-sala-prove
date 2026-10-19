@@ -122,6 +122,7 @@ const REGIONE = "us-central1";
 const APP_URL = `https://${PROGETTO}.web.app`;
 const ORIGINI = [APP_URL, `https://${PROGETTO}.firebaseapp.com`];
 const BAND_EMAIL = "band@il-ritmo-della-sala-prove.web.app";
+const FAN_EMAIL = "fan@il-ritmo-della-sala-prove.web.app";   // sola lettura, vedi accesso.js
 const SPOTIFY_CLIENT_ID = (process.env.SPOTIFY_CLIENT_ID || "").trim();
 const CALLBACK_URL = `https://${REGIONE}-${PROGETTO}.cloudfunctions.net/spotifyCallback`;
 const SCOPES = "playlist-modify-public playlist-modify-private playlist-read-private";
@@ -154,15 +155,23 @@ function cors(req, res) {
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
-async function eBand(req) {
+// chi chiama: "band", "fan" (sola lettura) oppure null
+async function ruolo(req) {
   const m = (req.get("Authorization") || "").match(/^Bearer (.+)$/);
-  if (!m) return false;
+  if (!m) return null;
   try {
     const t = await getAuth().verifyIdToken(m[1]);
-    return (t.email || "").toLowerCase() === BAND_EMAIL;
+    const email = (t.email || "").toLowerCase();
+    if (email === BAND_EMAIL) return "band";
+    // per i fan si controlla anche che la sessione non sia stata revocata (password cambiata)
+    if (email === FAN_EMAIL) { await getAuth().verifyIdToken(m[1], true); return "fan"; }
+    return null;
   } catch (e) {
-    return false;
+    return null;
   }
+}
+async function eBand(req) {
+  return (await ruolo(req)) === "band";
 }
 
 async function tokenSpotify(params) {
@@ -418,4 +427,8 @@ exports.telegramOgniOra = telegram.telegramOgniOra;
 // ============================================================
 // Notifiche push ai telefoni della band: vedi notifiche.js
 // ============================================================
-exports.notifiche = require("./notifiche").crea({ cors, eBand, REGIONE }).notifiche;
+exports.notifiche = require("./notifiche").crea({ cors, ruolo, REGIONE }).notifiche;
+// accesso dei fan e messaggi dei fan alla band (inoltrati nel gruppo Telegram): vedi accesso.js
+exports.accesso = require("./accesso").crea({
+  cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, segreti: [telegram.TELEGRAM_TOKEN]
+}).accesso;

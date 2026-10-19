@@ -1,12 +1,33 @@
 // Regole Firestore — Console Firebase → Firestore Database → Regole
-// Leggono e scrivono solo le richieste fatte con l'account condiviso della band.
+// Account condiviso della band: legge e scrive tutto.
+// Account dei fan (sola lettura): legge scaletta, proposte, task, persone, registrazioni,
+// diretta e bacheca, non la cassa. Scrive solo la propria richiesta di ascolto della
+// diretta, che crea e cancella, e i "mi piace" in bacheca; post e commenti in bacheca
+// li scrive per loro la funzione "accesso". La password dei fan la gestisce la band dall'app.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function band() {
+      return request.auth != null && request.auth.token.email == 'band@il-ritmo-della-sala-prove.web.app';
+    }
+    function fan() {
+      return request.auth != null && request.auth.token.email == 'fan@il-ritmo-della-sala-prove.web.app';
+    }
     match /{collection}/{doc} {
-      allow read, write: if request.auth != null
-        && request.auth.token.email == 'band@il-ritmo-della-sala-prove.web.app'
-        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta'];
+      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'])
+        || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta', 'bacheca']);
+      allow write: if band()
+        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'];
+    }
+    match /diretta/{id} {
+      allow create: if fan() && id != 'stato'
+        && request.resource.data.tipo == 'ascolto'
+        && request.resource.data.keys().hasOnly(['tipo', 'sessione', 'chi', 'offer', 'creato']);
+      allow delete: if fan() && resource.data.tipo == 'ascolto';
+    }
+    match /bacheca/{id} {
+      allow update: if fan()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['piace']);
     }
   }
 }

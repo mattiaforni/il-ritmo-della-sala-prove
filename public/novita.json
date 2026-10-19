@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "29", "data": "2026-10-19", "titolo": "Fan e Bacheca",
+      "punti": [
+        "Nuova sezione Bacheca: i fan scrivono alla band, voi rispondete e potete togliere i messaggi. I messaggi dei fan arrivano anche nel gruppo Telegram; un pallino sulla sezione segnala quelli nuovi.",
+        "I fan entrano con il loro nome e una password da fan, oppure dal link d'invito (basta il nome). Vedono Scaletta, Proposte con i voti, Audio con la diretta e Bacheca; il nome resta sul telefono. Toccandolo in alto: notifiche, cambia nome, esci.",
+        "La password dei fan la imposta chiunque della band da Personale, card «Accesso fan»: da lì si manda l'invito, si cambia o si disattiva. Cambiandola, chi ha quella vecchia esce entro un'ora.",
+        "All'ingresso si sceglie Band o Fan; per voi non cambia niente."
+      ]
+    },
+    {
       "versione": "28", "data": "2026-10-14", "titolo": "Registrazioni di fila",
       "punti": [
         "Finita una registrazione parte la successiva dello stesso giorno, nell'ordine della prova; dalla pagina di una canzone, la successiva di quella canzone.",

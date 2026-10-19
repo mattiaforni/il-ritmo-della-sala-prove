@@ -23,7 +23,7 @@ const BITRATE = 128000;           // Opus stereo a 128 kbps: qualità musica, no
 const ATTESA_RISPOSTA_MS = 20000;
 const CHIAVE_INGRESSO = "prove_diretta_ingresso";
 
-export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, alAvvio, primaDiAscoltare, ripristinaComandi }) {
+export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, alAvvio, primaDiAscoltare, ripristinaComandi, puoTrasmettere = () => true }) {
   const supportata = typeof RTCPeerConnection !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
   const audioEl = document.getElementById("diretta-audio");
   const d = {
@@ -469,7 +469,8 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
       </article>`;
     }
 
-    if (isMobile) {
+    // dal telefono, o con l'accesso dei fan, la diretta si ascolta soltanto
+    if (isMobile || !puoTrasmettere()) {
       return `<article class="card dircard spenta"><p class="dir-txt">Diretta dalla sala: <b>spenta</b>. Si avvia dal computer della sala.</p></article>`;
     }
     return `
@@ -492,7 +493,7 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
 
   function azione(nome) {
     switch (nome) {
-      case "dir-avvia": avvia(); break;
+      case "dir-avvia": if (puoTrasmettere()) avvia(); break;
       case "dir-ferma": ferma(); break;
       case "dir-ascolta": ascolta(); break;
       case "dir-smetti": smetti(); break;
