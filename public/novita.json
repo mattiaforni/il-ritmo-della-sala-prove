@@ -2,6 +2,14 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "30", "data": "2026-10-21", "titolo": "Registrazioni di fila più solide",
+      "punti": [
+        "La registrazione successiva si carica in anticipo, due minuti prima della fine: il passaggio è quasi immediato e non dipende dalla rete.",
+        "Con l'autoradio in Bluetooth il cambio di brano non si ferma più: la pausa che l'autoradio manda in quel momento viene ignorata. Le pause date da voi funzionano come prima.",
+        "Se la rete salta a metà brano (galleria, poco campo) la registrazione riprende da sola dallo stesso punto appena torna la connessione."
+      ]
+    },
+    {
       "versione": "29", "data": "2026-10-19", "titolo": "Fan e Bacheca",
       "punti": [
         "Nuova sezione Bacheca: i fan scrivono alla band, voi rispondete e potete togliere i messaggi. I messaggi dei fan arrivano anche nel gruppo Telegram; un pallino sulla sezione segnala quelli nuovi.",

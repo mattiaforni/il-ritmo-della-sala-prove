@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "29";
+const APP_VERSION = "30";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1410,39 +1410,125 @@ function renderAudio() {
   diretta.render();
 }
 
-// player unico: la riproduzione continua anche quando la pagina si ridisegna
-const player = $("#player");
+// Riproduzione con due lettori che si danno il cambio: quello in uso suona, l'altro carica in anticipo
+// la registrazione successiva della coda. Così il passaggio è quasi immediato e non dipende dalla rete
+// (in macchina: gallerie, poca copertura). Con l'autoradio in Bluetooth un buco tra un brano e l'altro
+// viene preso per una fermata e l'autoradio manda "pausa": per questo il passaggio deve essere rapido
+// e una pausa arrivata dai comandi esterni subito dopo un cambio automatico non si esegue.
+const lettori = [$("#player"), $("#player2")];
+let player = lettori[0];
+const altroLettore = () => (player === lettori[0] ? lettori[1] : lettori[0]);
+const riproduzione = {
+  vuole: false,        // chi ascolta vuole che suoni (play) o no (pausa, stop)
+  cambio: 0,           // quando è avvenuto l'ultimo passaggio automatico al brano successivo
+  pronto: null,        // id della registrazione caricata in anticipo nell'altro lettore
+  prontoErrore: 0,     // quando è fallito l'ultimo caricamento in anticipo (si riprova dopo un po')
+  srcCambiato: 0,      // quando l'app ha cambiato file al lettore (il cambio produce una "pausa" che non è di chi ascolta)
+  riprendiDa: null,    // { url, pos }: dopo un errore di rete, il punto da cui ripartire
+  errori: 0, timer: null, pos: 0
+};
+function caricaIn(el, url) {
+  if (el === player) riproduzione.srcCambiato = Date.now();
+  el.src = url;
+}
+function svuotaLettore(el) {
+  el.pause();
+  el.removeAttribute("src");
+  try { el.load(); } catch (e) { /* niente */ }
+}
+function suona() {
+  riproduzione.vuole = true;
+  statoSessione();
+  return player.play().catch(e => {
+    // in secondo piano il telefono può rifiutare: si riprova quando l'app torna visibile
+    if (e && e.name === "NotAllowedError") return;
+    if (e && e.name === "AbortError") return;
+    toast("Impossibile riprodurre questo file.");
+  });
+}
+// play dopo un errore di rete: si ricarica dal punto in cui era, altrimenti si riprende normalmente
+function riparti() {
+  if (player.error || riproduzione.timer) { riproduzione.vuole = true; riprendi(); } else suona();
+}
+function metti(r) {
+  // la registrazione è già caricata nell'altro lettore: si scambiano
+  const el = altroLettore();
+  if (riproduzione.pronto === r.id && el.getAttribute("src") === r.url && !el.error) {
+    const prima = player;
+    player = altroLettore();
+    riproduzione.srcCambiato = Date.now();
+    svuotaLettore(prima);
+    try { player.currentTime = 0; } catch (e) { /* niente */ }
+  } else {
+    // scelta a mano un'altra registrazione: quella caricata in anticipo non serve più
+    if (altroLettore().getAttribute("src")) svuotaLettore(altroLettore());
+    caricaIn(player, r.url);
+  }
+  riproduzione.pronto = null;
+  riproduzione.riprendiDa = null;
+}
 function playToggle(id, coda) {
   const r = state.registrazioni.find(x => x.id === id);
   if (!r) return;
-  if (state.playId === id) { player.paused ? player.play().catch(() => {}) : player.pause(); return; }
+  if (state.playId === id) {
+    if (player.paused) riparti(); else { riproduzione.vuole = false; player.pause(); }
+    return;
+  }
   if (coda) state.coda = coda;
   if (!state.coda || !state.coda.includes(id)) state.coda = [id];
   state.playId = id;
-  player.src = r.url;
-  player.play().catch(() => toast("Impossibile riprodurre questo file."));
+  annullaRipresa();
+  metti(r);
+  suona();
   comandiRegistrazioni();
   infoSchermoBloccato(r);
   syncPlayer();
 }
 // stop: si ferma, si torna all'inizio e la barra in basso si chiude
 function fermaRiproduzione() {
+  riproduzione.vuole = false;
+  annullaRipresa();
   player.pause();
   try { player.currentTime = 0; } catch (e) { /* file non ancora caricato */ }
+  svuotaLettore(altroLettore());
+  riproduzione.pronto = null;
+  riproduzione.riprendiDa = null;
   state.playId = null;
   state.coda = null;
-  if ("mediaSession" in navigator) navigator.mediaSession.metadata = null;
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.metadata = null;
+    try { navigator.mediaSession.playbackState = "none"; } catch (e) { /* niente */ }
+  }
   syncPlayer();
 }
 // passa alla registrazione successiva (passo 1) o precedente (−1) della coda; false se non c'è
-function vaiInCoda(passo) {
+function vaiInCoda(passo, automatico = false) {
   const c = (state.coda || []).filter(id => state.registrazioni.some(r => r.id === id));
   const i = c.indexOf(state.playId);
   const j = i + passo;
   if (i < 0 || j < 0 || j >= c.length) return false;
   state.coda = c;
+  if (automatico) riproduzione.cambio = Date.now();
   playToggle(c[j]);
   return true;
+}
+// la successiva della coda, da caricare in anticipo
+function prossimaInCoda() {
+  const c = (state.coda || []).filter(id => state.registrazioni.some(r => r.id === id));
+  const i = c.indexOf(state.playId);
+  return i >= 0 && i < c.length - 1 ? state.registrazioni.find(r => r.id === c[i + 1]) : null;
+}
+// si carica la successiva quando mancano due minuti alla fine (subito, per i brani brevi)
+function preparaProssima() {
+  const r = prossimaInCoda();
+  if (!r || riproduzione.pronto === r.id || Date.now() - riproduzione.prontoErrore < 20000) return;
+  const dur = player.duration;
+  if (!isFinite(dur) || dur - player.currentTime > 120) return;
+  const el = altroLettore();
+  el.preload = "auto";
+  el.src = r.url;
+  try { el.load(); } catch (e) { /* niente */ }
+  riproduzione.pronto = r.id;
 }
 // posizione nella coda, es. "2 di 7" (vuoto se si ascolta una registrazione sola)
 function posizioneInCoda() {
@@ -1453,6 +1539,48 @@ function posizioneInCoda() {
 function salta(sec) {
   if (!state.playId || !isFinite(player.duration)) return;
   player.currentTime = Math.max(0, Math.min(player.duration - 0.1, player.currentTime + sec));
+}
+// ---------- ripresa dopo un errore di rete (galleria, campo che va e viene) ----------
+// si ricarica la stessa registrazione dal punto in cui era, con attese crescenti (fino a circa 5 minuti)
+const ATTESE_RIPRESA = [2, 4, 8, 15, 30, 30, 60, 60, 90];
+function annullaRipresa() {
+  clearTimeout(riproduzione.timer);
+  riproduzione.timer = null;
+  riproduzione.errori = 0;
+}
+function programmaRipresa() {
+  if (!state.playId || !riproduzione.vuole || riproduzione.timer) return;
+  if (riproduzione.errori >= ATTESE_RIPRESA.length) { toast("Registrazione interrotta: niente rete."); return; }
+  const attesa = ATTESE_RIPRESA[riproduzione.errori++] * 1000;
+  riproduzione.timer = setTimeout(riprendi, attesa);
+}
+function riprendi() {
+  clearTimeout(riproduzione.timer);
+  riproduzione.timer = null;
+  const r = state.registrazioni.find(x => x.id === state.playId);
+  if (!r || !riproduzione.vuole) return;
+  // il punto si applica quando il file è di nuovo caricato (vedi loadedmetadata), solo se è ancora lui
+  if (!riproduzione.riprendiDa || riproduzione.riprendiDa.url !== r.url) riproduzione.riprendiDa = { url: r.url, pos: riproduzione.pos };
+  caricaIn(player, r.url);
+  suona();
+}
+window.addEventListener("online", () => { if (riproduzione.timer) riprendi(); });
+// tornando sull'app: se doveva suonare e il telefono l'aveva bloccata, riparte
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (state.playId && riproduzione.vuole && player.paused && !riproduzione.timer && !player.error) suona();
+  syncPlayer();
+});
+// stato e posizione per lo schermo bloccato, le cuffie e l'autoradio (Bluetooth, Android Auto)
+function statoSessione() {
+  // senza una registrazione in corso la sessione non è delle registrazioni (può essere della diretta)
+  if (!("mediaSession" in navigator) || !state.playId) return;
+  const ms = navigator.mediaSession;
+  try { ms.playbackState = riproduzione.vuole ? "playing" : "paused"; } catch (e) { /* niente */ }
+  const dur = player.duration;
+  if (state.playId && ms.setPositionState && isFinite(dur) && dur > 0) {
+    try { ms.setPositionState({ duration: dur, playbackRate: player.playbackRate || 1, position: Math.min(player.currentTime || 0, dur) }); } catch (e) { /* niente */ }
+  }
 }
 // titolo della registrazione: la canzone (o l'etichetta), sotto etichetta e data
 function infoRegistrazione(r) {
@@ -1478,9 +1606,11 @@ function comandiRegistrazioni() {
   if (!("mediaSession" in navigator)) return;
   const ms = navigator.mediaSession;
   const prova = (azione, fn) => { try { ms.setActionHandler(azione, fn); } catch (e) { /* azione non supportata */ } };
-  prova("play", () => player.play().catch(() => {}));
-  prova("pause", () => player.pause());
-  prova("stop", fermaRiproduzione);
+  prova("play", () => riparti());
+  // una pausa che arriva dall'autoradio subito dopo un cambio automatico di brano non è di chi ascolta
+  const appenaCambiato = () => Date.now() - riproduzione.cambio < 2500;
+  prova("pause", () => { if (appenaCambiato()) return; riproduzione.vuole = false; player.pause(); statoSessione(); });
+  prova("stop", () => { if (appenaCambiato()) return; fermaRiproduzione(); });
   prova("seekbackward", (d) => salta(-(d.seekOffset || 10)));
   prova("seekforward", (d) => salta(d.seekOffset || 10));
   prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
@@ -1520,6 +1650,8 @@ function renderMini() {
     <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">■</button>`;
 }
 function syncPlayer() {
+  // a schermo spento non serve ridisegnare: si aggiorna al ritorno
+  if (document.hidden) return;
   renderMini();
   const cur = state.playId, playing = cur && !player.paused, dur = player.duration;
   document.querySelectorAll(".play").forEach(b => {
@@ -1538,14 +1670,46 @@ function syncPlayer() {
     else s.textContent = fmtTime(state.registrazioni.find(x => x.id === id)?.durata);
   });
 }
-["play", "pause", "timeupdate", "ended", "loadedmetadata"].forEach(ev => player.addEventListener(ev, syncPlayer));
-// a fine brano la barra si chiude (come con lo stop)
-player.addEventListener("ended", () => { if (!vaiInCoda(1)) fermaRiproduzione(); });
-player.addEventListener("loadedmetadata", () => {
-  const r = state.registrazioni.find(x => x.id === state.playId);
-  if (r && !r.durata && isFinite(player.duration) && !state.fan) {
-    updateDoc(doc(db, "registrazioni", r.id), { durata: Math.round(player.duration) }).catch(() => {});
-  }
+// gli eventi contano solo per il lettore in uso (l'altro sta solo caricando la successiva)
+lettori.forEach(el => {
+  const delPlayer = (fn) => (e) => { if (e.target === player) fn(e); };
+  ["play", "pause", "timeupdate", "ended", "loadedmetadata"].forEach(ev => el.addEventListener(ev, delPlayer(syncPlayer)));
+  el.addEventListener("timeupdate", delPlayer(() => {
+    if (!player.paused) { riproduzione.pos = player.currentTime; if (riproduzione.errori && player.currentTime > 0) riproduzione.errori = 0; }
+    preparaProssima();
+  }));
+  el.addEventListener("loadedmetadata", delPlayer(() => {
+    const rd = riproduzione.riprendiDa;
+    if (rd && player.getAttribute("src") === rd.url) {
+      riproduzione.riprendiDa = null;
+      try { if (rd.pos > 0) player.currentTime = rd.pos; } catch (e) { /* niente */ }
+    }
+    statoSessione(); preparaProssima();
+  }));
+  el.addEventListener("play", delPlayer(() => { riproduzione.vuole = true; statoSessione(); }));
+  // pausa decisa dal telefono (cuffie staccate, telefonata): chi ascolta non vuole più che suoni.
+  // A fine brano la pausa arriva insieme a "ended" e non conta.
+  el.addEventListener("pause", delPlayer(() => {
+    // non è di chi ascolta: fine brano, errore di rete, ripresa in corso, file appena cambiato dall'app
+    if (!player.paused || player.ended || player.error || riproduzione.timer || Date.now() - riproduzione.srcCambiato < 1500) return;
+    riproduzione.vuole = false;
+    statoSessione();
+  }));
+  el.addEventListener("seeked", delPlayer(statoSessione));
+  // a fine brano parte la successiva della coda; a fine coda la barra si chiude (come con lo stop)
+  el.addEventListener("ended", delPlayer(() => { if (!vaiInCoda(1, true)) fermaRiproduzione(); }));
+  // errore di rete mentre si ascolta: si riprova dallo stesso punto
+  el.addEventListener("error", (e) => {
+    if (e.target === player) { if (state.playId && riproduzione.vuole) programmaRipresa(); return; }
+    // fallito il caricamento in anticipo: al passaggio si caricherà normalmente
+    if (riproduzione.pronto && el.getAttribute("src")) { riproduzione.pronto = null; riproduzione.prontoErrore = Date.now(); }
+  });
+  el.addEventListener("loadedmetadata", delPlayer(() => {
+    const r = state.registrazioni.find(x => x.id === state.playId);
+    if (r && !r.durata && isFinite(player.duration) && !state.fan) {
+      updateDoc(doc(db, "registrazioni", r.id), { durata: Math.round(player.duration) }).catch(() => {});
+    }
+  }));
 });
 
 function durataFile(file) {
