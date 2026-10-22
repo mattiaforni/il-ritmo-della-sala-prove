@@ -66,10 +66,11 @@ async function chiediAGemini(key, modello, testo) {
 exports.spotifyLink = onRequest(
   { region: "us-central1", secrets: [GEMINI_API_KEY], maxInstances: 3 },
   async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
+    cors(req, res);
     if (req.method === "OPTIONS") return res.status(204).send("");
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+    // solo la band: senza questo controllo chiunque potrebbe usare la chiave Gemini della band
+    if ((await ruolo(req)) !== "band") return res.status(403).json({ error: "accesso negato" });
 
     const key = GEMINI_API_KEY.value();
     if (!key) {
