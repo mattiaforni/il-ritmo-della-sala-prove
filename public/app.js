@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "34";
+const APP_VERSION = "35";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1470,8 +1470,32 @@ const riproduzione = {
   prontoErrore: 0,     // quando è fallito l'ultimo caricamento in anticipo (si riprova dopo un po')
   srcCambiato: 0,      // quando l'app ha cambiato file al lettore (il cambio produce una "pausa" che non è di chi ascolta)
   riprendiDa: null,    // { url, pos }: dopo un errore di rete, il punto da cui ripartire
-  errori: 0, timer: null, pos: 0
+  errori: 0, timer: null,
+  pos: 0, posUrl: null, // ultima posizione vista mentre suonava, e di quale file è (solo quello può ripartire da lì)
+  ultimoT: -1, fermoDa: 0, // per il controllo periodico: ultima posizione vista e da quando non si muove
+  ripartenze: 0        // ripartenze automatiche dopo l'ultimo cambio di brano (al massimo poche)
 };
+// ---------- diagnostica ----------
+// Gli ultimi eventi della riproduzione (avvii, fine brano, pause e da dove vengono, errori, riprese)
+// restano sul telefono: «Copia diagnostica» in fondo a Personale li mette negli appunti, da incollare
+// a chi segue l'app quando la riproduzione di fila si ferma o salta un brano.
+const DIAG_MAX = 120;
+let diagVoci = [];
+try { diagVoci = JSON.parse(localStorage.getItem("prove_diag") || "[]"); if (!Array.isArray(diagVoci)) diagVoci = []; } catch (e) { diagVoci = []; }
+function diag(evento, dettagli) {
+  const d = new Date();
+  const ora = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  const r = state.playId && state.registrazioni.find(x => x.id === state.playId);
+  const t = isFinite(player.currentTime) ? Math.round(player.currentTime) : "-";
+  const dove = r ? ` [${infoRegistrazione(r).titolo.slice(0, 22)} ${t}s${player === lettori[1] ? " L2" : " L1"}]` : "";
+  diagVoci.push(`${ora} ${evento}${dove}${dettagli ? " · " + dettagli : ""}`);
+  if (diagVoci.length > DIAG_MAX) diagVoci.splice(0, diagVoci.length - DIAG_MAX);
+  try { localStorage.setItem("prove_diag", JSON.stringify(diagVoci)); } catch (e) { /* niente */ }
+}
+function testoDiagnostica() {
+  const testa = `Il ritmo della sala prove · versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · ${navigator.onLine ? "online" : "offline"} · schermo ${document.hidden ? "spento/altra app" : "acceso"}`;
+  return [testa, ...diagVoci].join("\n");
+}
 function caricaIn(el, url) {
   if (el === player) riproduzione.srcCambiato = Date.now();
   el.src = url;
@@ -1485,7 +1509,8 @@ function suona() {
   riproduzione.vuole = true;
   statoSessione();
   return player.play().catch(e => {
-    // in secondo piano il telefono può rifiutare: si riprova quando l'app torna visibile
+    diag("avvio rifiutato", e && e.name);
+    // in secondo piano il telefono può rifiutare: ci riprova il controllo periodico e il ritorno sull'app
     if (e && e.name === "NotAllowedError") return;
     if (e && e.name === "AbortError") return;
     toast("Impossibile riprodurre questo file.");
@@ -1504,19 +1529,27 @@ function metti(r) {
     riproduzione.srcCambiato = Date.now();
     svuotaLettore(prima);
     try { player.currentTime = 0; } catch (e) { /* niente */ }
+    diag("scambio lettori", "pronta in anticipo");
   } else {
     // scelta a mano un'altra registrazione: quella caricata in anticipo non serve più
     if (altroLettore().getAttribute("src")) svuotaLettore(altroLettore());
     caricaIn(player, r.url);
+    diag("carico", riproduzione.pronto === r.id ? "precarico non utilizzabile" : "non precaricata");
   }
   riproduzione.pronto = null;
   riproduzione.riprendiDa = null;
+  // la posizione vista finora era del brano precedente: non deve diventare il punto di ripresa di questo
+  riproduzione.pos = 0;
+  riproduzione.posUrl = r.url;
+  riproduzione.ultimoT = -1;
+  riproduzione.fermoDa = Date.now();
+  riproduzione.ripartenze = 0;
 }
 function playToggle(id, coda) {
   const r = state.registrazioni.find(x => x.id === id);
   if (!r) return;
   if (state.playId === id) {
-    if (player.paused) riparti(); else { riproduzione.vuole = false; player.pause(); }
+    if (player.paused) { diag("play (tocco)"); riparti(); } else { diag("pausa (tocco)"); riproduzione.vuole = false; player.pause(); }
     return;
   }
   if (coda) state.coda = coda;
@@ -1524,6 +1557,7 @@ function playToggle(id, coda) {
   state.playId = id;
   annullaRipresa();
   metti(r);
+  diag("avvio", `${posizioneInCoda() || "sola"}`);
   suona();
   comandiRegistrazioni();
   infoSchermoBloccato(r);
@@ -1531,6 +1565,7 @@ function playToggle(id, coda) {
 }
 // stop: si ferma, si torna all'inizio e la barra in basso si chiude
 function fermaRiproduzione() {
+  if (state.playId) diag("stop");
   riproduzione.vuole = false;
   annullaRipresa();
   player.pause();
@@ -1538,6 +1573,8 @@ function fermaRiproduzione() {
   svuotaLettore(altroLettore());
   riproduzione.pronto = null;
   riproduzione.riprendiDa = null;
+  riproduzione.pos = 0;
+  riproduzione.posUrl = null;
   state.playId = null;
   state.coda = null;
   if ("mediaSession" in navigator) {
@@ -1574,6 +1611,7 @@ function preparaProssima() {
   el.src = r.url;
   try { el.load(); } catch (e) { /* niente */ }
   riproduzione.pronto = r.id;
+  diag("precarico", `prossima: ${infoRegistrazione(r).titolo.slice(0, 22)}`);
 }
 // posizione nella coda, es. "2 di 7" (vuoto se si ascolta una registrazione sola)
 function posizioneInCoda() {
@@ -1584,6 +1622,7 @@ function posizioneInCoda() {
 function salta(sec) {
   if (!state.playId || !isFinite(player.duration)) return;
   player.currentTime = Math.max(0, Math.min(player.duration - 0.1, player.currentTime + sec));
+  diag(`salto di ${sec > 0 ? "+" : ""}${sec} s`);
 }
 // ---------- ripresa dopo un errore di rete (galleria, campo che va e viene) ----------
 // si ricarica la stessa registrazione dal punto in cui era, con attese crescenti (fino a circa 5 minuti)
@@ -1593,10 +1632,11 @@ function annullaRipresa() {
   riproduzione.timer = null;
   riproduzione.errori = 0;
 }
-function programmaRipresa() {
+function programmaRipresa(motivo) {
   if (!state.playId || !riproduzione.vuole || riproduzione.timer) return;
-  if (riproduzione.errori >= ATTESE_RIPRESA.length) { toast("Registrazione interrotta: niente rete."); return; }
+  if (riproduzione.errori >= ATTESE_RIPRESA.length) { diag("ripresa abbandonata", motivo); toast("Registrazione interrotta: niente rete."); return; }
   const attesa = ATTESE_RIPRESA[riproduzione.errori++] * 1000;
+  diag("ripresa fra " + attesa / 1000 + " s", motivo);
   riproduzione.timer = setTimeout(riprendi, attesa);
 }
 function riprendi() {
@@ -1604,18 +1644,52 @@ function riprendi() {
   riproduzione.timer = null;
   const r = state.registrazioni.find(x => x.id === state.playId);
   if (!r || !riproduzione.vuole) return;
-  // il punto si applica quando il file è di nuovo caricato (vedi loadedmetadata), solo se è ancora lui
-  if (!riproduzione.riprendiDa || riproduzione.riprendiDa.url !== r.url) riproduzione.riprendiDa = { url: r.url, pos: riproduzione.pos };
+  // il punto si applica quando il file è di nuovo caricato (vedi loadedmetadata), solo se è ancora lui:
+  // la posizione vale solo se è stata vista su questo stesso file, mai quella del brano precedente
+  const pos = riproduzione.posUrl === r.url ? riproduzione.pos : 0;
+  if (!riproduzione.riprendiDa || riproduzione.riprendiDa.url !== r.url) riproduzione.riprendiDa = { url: r.url, pos };
+  diag("ripresa", `da ${Math.round(riproduzione.riprendiDa.pos)} s`);
   caricaIn(player, r.url);
   suona();
 }
-window.addEventListener("online", () => { if (riproduzione.timer) riprendi(); });
+window.addEventListener("online", () => { diag("rete tornata"); if (riproduzione.timer) riprendi(); });
 // tornando sull'app: se doveva suonare e il telefono l'aveva bloccata, riparte
 document.addEventListener("visibilitychange", () => {
+  diag(document.visibilityState === "visible" ? "app in primo piano" : "app in secondo piano");
   if (document.visibilityState !== "visible") return;
   if (state.playId && riproduzione.vuole && player.paused && !riproduzione.timer && !player.error) suona();
   syncPlayer();
 });
+// Controllo periodico: copre quello che gli eventi non segnalano. Se dovrebbe suonare ma il lettore è in
+// pausa (avvio rifiutato a schermo spento, pausa del sistema arrivata subito dopo un cambio di brano)
+// riparte, poche volte per brano. Se il tempo non avanza da un po' senza errori (rete sparita negli ultimi
+// secondi, fine brano mai segnalata) ricarica dal punto in cui era, o passa al brano dopo se era alla fine.
+const FERMO_MS = 12000, MAX_RIPARTENZE = 3;
+function controlloRiproduzione() {
+  if (!state.playId || !riproduzione.vuole || riproduzione.timer) return;
+  const t = player.currentTime || 0;
+  if (player.paused && !player.ended && !player.error) {
+    if (riproduzione.ripartenze >= MAX_RIPARTENZE) return;
+    riproduzione.ripartenze++;
+    diag("ripartenza automatica", `${riproduzione.ripartenze} di ${MAX_RIPARTENZE}`);
+    suona();
+    return;
+  }
+  if (t !== riproduzione.ultimoT) { riproduzione.ultimoT = t; riproduzione.fermoDa = Date.now(); return; }
+  // un file che sta ancora arrivando (nessun dato, posizione 0) ha più tempo: ricaricarlo lo farebbe ripartire da capo
+  const limite = t === 0 && player.readyState < 2 ? FERMO_MS * 2.5 : FERMO_MS;
+  if (player.paused || Date.now() - riproduzione.fermoDa < limite) return;
+  riproduzione.fermoDa = Date.now();
+  const dur = player.duration;
+  if (isFinite(dur) && dur > 0 && dur - t < 1.5) {
+    diag("fine brano non segnalata");
+    if (!vaiInCoda(1, true)) fermaRiproduzione();
+    return;
+  }
+  diag("fermo da " + Math.round(limite / 1000) + " s", `rete ${navigator.onLine ? "ok" : "assente"}, stato ${player.readyState}`);
+  programmaRipresa("fermo");
+}
+setInterval(controlloRiproduzione, 4000);
 // stato e posizione per lo schermo bloccato, le cuffie e l'autoradio (Bluetooth, Android Auto)
 function statoSessione() {
   // senza una registrazione in corso la sessione non è delle registrazioni (può essere della diretta)
@@ -1651,18 +1725,19 @@ function comandiRegistrazioni() {
   if (!("mediaSession" in navigator)) return;
   const ms = navigator.mediaSession;
   const prova = (azione, fn) => { try { ms.setActionHandler(azione, fn); } catch (e) { /* azione non supportata */ } };
-  prova("play", () => riparti());
+  prova("play", () => { diag("play (comando esterno)"); riparti(); });
   // una pausa che arriva dall'autoradio subito dopo un cambio automatico di brano non è di chi ascolta
   const appenaCambiato = () => Date.now() - riproduzione.cambio < 2500;
-  prova("pause", () => { if (appenaCambiato()) return; riproduzione.vuole = false; player.pause(); statoSessione(); });
-  prova("stop", () => { if (appenaCambiato()) return; fermaRiproduzione(); });
+  prova("pause", () => { if (appenaCambiato()) { diag("pausa (comando esterno) ignorata", "subito dopo il cambio"); return; } diag("pausa (comando esterno)"); riproduzione.vuole = false; player.pause(); statoSessione(); });
+  prova("stop", () => { if (appenaCambiato()) { diag("stop (comando esterno) ignorato", "subito dopo il cambio"); return; } diag("stop (comando esterno)"); fermaRiproduzione(); });
   prova("seekbackward", (d) => salta(-(d.seekOffset || 10)));
   prova("seekforward", (d) => salta(d.seekOffset || 10));
   prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
   // tasti avanti/indietro di brano (schermo bloccato, cuffie, volante dell'auto)
   const c = state.coda || [], i = c.indexOf(state.playId);
-  prova("nexttrack", i >= 0 && i < c.length - 1 ? () => vaiInCoda(1) : null);
+  prova("nexttrack", i >= 0 && i < c.length - 1 ? () => { diag("brano successivo (comando esterno)"); vaiInCoda(1); } : null);
   prova("previoustrack", () => {
+    diag("brano precedente (comando esterno)");
     if (player.currentTime > 3 || !vaiInCoda(-1)) { try { player.currentTime = 0; } catch (e) { /* niente */ } }
   });
 }
@@ -1720,34 +1795,53 @@ lettori.forEach(el => {
   const delPlayer = (fn) => (e) => { if (e.target === player) fn(e); };
   ["play", "pause", "timeupdate", "ended", "loadedmetadata"].forEach(ev => el.addEventListener(ev, delPlayer(syncPlayer)));
   el.addEventListener("timeupdate", delPlayer(() => {
-    if (!player.paused) { riproduzione.pos = player.currentTime; if (riproduzione.errori && player.currentTime > 0) riproduzione.errori = 0; }
+    if (!player.paused) {
+      riproduzione.pos = player.currentTime;
+      riproduzione.posUrl = player.getAttribute("src");
+      if (riproduzione.errori && player.currentTime > 0) riproduzione.errori = 0;
+    }
     preparaProssima();
   }));
   el.addEventListener("loadedmetadata", delPlayer(() => {
     const rd = riproduzione.riprendiDa;
     if (rd && player.getAttribute("src") === rd.url) {
       riproduzione.riprendiDa = null;
-      try { if (rd.pos > 0) player.currentTime = rd.pos; } catch (e) { /* niente */ }
+      // mai oltre la fine del file: un punto fuori dal brano lo farebbe finire subito (e saltare al successivo)
+      const dur = player.duration;
+      const ok = rd.pos > 0 && (!isFinite(dur) || rd.pos < dur - 1);
+      try { if (ok) player.currentTime = rd.pos; } catch (e) { /* niente */ }
+      if (rd.pos > 0 && !ok) diag("punto di ripresa scartato", `${Math.round(rd.pos)} s su ${Math.round(dur)} s`);
     }
     statoSessione(); preparaProssima();
   }));
   el.addEventListener("play", delPlayer(() => { riproduzione.vuole = true; statoSessione(); }));
+  el.addEventListener("playing", delPlayer(() => diag("suona")));
+  el.addEventListener("waiting", delPlayer(() => diag("in attesa di dati", `stato ${player.readyState}`)));
+  el.addEventListener("stalled", delPlayer(() => diag("rete ferma")));
   // pausa decisa dal telefono (cuffie staccate, telefonata): chi ascolta non vuole più che suoni.
   // A fine brano la pausa arriva insieme a "ended" e non conta.
   el.addEventListener("pause", delPlayer(() => {
     // non è di chi ascolta: fine brano, errore di rete, ripresa in corso, file appena cambiato dall'app
-    if (!player.paused || player.ended || player.error || riproduzione.timer || Date.now() - riproduzione.srcCambiato < 1500) return;
+    if (!riproduzione.vuole || !player.paused || player.ended || player.error || riproduzione.timer) return;
+    // nei 20 s dopo un cambio di file una pausa del sistema (perdita dell'audio, autoradio in Bluetooth)
+    // non è di chi ascolta: resta la volontà di suonare e il controllo periodico fa ripartire
+    if (Date.now() - riproduzione.srcCambiato < 20000) { diag("pausa (sistema) ignorata", "subito dopo il cambio"); return; }
+    diag("pausa (sistema)");
     riproduzione.vuole = false;
     statoSessione();
   }));
   el.addEventListener("seeked", delPlayer(statoSessione));
   // a fine brano parte la successiva della coda; a fine coda la barra si chiude (come con lo stop)
-  el.addEventListener("ended", delPlayer(() => { if (!vaiInCoda(1, true)) fermaRiproduzione(); }));
+  el.addEventListener("ended", delPlayer(() => { diag("fine brano"); if (!vaiInCoda(1, true)) fermaRiproduzione(); }));
   // errore di rete mentre si ascolta: si riprova dallo stesso punto
   el.addEventListener("error", (e) => {
-    if (e.target === player) { if (state.playId && riproduzione.vuole) programmaRipresa(); return; }
+    if (e.target === player) {
+      diag("errore", `codice ${player.error && player.error.code}, rete ${navigator.onLine ? "ok" : "assente"}`);
+      if (state.playId && riproduzione.vuole) programmaRipresa("errore");
+      return;
+    }
     // fallito il caricamento in anticipo: al passaggio si caricherà normalmente
-    if (riproduzione.pronto && el.getAttribute("src")) { riproduzione.pronto = null; riproduzione.prontoErrore = Date.now(); }
+    if (riproduzione.pronto && el.getAttribute("src")) { diag("precarico fallito"); riproduzione.pronto = null; riproduzione.prontoErrore = Date.now(); }
   });
   el.addEventListener("loadedmetadata", delPlayer(() => {
     const r = state.registrazioni.find(x => x.id === state.playId);
@@ -2142,7 +2236,7 @@ function renderPersonale() {
     ${mia ? accessoCard() : ""}
     ${mia ? spotifyCard() : ""}
     ${add}
-    <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"}</p>`;
+    <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · <button class="app-ver-btn" data-action="copia-diag">Copia diagnostica</button></p>`;
 }
 
 // ---------- azioni ----------
@@ -2337,6 +2431,13 @@ async function act(btn) {
       if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
       break;
     }
+    case "copia-diag": {
+      // il registro della riproduzione, da incollare nel messaggio a chi segue l'app
+      const testo = testoDiagnostica();
+      try { await navigator.clipboard.writeText(testo); toast("Diagnostica copiata: incollala nel messaggio."); }
+      catch (e) { prompt("Copia questo testo:", testo); }
+      break;
+    }
     case "play-preferite": {
       const coda = codaPreferite();
       if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
@@ -2458,6 +2559,7 @@ async function act(btn) {
       if (isFinite(player.duration)) {
         const r = btn.getBoundingClientRect();
         player.currentTime = Math.max(0, Math.min(1, (window.__lastX - r.left) / r.width)) * player.duration;
+        diag("spostato con la linea (tocco)", `a ${Math.round(player.currentTime)} s su ${Math.round(player.duration)}`);
       }
       break;
     }
