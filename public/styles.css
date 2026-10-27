@@ -21,8 +21,8 @@
   --inchiostro: #231B15;
   --inchiostro-2: #645A50;
   --inchiostro-3: #978C80;
-  --linea: #E3DCD2;
-  --linea-forte: #CBC1B4;
+  --linea: #D3CABD;          /* filetti più marcati dalla v37: quelli chiari dal telefono non si vedevano */
+  --linea-forte: #BCB1A2;
   --accento: #B4552D;
   --accento-tinta: #F4E3D9;
   --su-accento: #FFFFFF;
@@ -296,7 +296,7 @@ button.ini.on { border-color: transparent; color: #fff; }
 .brano {
   position: relative;
   display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center;
-  padding: 14px 0 15px;
+  padding: 16px 0 17px;
   cursor: pointer;
 }
 .brano + .brano, .brano:first-child { border-top: none; }
@@ -308,7 +308,7 @@ button.ini.on { border-color: transparent; color: #fff; }
 .cnt { font-size: 12.5px; color: var(--inchiostro-3); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 30px; text-align: right; }
 .cnt.ok { color: var(--verde); font-weight: 500; }
 /* il filetto sotto ogni pezzo è anche il suo avanzamento */
-.brano-linea { position: absolute; left: 38px; right: 0; bottom: 0; height: 1px; background: var(--linea); }
+.brano-linea { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--linea); }
 .brano-linea i { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accento); transition: width .4s ease; }
 .brano.pronta .brano-linea i { background: var(--verde); }
 .brano.generale .brano-linea i { background: var(--ambra-pieno); }
@@ -351,7 +351,7 @@ button.ini.on { border-color: transparent; color: #fff; }
 /* task */
 .task {
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center;
-  padding: 11px 0; border-bottom: 1px solid var(--linea);
+  padding: 13px 0; border-bottom: 1px solid var(--linea);
 }
 .chk {
   width: 22px; height: 22px; padding: 0;
@@ -387,7 +387,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .picks button.ini { width: auto; height: 32px; font-size: 10.5px; }
 
 /* setup */
-.setup-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--linea); align-items: start; }
+.setup-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--linea); align-items: start; }
 .setup-row.sola { grid-template-columns: 92px minmax(0, 1fr); }
 .setup-parte { font-size: 12px; font-weight: 600; color: var(--inchiostro-2); line-height: 21px; }
 .setup-txt { font-size: 14.5px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-line; cursor: pointer; }
@@ -442,8 +442,9 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 
 /* ---------- Proposte: sulla riga titolo e voti, il resto toccando la riga ---------- */
 .prop { position: relative; border-bottom: 1px solid var(--linea); }
-.prop-riga { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center; padding: 13px 0; cursor: pointer; }
-.prop.da-votare::before { content: ""; position: absolute; left: -16px; top: 0; bottom: -1px; width: 3px; background: var(--ambra-pieno); }
+.prop-riga { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center; padding: 15px 0; cursor: pointer; }
+/* la striscia ambra sta nella colonna del numero (vuota per le proposte da votare): sul bordo dello schermo non si vedeva */
+.prop.da-votare::before { content: ""; position: absolute; left: 2px; top: 16px; bottom: 16px; width: 3px; border-radius: 1px; background: var(--ambra-pieno); }
 .prop .song-artist .ok { color: var(--verde); }
 .ncom { color: var(--inchiostro-3); }
 .prop-voti { display: flex; gap: 2px; }
@@ -491,7 +492,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .vcomm.giu .field { border-bottom-color: var(--rosso); }
 
 /* ---------- Audio ---------- */
-.dircard { padding: 12px 0; border-bottom: 1px solid var(--linea); }
+.dircard { padding: 14px 0; border-bottom: 1px solid var(--linea); }
 .dir-riga { display: flex; align-items: center; gap: 12px; }
 .dir-riga > svg { width: 22px; height: 22px; color: var(--inchiostro-3); }
 .dircard.live .dir-riga > svg { color: var(--rosso); }
@@ -515,7 +516,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 /* una registrazione: play | titolo e sotto etichetta, data, durata | stellina */
 .rec {
   display: grid; grid-template-columns: 36px minmax(0, 1fr) 40px; gap: 0 12px; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid var(--linea);
+  padding: 12px 0; border-bottom: 1px solid var(--linea);
 }
 .player { display: contents; }
 .play {
@@ -552,8 +553,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .rec-det-t { flex: 1; min-width: 0; font-size: 12.5px; color: var(--inchiostro-3); line-height: 1.45; }
 .rec-file { display: block; color: var(--inchiostro-2); overflow-wrap: anywhere; }
 .rec-det .btn.quiet { padding: 0 0 0 8px; }
-.rec-group .rec.pref { box-shadow: inset 3px 0 0 var(--ambra-pieno); margin-left: -16px; padding-left: 16px; }
-.pref-group .rec.pref { box-shadow: none; margin-left: 0; padding-left: 0; }
+/* nei giorni la preferita si riconosce dalla stellina piena: la striscia a sinistra, sul bordo dello schermo, non si vedeva */
 .pref-group .rec-date { color: var(--ambra); }
 .pref-group .rec-date small { color: var(--ambra); }
 .rec.evidenzia { background: var(--ambra-tinta); transition: background .3s; }
@@ -629,7 +629,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .msg-azioni { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .msg-come { flex: 1; font-size: 12.5px; color: var(--inchiostro-3); }
 .msg-come b { font-weight: 500; color: var(--inchiostro-2); }
-.msg { position: relative; padding: 14px 0 10px; border-bottom: 1px solid var(--linea); }
+.msg { position: relative; padding: 16px 0 12px; border-bottom: 1px solid var(--linea); }
 .msg-head { display: flex; align-items: center; gap: 8px; }
 .msg-chi { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; font-size: 14px; }
 .msg-chi b { font-weight: 600; }
@@ -671,7 +671,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .saldo .tot b { color: var(--inchiostro); font-weight: 500; font-variant-numeric: tabular-nums; }
 .mov {
   display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center;
-  padding: 12px 0; border-bottom: 1px solid var(--linea); cursor: pointer;
+  padding: 14px 0; border-bottom: 1px solid var(--linea); cursor: pointer;
 }
 .mov .d { line-height: 1.1; text-align: center; color: var(--inchiostro-3); font-size: 11px; text-transform: lowercase; }
 .mov .d b { display: block; font: 400 21px/1 var(--display); color: var(--inchiostro); }
@@ -702,10 +702,10 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .rename-form { display: flex; gap: 8px; align-items: flex-end; margin: 14px 0 4px; }
 .rename-form .field { flex: 1; min-width: 0; font: 400 28px var(--display); }
 .rename-hint { font-size: 12.5px; color: var(--inchiostro-2); margin: 4px 0 0; }
-.ptask { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--linea); }
+.ptask { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--linea); }
 .ptask-song { display: block; font: 600 10.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accento); margin-bottom: 1px; }
 .ptask-song.gen { color: var(--ambra); }
-.vrow { display: flex; align-items: center; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--linea); }
+.vrow { display: flex; align-items: center; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--linea); }
 .vrow .t { flex: 1; min-width: 0; }
 .vrow .t b { display: block; font-weight: 500; font-size: 15px; }
 .vrow .t span { font-size: 12.5px; color: var(--inchiostro-2); }
