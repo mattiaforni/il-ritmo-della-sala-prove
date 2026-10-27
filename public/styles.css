@@ -828,3 +828,50 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .conn-banner span, .update-banner span { flex: 1; }
 .conn-banner button, .update-banner button { background: var(--carta); color: var(--inchiostro); border: none; border-radius: var(--r); font: 500 13.5px var(--ui); padding: 8px 12px; }
 .update-banner button { background: var(--accento); color: var(--su-accento); }
+
+/* ==========================================================
+   Righe a tessere (v37, richiesta di Mattia: i filetti tra un
+   elemento e l'altro non si vedevano abbastanza; riferimento
+   l'app Leghe Fantacalcio). Ogni elemento di un elenco è una
+   tessera bianca sul fondo calce, staccata dalle altre da uno
+   spazio, invece che da un filetto. Testata e barre restano bianche.
+   ========================================================== */
+:root { --carta: #ECE7DF; --testata: #FFFFFF; --tessera: #FFFFFF; --stacco: 6px; --r-t: 4px; }
+.topbar { background: var(--testata); }
+.pl-strip, .brano, .prop, .dircard, .rec, .task, .setup-row, .msg, .mov, .ptask, .vrow, .nt-row, .sp-row, .orfano, .up-row {
+  background: var(--tessera);
+  border: none; border-radius: var(--r-t);
+  margin: 0 0 var(--stacco);
+}
+/* dentro la tessera il testo si stacca dai bordi */
+.pl-strip, .dircard, .task, .setup-row, .msg, .mov, .ptask, .vrow, .nt-row, .sp-row, .orfano, .up-row { padding-left: 14px; padding-right: 14px; }
+.brano { padding: 14px 14px 15px 12px; overflow: hidden; }
+.prop-riga { padding: 13px 12px 13px 12px; }
+.prop { overflow: hidden; }
+.prop-dett { padding: 0 14px 12px 50px; }
+.vcomm { padding: 0 12px 12px 50px; }
+.rec { padding: 10px 6px 10px 12px; }
+.fascia, .sec-title, .prop-sez, .rec-date { margin: 22px 0 8px; }
+.fascia::after, .sec-title::after, .prop-sez::after, .rec-date::after { background: var(--linea-forte); opacity: .6; }
+/* l'avanzamento resta sul bordo basso della tessera */
+.brano-linea { left: 0; right: 0; height: 3px; background: transparent; }
+.brano-linea i { height: 3px; }
+.brano:active { background: var(--foglio-2); }
+/* le strisce ambra (da votare, preferite) stanno dentro la tessera, a sinistra */
+.prop.da-votare::before { left: 0; top: 0; bottom: 0; width: 3px; }
+.rec-group .rec.pref { box-shadow: inset 3px 0 0 var(--ambra-pieno); margin-left: 0; padding-left: 12px; }
+.pref-group .rec.pref { box-shadow: none; }
+.rec.evidenzia { background: var(--ambra-tinta); }
+.task .del-mini { margin-right: -8px; }
+.cmts { border-left-color: var(--linea); }
+.msg-form { background: var(--tessera); border: none; border-radius: var(--r-t); padding: 14px; margin-top: 14px; }
+.saldo { border-bottom: none; }
+.pl-strip { margin-top: 14px; }
+.dircard { margin-top: 14px; }
+.who-bar button.ini.sel { box-shadow: 0 0 0 2px var(--carta), 0 0 0 3.5px var(--inchiostro); }
+/* nei fogli il fondo è calce, così anche le righe dei file sono tessere */
+.foglio { background: var(--carta); }
+.foglio-testa, .foglio-barra { background: var(--foglio); }
+.up-row { padding-top: 10px; padding-bottom: 10px; }
+.pg-link a { background: var(--tessera); }
+.picks button.ini, .parte-add { background: var(--tessera); }
