@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "31";
+const APP_VERSION = "32";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -254,6 +254,8 @@ function whoTags(nomi = []) {
 
 // ---------- canzoni ----------
 const isGenerale = (c) => c.id === GENERALE_ID || c.stato === "generale";
+// pezzi nostri: canzoni della band, non su Spotify (niente ricerca automatica, niente icone, fuori dalle playlist)
+const isNostro = (c) => !!(c && c.nostro);
 const scaletta = () => state.canzoni.filter(c => !isGenerale(c) && c.stato !== "proposta");
 const proposte = () => state.canzoni.filter(c => c.stato === "proposta");
 // classifica delle proposte: più 👍 prima; a parità, meno 👎; poi la più vecchia
@@ -286,6 +288,21 @@ const perOrdineDiProva = (a, b) => msDi(a.creato) - msDi(b.creato) || String(a.n
 // riproduzione di fila: le registrazioni dello stesso giorno (da Audio) o della stessa canzone (dalla sua pagina)
 const codaGiorno = (data) => state.registrazioni.filter(r => (r.data || "") === (data || "")).sort(perOrdineDiProva).map(r => r.id);
 const codaCanzone = (canzoneId) => recsOf(canzoneId).map(r => r.id);
+// preferite: le registrazioni venute meglio (campo preferita), nell'ordine della scaletta, poi proposte,
+// poi quelle senza canzone; a parità di canzone dalla più recente
+const perData = (a, b) => String(b.data || "").localeCompare(String(a.data || "")) || perOrdineDiProva(b, a);
+function preferite() {
+  const ordine = [...scaletta(), ...proposte()].map(c => c.id);
+  const pos = (r) => { const i = ordine.indexOf(r.canzoneId); return i < 0 ? ordine.length : i; };
+  return state.registrazioni.filter(r => r.preferita).sort((a, b) => pos(a) - pos(b) || perData(a, b));
+}
+const codaPreferite = () => preferite().map(r => r.id);
+// la coda da cui parte una registrazione dipende da dove la si tocca: blocco delle preferite, pagina della canzone o giorno
+function codaDi(btn, id) {
+  const r = state.registrazioni.find(x => x.id === id);
+  if (btn.closest(".pref-group")) return codaPreferite();
+  return r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data);
+}
 const pct = (d, t) => t ? Math.round(d / t * 100) : 0;
 const songQuery = (c) => c.titolo + (c.artista ? " " + c.artista : "");
 
@@ -310,6 +327,7 @@ function linkSpotify(c) {
   return { url: `https://open.spotify.com/track/${track[1]}?context=${encodeURIComponent("spotify:playlist:" + pl)}`, kind };
 }
 function linksHtml(c) {
+  if (isNostro(c)) return `<span class="nostro-tag">pezzo nostro</span>`;
   const q = encodeURIComponent(songQuery(c));
   const ls = linkSpotify(c);
   const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
@@ -337,12 +355,12 @@ document.addEventListener("error", e => {
 const playlistInfo = () => state.canzoni.find(c => c.id === GENERALE_ID)?.playlist || null;
 const haLinkSpotify = (c) => SPOTIFY_RE.test(c.spotifyUrl || "");
 function contaBrani(lista) {
-  const con = lista.filter(haLinkSpotify).length;
-  return { con, senza: lista.length - con };
+  const con = lista.filter(haLinkSpotify).length, nostri = lista.filter(isNostro).length;
+  return { con, nostri, senza: lista.length - con - nostri };
 }
 function descriviBrani(lista) {
-  const { con, senza } = contaBrani(lista);
-  return `${con} ${con === 1 ? "brano" : "brani"}${senza ? ` · ${senza} senza link` : ""}`;
+  const { con, nostri, senza } = contaBrani(lista);
+  return `${con} ${con === 1 ? "brano" : "brani"}${senza ? ` · ${senza} senza link` : ""}${nostri ? ` · ${nostri} ${nostri === 1 ? "nostro" : "nostri"}` : ""}`;
 }
 function plStrip(kind) {
   const info = playlistInfo();
@@ -625,7 +643,7 @@ function spotifyCard() {
       <div class="sp-actions"><button class="btn fill" data-action="sp-collega">Collega Spotify</button></div>
     </article>`;
   }
-  const senza = [...scaletta(), ...proposte()].filter(c => !haLinkSpotify(c)).map(c => c.titolo);
+  const senza = [...scaletta(), ...proposte()].filter(c => !haLinkSpotify(c) && !isNostro(c)).map(c => c.titolo);
   const riga = (kind, nome, lista) => `
       <div class="sp-row">
         <img class="ico ico-sp" src="${esc(state.spIcon)}" alt="">
@@ -983,7 +1001,7 @@ setTimeout(controllaVersione, 3000);
 // ---------- render (conserva campi in compilazione e riproduzione) ----------
 function captureInputs() {
   const vals = {};
-  document.querySelectorAll("main [data-keep]").forEach(el => { vals[el.dataset.keep] = el.value; });
+  document.querySelectorAll("main [data-keep]").forEach(el => { vals[el.dataset.keep] = el.type === "checkbox" ? (el.checked ? "✓" : "✗") : el.value; });
   const a = document.activeElement;
   let focus = null;
   if (a && a.dataset && a.dataset.keep && a.closest("main")) {
@@ -995,7 +1013,8 @@ function captureInputs() {
 function restoreInputs({ vals, focus }) {
   Object.entries(vals).forEach(([k, v]) => {
     const el = document.querySelector(`main [data-keep="${CSS.escape(k)}"]`);
-    if (el && v != null && v !== "") el.value = v;
+    if (el && el.type === "checkbox") el.checked = v === "✓";
+    else if (el && v != null && v !== "") el.value = v;
   });
   if (focus) {
     const el = document.querySelector(`main [data-keep="${CSS.escape(focus.key)}"]`);
@@ -1256,10 +1275,13 @@ function linkBlock(c) {
         <input class="field" name="titolo" data-keep="ed-tit-${c.id}" value="${esc(c.titolo || "")}" maxlength="80" autocomplete="off" required></label>
       <label>Artista
         <input class="field" name="artista" data-keep="ed-art-${c.id}" value="${esc(c.artista || "")}" maxlength="60" autocomplete="off"></label>
+      <label class="chk-row"><input type="checkbox" name="nostro" data-keep="ed-nostro-${c.id}" ${isNostro(c) ? "checked" : ""}><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
+      <div class="solo-cover">
       <label>Link Songsterr della canzone
         <input class="field" name="songsterr" data-keep="link-ss-${c.id}" value="${esc(c.songsterrUrl || "")}" placeholder="https://www.songsterr.com/a/wsa/…" autocomplete="off" inputmode="url"></label>
       <p class="hint">Se correggi titolo o artista, il brano su Spotify si cerca di nuovo. Se il brano è sbagliato ma il testo è giusto, tocca «Cerca di nuovo».</p>
-      <div class="ed"><button type="submit" class="btn quiet" name="cerca" value="1" title="Cerca di nuovo il brano su Spotify">Cerca di nuovo</button><span class="sp"></span><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
+      </div>
+      <div class="ed"><button type="submit" class="btn quiet solo-cover" name="cerca" value="1" title="Cerca di nuovo il brano su Spotify">Cerca di nuovo</button><span class="sp"></span><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
     </form>`;
 }
 function addSongBlock(where, label, cta) {
@@ -1271,6 +1293,7 @@ function addSongBlock(where, label, cta) {
       <input class="field" name="titolo" data-keep="add-${where}-titolo" placeholder="Titolo" maxlength="80" autocomplete="off" required>
       <input class="field" name="artista" data-keep="add-${where}-artista" placeholder="Artista" maxlength="60" autocomplete="off">
       <button class="btn fill" type="submit">${cta}</button>
+      <label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
     </form>`;
 }
 
@@ -1358,12 +1381,17 @@ function recRow(r, mode) {
   const label = r.etichetta ? ` <em>· ${esc(r.etichetta)}</em>` : "";
   let name;
   if (mode === "song") name = esc(fmtGiorno(r.data)) + label;
+  else if (mode === "pref") name = (song ? esc(song.titolo) : esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`) + ` <em>· ${esc(fmtGiorno(r.data))}</em>` + (song ? label : "");
   else if (song) name = esc(song.titolo) + label;
   else name = esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`;
   const meta = [r.caricatoDa, fmtMB(r.size)].filter(Boolean).map(esc).join(" · ");
+  // stellina: la band la accende e la spegne; i fan la vedono solo accesa
+  const stella = state.fan
+    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">★</span>` : "")
+    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${r.preferita ? "★" : "☆"}</button>`;
   return `
-    <div class="rec" data-rec="${r.id}">
-      <span class="rec-name">${name}</span>
+    <div class="rec${r.preferita ? " pref" : ""}" data-rec="${r.id}">
+      <span class="rec-name">${stella}${name}</span>
       <span class="rec-meta">${meta}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
       ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
       <div class="player">
@@ -1379,7 +1407,13 @@ function renderAudio() {
     const g = gruppi.find(x => x.data === r.data);
     g ? g.items.push(r) : gruppi.push({ data: r.data, items: [r] });
   });
-  const lista = gruppi.map(g => `
+  const pref = preferite();
+  const blocco = pref.length ? `
+    <section class="card rec-group pref-group">
+      <h2 class="rec-date"><span class="stella on" aria-hidden="true">★</span> Preferite <small>${pref.length} ${pref.length === 1 ? "registrazione" : "registrazioni"}</small>${pref.length > 1 ? `<button class="btn quiet tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">▶ Tutte</button>` : ""}</h2>
+      ${pref.map(r => recRow(r, "pref")).join("")}
+    </section>` : "";
+  const lista = blocco + gruppi.map(g => `
     <section class="card rec-group">
       <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small>${g.items.length > 1 ? `<button class="btn quiet tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">▶ Tutte</button>` : ""}</h2>
       ${[...g.items].sort(perOrdineDiProva).map(r => recRow(r, "audio")).join("")}
@@ -2039,7 +2073,7 @@ async function aggiungiParte(songId, key) {
 // azioni che scrivono nel database: ai fan non arrivano (e il database le rifiuterebbe comunque)
 const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
-  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "add-open",
+  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "add-open",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg"
 ]);
@@ -2191,13 +2225,34 @@ async function act(btn) {
     }
     case "play": {
       if (state.playId === id || btn.closest("#mini")) { playToggle(id); break; }
-      const r = state.registrazioni.find(x => x.id === id);
-      playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
+      playToggle(id, codaDi(btn, id));
       break;
     }
     case "play-giorno": {
       const coda = codaGiorno(btn.dataset.data);
       if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      break;
+    }
+    case "play-preferite": {
+      const coda = codaPreferite();
+      if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      break;
+    }
+    case "pref": {
+      // una sola preferita per pezzo: accendendone una, quella di prima dello stesso pezzo si spegne
+      const r = state.registrazioni.find(x => x.id === id);
+      if (!r) return;
+      const on = !r.preferita;
+      const spenta = { preferita: false, preferitaDa: deleteField(), preferitaIl: deleteField() };
+      const batch = writeBatch(db);
+      batch.update(doc(db, "registrazioni", id), on ? { preferita: true, preferitaDa: state.user || "", preferitaIl: serverTimestamp() } : spenta);
+      const prima = on && r.canzoneId ? state.registrazioni.filter(x => x.id !== id && x.preferita && x.canzoneId === r.canzoneId) : [];
+      prima.forEach(x => batch.update(doc(db, "registrazioni", x.id), spenta));
+      const ok = await batch.commit().then(() => true, erroreScrittura);
+      if (ok && prima.length) {
+        const song = state.canzoni.find(c => c.id === r.canzoneId);
+        toast(`Ora è la preferita di «${song ? song.titolo : "questo pezzo"}», al posto di quella del ${fmtGiorno(prima[0].data)}.`);
+      }
       break;
     }
     case "mini-stop": fermaRiproduzione(); break;
@@ -2295,11 +2350,7 @@ async function act(btn) {
       break;
     }
     case "seek": {
-      if (state.playId !== id) {
-        const r = state.registrazioni.find(x => x.id === id);
-        playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
-        break;
-      }
+      if (state.playId !== id) { playToggle(id, codaDi(btn, id)); break; }
       if (isFinite(player.duration)) {
         const r = btn.getBoundingClientRect();
         player.currentTime = Math.max(0, Math.min(1, (window.__lastX - r.left) / r.width)) * player.duration;
@@ -2490,17 +2541,18 @@ mainEl.addEventListener("submit", async e => {
     const titolo = form.titolo.value.trim();
     if (!titolo) return;
     const artista = form.artista.value.trim();
+    const nostro = !!(form.nostro && form.nostro.checked);
     const stato = form.dataset.stato === "proposta" ? "proposta" : "scaletta";
     const where = stato === "proposta" ? "proposte" : "scaletta";
-    form.titolo.value = ""; form.artista.value = "";
+    form.titolo.value = ""; form.artista.value = ""; if (form.nostro) form.nostro.checked = false;
     const maxOrd = state.canzoni.reduce((m, c) => Math.max(m, c.ordine || 0), 0);
     const ref = await scrivi(addDoc(collection(db, "canzoni"), {
-      titolo, artista, stato, ordine: maxOrd + 1, spotifyUrl: "", reazioni: {},
+      titolo, artista, stato, ordine: maxOrd + 1, spotifyUrl: "", reazioni: {}, nostro,
       propostaDa: stato === "proposta" ? (state.user || "") : "", creato: serverTimestamp()
     }), () => { rimetti(`add-${where}-titolo`, titolo); rimetti(`add-${where}-artista`, artista); });
     if (ref) {
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
-      enrichSong({ id: ref.id, titolo, artista });
+      enrichSong({ id: ref.id, titolo, artista, nostro });
       playlistDaAggiornare();
       if (stato === "proposta") notifica("proposta", { canzoneId: ref.id });
     }
@@ -2599,12 +2651,15 @@ mainEl.addEventListener("submit", async e => {
     const ssIn = form.songsterr.value.trim();
     const ss = ssIn ? (ssIn.match(SONGSTERR_RE) || [null])[0] : "";
     if (ss === null) { toast("Il link Songsterr deve essere quello della canzone (songsterr.com/a/…)."); return; }
-    const cerca = e.submitter && e.submitter.name === "cerca";
+    const nostro = !!(form.nostro && form.nostro.checked);
+    const cerca = !nostro && e.submitter && e.submitter.name === "cerca";
     const testoCambiato = titolo !== (c.titolo || "") || artista !== (c.artista || "");
-    // si cerca di nuovo se lo si chiede, o se il testo è cambiato e il link era stato trovato in automatico
-    const ricerca = cerca || (testoCambiato && c.spotifyAuto !== false) || !c.spotifyUrl;
-    const upd = { titolo, artista, songsterrUrl: ss ? normalizzaSongsterr(ss) : "" };
+    // si cerca di nuovo se lo si chiede, o se il testo è cambiato e il link era stato trovato in automatico;
+    // un pezzo nostro non si cerca mai (e un link trovato per sbaglio si toglie)
+    const ricerca = !nostro && (cerca || (testoCambiato && c.spotifyAuto !== false) || !c.spotifyUrl || isNostro(c));
+    const upd = { titolo, artista, nostro, songsterrUrl: nostro ? "" : ss ? normalizzaSongsterr(ss) : "" };
     if (ricerca) { upd.spotifyUrl = ""; upd.spotifyAuto = null; }
+    if (nostro) { upd.spotifyUrl = ""; upd.spotifyAuto = false; }
     form.songsterr.value = "";
     state.linkEdit = null;
     const ok = await scrivi(updateDoc(doc(db, "canzoni", song), upd).then(() => true));
@@ -2699,7 +2754,7 @@ async function enrichLink(songId, titolo, artista, cosa) {
   } catch (e) { /* resta il link di ricerca */ }
 }
 function enrichSong(c) {
-  if (!c || isGenerale(c) || state.enrichTried.has(c.id) || state.fan) return;
+  if (!c || isGenerale(c) || isNostro(c) || state.enrichTried.has(c.id) || state.fan) return;
   state.enrichTried.add(c.id);
   // con le playlist collegate il link Spotify lo cerca la funzione delle playlist, direttamente su Spotify
   if (!c.spotifyUrl && !playlistInfo()?.scaletta) enrichLink(c.id, c.titolo, c.artista, "spotify");

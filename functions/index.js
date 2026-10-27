@@ -308,6 +308,7 @@ async function sincronizza({ forza = false } = {}) {
   const canzoni = (await db().collection("canzoni").get()).docs.map(d => ({ id: d.id, ...d.data() }));
   const trovate = [], senza = [];
   const uriDi = async (c) => {
+    if (c.nostro) return null;   // pezzo della band: non è su Spotify, non si cerca e non va in playlist
     let m = (c.spotifyUrl || "").match(TRACK_RE);
     if (!m && c.titolo) {
       const url = await cercaBrano(token, c).catch(e => { console.error(`[playlist] ricerca "${c.titolo}": ${e.message}`); return null; });

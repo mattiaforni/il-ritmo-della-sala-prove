@@ -263,6 +263,16 @@ button.ini.on { border-color: transparent; color: #fff; }
   font-size: 15px; line-height: 1;
 }
 .addform { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 4px 0 8px; }
+.addform .chk-row { grid-column: 1 / -1; }
+/* pezzi nostri: casella quadrata (come nelle notifiche) e etichetta al posto delle icone */
+.chk-row { display: flex; align-items: center; gap: 10px; font: 500 13.5px var(--sans); color: var(--legno); padding: 2px 0; }
+.chk-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+.chk-row input:checked + .nt-box { background: var(--verde); border-color: var(--verde); }
+.chk-row input:checked + .nt-box::after { content: "✓"; }
+.chk-row input:focus-visible + .nt-box { outline: 2px solid var(--ambra); outline-offset: 2px; }
+.link-form .chk-row { display: flex; font: 500 13.5px var(--sans); color: var(--legno); }
+.link-form:has(input[name="nostro"]:checked) .solo-cover { display: none; }
+.nostro-tag { font: 600 11px var(--sans); color: var(--ambra-scuro); background: var(--ambra-chiaro); padding: 3px 7px; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
 .addform .field { min-width: 0; }
 
 /* ---------- proposte ---------- */
@@ -323,6 +333,18 @@ button.ini.on { border-color: transparent; color: #fff; }
 .rec-group .rec { padding: 10px 14px 12px; border-top: none; border-bottom: 1px solid var(--rule); }
 .rec-group .rec:last-child { border-bottom: none; }
 .rec-song { font-size: 11.5px; color: var(--cotto); font-weight: 600; grid-column: 1 / -1; }
+
+/* preferite: stellina sulla riga e blocco in cima ad Audio */
+.stella {
+  background: none; border: none; padding: 4px 8px 4px 0; margin: -4px 0;
+  font-size: 18px; line-height: 1; color: var(--muted); opacity: .5; vertical-align: -2px;
+}
+.stella.on { color: var(--ambra); opacity: 1; }
+.rec-group .rec.pref { box-shadow: inset 4px 0 0 var(--ambra); }
+.pref-group { background: var(--ambra-chiaro); }
+.pref-group .rec-date .stella { font-size: 15px; align-self: center; margin: 0 -2px 0 0; }
+.pref-group .rec.pref { box-shadow: none; border-bottom-color: rgba(138, 95, 18, .18); }
+.pref-group .rec.evidenzia { background: #efdcae; }
 
 .upload { margin-top: 4px; border: 1.5px dashed var(--muted); border-radius: var(--r); padding: 12px 14px; }
 .upload h3 { font: 600 14px var(--sans); color: var(--muted); margin: 0 0 8px; }
