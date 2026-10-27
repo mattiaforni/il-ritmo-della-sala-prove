@@ -469,27 +469,42 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 }
 .addform .chk-row { margin-top: 4px; }
 
-/* ---------- Proposte ---------- */
-.prop { position: relative; padding: 14px 0 10px; border-bottom: 1px solid var(--linea); }
-.prop-riga { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center; cursor: pointer; }
+/* ---------- Proposte: sulla riga titolo e voti, il resto toccando la riga ---------- */
+.prop { position: relative; border-bottom: 1px solid var(--linea); }
+.prop-riga { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center; padding: 13px 0; cursor: pointer; }
 .prop.da-votare::before { content: ""; position: absolute; left: -16px; top: 0; bottom: -1px; width: 3px; background: var(--ambra-pieno); }
-.prop.da-votare .num { color: var(--ambra); }
+.prop .song-artist .ok { color: var(--verde); }
 .ncom { color: var(--inchiostro-3); }
-.prop-bar { display: flex; align-items: center; gap: 6px; padding: 10px 0 0 38px; }
+.prop-voti { display: flex; gap: 2px; }
+.voto {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-width: 46px; height: 36px; padding: 0 8px;
+  font: 500 14px var(--ui); font-variant-numeric: tabular-nums;
+  border: 1px solid transparent; border-radius: var(--r);
+  background: transparent; color: var(--inchiostro-3);
+}
+.voto svg { width: 18px; height: 18px; }
+.prop.da-votare .voto { border-color: var(--linea-forte); color: var(--inchiostro-2); }
+.prop.da-votare .prop-voti { gap: 6px; }
+.voto.on.up { background: var(--verde-tinta); border-color: transparent; color: var(--verde); }
+.voto.on.down { background: var(--rosso-tinta); border-color: transparent; color: var(--rosso); }
+.voto.sola { cursor: default; min-width: 0; padding: 0 4px; }
+.prop.aperta .prop-riga .song-title { color: var(--accento); }
+.prop-dett { padding: 0 0 12px 38px; }
+.prop-dett .pg-link { margin-top: 0; }
+.prop-dett .link-form { margin-top: 12px; }
+.prop-az { display: flex; align-items: center; gap: 2px; margin-top: 10px; }
+.prop-az .btn.quiet:first-child { padding-left: 0; }
+/* i pulsanti dei voti nella pagina Personale (Da votare) */
 .vote {
   display: inline-flex; align-items: center; gap: 6px;
-  min-height: 34px; padding: 0 11px;
-  font: 500 14px var(--ui); font-variant-numeric: tabular-nums;
+  min-height: 36px; padding: 0 11px;
+  font: 500 14px var(--ui);
   border: 1px solid var(--linea-forte); border-radius: var(--r);
   background: transparent; color: var(--inchiostro-2);
 }
-.vote svg { width: 17px; height: 17px; }
-.vote.on.up { background: var(--verde-tinta); border-color: var(--verde); color: var(--verde); }
-.vote.on.down { background: var(--rosso-tinta); border-color: var(--rosso); color: var(--rosso); }
-.vote.sola { border-color: transparent; padding: 0 8px 0 0; cursor: default; color: var(--inchiostro-3); }
-.prop-bar .btn { min-height: 34px; padding: 0 12px; }
-.prop-bar .x { margin-right: -8px; }
-.voters { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 0 4px 38px; }
+.vote svg { width: 18px; height: 18px; }
+.voters { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 14px 0 2px; }
 .vg { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .vl { display: inline-grid; place-items: center; width: 18px; color: var(--inchiostro-3); margin-right: 2px; }
 .vl svg { width: 15px; height: 15px; }
@@ -500,7 +515,7 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .vcom { display: grid; grid-template-columns: auto auto 1fr; gap: 6px 6px; align-items: start; font-size: 13.5px; }
 .vcom .vl { height: 20px; }
 .vcom-t { line-height: 1.4; padding-left: 4px; overflow-wrap: anywhere; color: var(--inchiostro-2); }
-.vcomm { display: flex; gap: 8px; align-items: flex-end; padding: 10px 0 2px 38px; }
+.vcomm { display: flex; gap: 8px; align-items: flex-end; padding: 0 0 12px 38px; }
 .vcomm .field { flex: 1; min-width: 0; font-size: 15px; }
 .vcomm.giu .field { border-bottom-color: var(--rosso); }
 
@@ -524,10 +539,12 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .dircard .ini { margin-left: 3px; }
 
 .rec-group { padding: 0; }
-.rec-date .stella { font-size: 13px; letter-spacing: 0; padding: 0; margin: 0; }
+.rec-date .stella { padding: 0; margin: 0; width: auto; height: auto; }
+.rec-date .stella svg { width: 13px; height: 13px; }
+/* una registrazione: play | titolo e sotto etichetta, data, durata | stellina */
 .rec {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 1px 12px; align-items: center;
-  padding: 11px 0; border-bottom: 1px solid var(--linea);
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) 40px; gap: 0 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--linea);
 }
 .player { display: contents; }
 .play {
@@ -539,22 +556,32 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 }
 .play svg { width: 15px; height: 15px; }
 .play.on { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
-.rec-name { grid-column: 2; grid-row: 1; font-weight: 500; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; min-width: 0; }
-.rec-name em { font-style: normal; font-weight: 400; color: var(--inchiostro-2); }
-.rec-meta { grid-column: 2; grid-row: 2; font-size: 12.5px; color: var(--inchiostro-3); display: flex; align-items: center; gap: 6px; min-width: 0; }
-.rec-meta .del-mini { width: 26px; height: 22px; margin-left: auto; }
-.rec-meta .del-mini svg { width: 15px; height: 15px; }
-.rec-file { grid-column: 2 / -1; grid-row: 3; font-size: 11.5px; color: var(--inchiostro-3); overflow-wrap: anywhere; opacity: .8; }
-.time { grid-column: 3; grid-row: 1; font-size: 12.5px; color: var(--inchiostro-3); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
-.rec .line { grid-column: 2 / -1; grid-row: 4; margin-top: 6px; }
+.rec-name { grid-column: 2; grid-row: 1; font-weight: 500; font-size: 15.5px; line-height: 1.3; overflow-wrap: anywhere; min-width: 0; }
+.rec-name[data-action] { cursor: pointer; }
+.rec.aperta .rec-name { color: var(--accento); }
+.rec-meta { grid-column: 2; grid-row: 2; font-size: 12.5px; color: var(--inchiostro-3); display: flex; flex-wrap: wrap; min-width: 0; }
+.rec-meta > span + span::before { content: "·"; margin: 0 6px; }
+.rec-meta .time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stella {
+  grid-column: 3; grid-row: 1 / span 2;
+  width: 40px; height: 40px; padding: 0; margin: 0 -6px 0 6px;
+  display: grid; place-items: center;
+  background: none; border: none; color: var(--inchiostro-3);
+}
+.stella svg { width: 24px; height: 24px; fill: none; }
+.stella.on { color: var(--ambra-pieno); }
+.stella.on svg { fill: currentColor; }
+.rec .line { grid-column: 2 / -1; grid-row: 3; margin-top: 6px; }
 .rec:not(:has(.play.on)) .line { display: none; }
 .line { height: 16px; display: flex; align-items: center; cursor: pointer; }
 .line > span { position: relative; display: block; width: 100%; height: 2px; background: var(--linea); }
 .line i { position: absolute; left: 0; top: 0; height: 100%; width: 0; background: var(--accento); }
-.stella { background: none; border: none; padding: 2px 6px 2px 0; margin: -2px 0; font-size: 16px; line-height: 1; color: var(--inchiostro-3); vertical-align: -1px; }
-.stella.on { color: var(--ambra-pieno); }
-.rec-group .rec.pref { box-shadow: inset 3px 0 0 var(--ambra-pieno); padding-left: 0; }
-.rec-group .rec.pref { margin-left: -16px; padding-left: 16px; }
+/* dettagli (tocco sul titolo): nome del file, chi l'ha caricata, peso, Elimina */
+.rec-det { grid-column: 2 / -1; grid-row: 4; display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--linea); }
+.rec-det-t { flex: 1; min-width: 0; font-size: 12.5px; color: var(--inchiostro-3); line-height: 1.45; }
+.rec-file { display: block; color: var(--inchiostro-2); overflow-wrap: anywhere; }
+.rec-det .btn.quiet { padding: 0 0 0 8px; }
+.rec-group .rec.pref { box-shadow: inset 3px 0 0 var(--ambra-pieno); margin-left: -16px; padding-left: 16px; }
 .pref-group .rec.pref { box-shadow: none; margin-left: 0; padding-left: 0; }
 .pref-group .rec-date { color: var(--ambra); }
 .pref-group .rec-date small { color: var(--ambra); }

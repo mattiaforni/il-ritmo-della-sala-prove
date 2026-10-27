@@ -176,6 +176,7 @@ const state = {
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
   commentaPost: null,         // bacheca: post con il campo del commento aperto
+  recInfo: null,              // registrazione con i dettagli aperti (file, chi l'ha caricata, Elimina)
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
@@ -1394,37 +1395,46 @@ function renderProposte() {
     const conCom = new Set(com.map(([n]) => n));
     const suSolo = su.filter(n => !conCom.has(n)), giuSolo = giu.filter(n => !conCom.has(n));
     const pollice = (v) => `<span class="vl ${v === "down" ? "giu" : "su"}" aria-label="${v === "down" ? "Non mi piace" : "Mi piace"}">${IC(v === "down" ? "giu" : "su")}</span>`;
-    const voters = !open ? "" : `
+    // sulla riga solo titolo e i due voti (si votano da lì); toccando la riga si aprono
+    // ascolto, chi ha votato, commenti e le azioni (Modifica, Elimina, In scaletta)
+    const voters = `
       <div class="voters">
         ${suSolo.length ? `<span class="vg">${pollice("up")}${suSolo.map(iniTag).join("")}</span>` : ""}
         ${giuSolo.length ? `<span class="vg">${pollice("down")}${giuSolo.map(iniTag).join("")}</span>` : ""}
         ${!su.length && !giu.length ? `<span class="none">Nessun voto ancora.</span>` : ""}
         ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom">${pollice(r[n])}${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
       </div>`;
+    const pronta = su.length >= SOGLIA_SCALETTA;
+    const voti = state.fan ? `
+        <span class="voto sola" aria-label="Mi piace: ${su.length}">${IC("su")}${su.length}</span>
+        <span class="voto sola" aria-label="Non mi piace: ${giu.length}">${IC("giu")}${giu.length}</span>` : `
+        <button class="voto${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">${IC("su")}${su.length}</button>
+        <button class="voto${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">${IC("giu")}${giu.length}</button>`;
+    const dettagli = !(open || state.linkEdit === c.id) ? "" : `
+      <div class="prop-dett">
+        <div class="pg-link">${linksHtml(c, true)}</div>
+        ${voters}
+        ${state.linkEdit === c.id ? linkBlock(c) : ""}
+        ${state.fan ? "" : `
+        <div class="prop-az">
+          <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">${IC("matita")}Modifica</button>
+          <button class="btn quiet" data-action="del-song" data-id="${c.id}">${IC("cestino")}Elimina</button>
+          <span class="sp"></span>
+          <button class="btn${pronta ? " go" : ""}" data-action="promote" data-id="${c.id}">${IC("sopra")}In scaletta</button>
+        </div>`}
+      </div>`;
     return `
-    <article class="prop${daVotare(c) ? " da-votare" : ""}">
-      <div class="prop-riga" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${open}">
+    <article class="prop${daVotare(c) ? " da-votare" : ""}${dettagli ? " aperta" : ""}">
+      <div class="prop-riga" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${!!dettagli}">
         <span class="num" aria-hidden="true">${rango || ""}</span>
         <div class="brano-testo">
           <h2 class="song-title">${esc(c.titolo)}</h2>
-          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
+          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}${pronta ? `<span class="ok"> · pronta per la scaletta</span>` : ""}</div>
         </div>
-        <div class="brano-lato">${linksHtml(c)}</div>
-      </div>
-      <div class="prop-bar">${state.fan ? `
-        <span class="vote sola" aria-label="Mi piace: ${su.length}">${IC("su")} ${su.length}</span>
-        <span class="vote sola" aria-label="Non mi piace: ${giu.length}">${IC("giu")} ${giu.length}</span>
-        <span class="sp"></span>` : `
-        <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">${IC("su")}${su.length}</button>
-        <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">${IC("giu")}${giu.length}</button>
-        <span class="sp"></span>
-        <button class="ico-btn" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica">${IC("matita")}</button>
-        <button class="ico-btn" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta" title="Elimina">${IC("cestino")}</button>
-        <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">${IC("sopra")}In scaletta</button>`}
+        <div class="prop-voti">${voti}</div>
       </div>
       ${commentoForm(c)}
-      ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
-      ${voters}
+      ${dettagli}
     </article>`;
   };
   const cards = (nuove.length ? `<h3 class="prop-sez amb">Da votare <small>${nuove.length}</small></h3>${nuove.map(c => card(c)).join("")}` : "") +
@@ -1437,27 +1447,36 @@ function renderProposte() {
 // ---------- registrazioni ----------
 function recRow(r, mode) {
   const song = state.canzoni.find(c => c.id === r.canzoneId);
-  const label = r.etichetta ? ` <em>· ${esc(r.etichetta)}</em>` : "";
-  let name;
-  if (mode === "song") name = esc(fmtGiorno(r.data)) + label;
-  else if (mode === "pref") name = (song ? esc(song.titolo) : esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`) + ` <em>· ${esc(fmtGiorno(r.data))}</em>` + (song ? label : "");
-  else if (song) name = esc(song.titolo) + label;
-  else name = esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`;
-  const meta = [r.caricatoDa, fmtMB(r.size)].filter(Boolean).map(esc).join(" · ");
-  // stellina: la band la accende e la spegne; i fan la vedono solo accesa
+  // sulla riga solo titolo, etichetta, data e durata; file, chi l'ha caricata e Elimina si aprono toccando il titolo
+  const senza = song ? r.etichetta : "senza canzone";
+  let titolo, sotto;
+  if (mode === "song") { titolo = fmtGiorno(r.data); sotto = [r.etichetta]; }
+  else if (mode === "pref") { titolo = song ? song.titolo : (r.etichetta || "Registrazione"); sotto = [fmtGiorno(r.data), senza]; }
+  else { titolo = song ? song.titolo : (r.etichetta || "Registrazione"); sotto = [senza]; }
+  sotto = sotto.filter(Boolean).map(esc);
+  // la stessa registrazione può stare sia fra le preferite sia nel suo giorno: si apre solo dove la si tocca
+  const aperta = !state.fan && state.recInfo === `${r.id}:${mode}`;
+  // stellina a destra, grande: la band la accende e la spegne; i fan la vedono solo accesa
   const stella = state.fan
-    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">★</span>` : "")
-    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${r.preferita ? "★" : "☆"}</button>`;
+    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">${IC("stella")}</span>` : "")
+    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${IC("stella")}</button>`;
+  const nome = state.fan
+    ? `<span class="rec-name">${esc(titolo)}</span>`
+    : `<span class="rec-name" data-action="rec-info" data-id="${r.id}" data-modo="${mode}" role="button" tabindex="0" aria-expanded="${aperta}">${esc(titolo)}</span>`;
+  const dettagli = !aperta ? "" : `
+      <div class="rec-det">
+        <span class="rec-det-t"><span class="rec-file">${esc(r.nomeFile || "nome del file non salvato")}</span>${[r.caricatoDa ? `caricata da ${esc(r.caricatoDa)}` : "", esc(fmtMB(r.size))].filter(Boolean).join(" · ")}</span>
+        <button class="btn quiet" data-action="del-rec" data-id="${r.id}">${IC("cestino")}Elimina</button>
+      </div>`;
   return `
-    <div class="rec${r.preferita ? " pref" : ""}" data-rec="${r.id}">
-      <span class="rec-name">${stella}${name}</span>
-      <span class="rec-meta">${meta}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione" title="Elimina">${IC("cestino")}</button>`}</span>
-      ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
+    <div class="rec${r.preferita ? " pref" : ""}${aperta ? " aperta" : ""}" data-rec="${r.id}">
+      ${nome}
+      <span class="rec-meta">${sotto.map(t => `<span>${t}</span>`).join("")}<span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span></span>
+      ${stella}
       <div class="player">
         <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">${IC("play")}</button>
         <div class="line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
-        <span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span>
-      </div>
+      </div>${dettagli}
     </div>`;
 }
 function renderAudio() {
@@ -1469,7 +1488,7 @@ function renderAudio() {
   const pref = preferite();
   const blocco = pref.length ? `
     <section class="rec-group pref-group">
-      <h2 class="rec-date"><span class="stella on" aria-hidden="true">★</span>Preferite <small>${pref.length}</small>${pref.length > 1 ? `<button class="tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">${IC("play")}Tutte</button>` : ""}</h2>
+      <h2 class="rec-date"><span class="stella on" aria-hidden="true">${IC("stella")}</span>Preferite <small>${pref.length}</small>${pref.length > 1 ? `<button class="tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">${IC("play")}Tutte</button>` : ""}</h2>
       ${pref.map(r => recRow(r, "pref")).join("")}
     </section>` : "";
   const lista = blocco + gruppi.map(g => `
@@ -2382,6 +2401,9 @@ async function act(btn) {
     case "voters":
       state.votersOpen.has(id) ? state.votersOpen.delete(id) : state.votersOpen.add(id);
       render(); break;
+    case "rec-info":
+      state.recInfo = state.recInfo === `${id}:${btn.dataset.modo}` ? null : `${id}:${btn.dataset.modo}`;
+      render(); break;
     case "pick": {
       const song = btn.dataset.song, nome = btn.dataset.nome;
       const set = state.drafts[song] || (state.drafts[song] = new Set());
@@ -2451,7 +2473,6 @@ async function act(btn) {
       if (!c) return;
       const voto = action === "react-up" ? "up" : "down";
       const gia = (c.reazioni || {})[state.user] === voto;
-      if (!btn.closest("#view-personale")) state.votersOpen.add(id);
       if (gia) {
         // stesso voto di nuovo: si toglie, insieme al commento
         state.commentoVoto = null;
@@ -2648,7 +2669,7 @@ async function act(btn) {
     case "up-annulla": state.pendingFiles = []; state.righeUpload = []; render(); break;
     case "del-rec": {
       const r = state.registrazioni.find(x => x.id === id);
-      if (!r || !confirm("Eliminare questa registrazione?")) return;
+      if (!r || !confirm(`Eliminare questa registrazione?${r.nomeFile ? "\n" + r.nomeFile : ""}`)) return;
       if (state.playId === id) fermaRiproduzione();
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
       await deleteDoc(doc(db, "registrazioni", id)).catch(erroreScrittura);
