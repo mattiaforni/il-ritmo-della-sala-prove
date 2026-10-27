@@ -168,6 +168,7 @@ const state = {
   tipoMov: "spesa",
   movOpen: null,
   pendingFiles: [],
+  righeUpload: [],            // una riga per file scelto: { file, breve, data, ora, canzoneId, etichetta, salta }
   upload: { active: false, pct: 0, txt: "" },
   playId: null,
   coda: null,                 // registrazioni da ascoltare di fila (id), quella in riproduzione compresa
@@ -1418,24 +1419,33 @@ function renderAudio() {
       <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small>${g.items.length > 1 ? `<button class="btn quiet tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">▶ Tutte</button>` : ""}</h2>
       ${[...g.items].sort(perOrdineDiProva).map(r => recRow(r, "audio")).join("")}
     </section>`).join("");
-  const opzioni = [...scaletta(), ...proposte()].map(c =>
-    `<option value="${c.id}">${esc(c.titolo)}${c.artista ? " – " + esc(c.artista) : ""}</option>`).join("");
-  const n = state.pendingFiles.length;
-  const filesLabel = n === 0 ? "Scegli file audio…" : n === 1 ? state.pendingFiles[0].name : `${n} file selezionati`;
+  const righe = state.righeUpload || [];
+  const n = righe.length;
+  const daCaricare = righe.filter(r => !r.salta).length;
   const up = state.upload;
+  // una riga per file: nome breve dal file, canzone (indovinata), etichetta; la casella esclude il file
+  const righeHtml = righe.map((r, i) => `
+    <div class="up-row${r.salta ? " salta" : ""}">
+      <label class="chk-row up-chk" aria-label="Carica questo file"><input type="checkbox" data-row="${i}" data-campo="carica" ${r.salta ? "" : "checked"}><span class="nt-box"></span></label>
+      <span class="up-file"><b>${esc(r.breve)}</b>${r.ora != null ? ` <small>${String(Math.floor(r.ora / 60)).padStart(2, "0")}:${String(r.ora % 60).padStart(2, "0")}</small>` : ""}</span>
+      <select class="field up-song" data-row="${i}" data-campo="canzoneId" data-keep="up-song-${i}" aria-label="Canzone" ${r.salta ? "disabled" : ""}>
+        <option value="">senza canzone</option>${[...scaletta(), ...proposte()].map(c =>
+          `<option value="${c.id}" ${c.id === r.canzoneId ? "selected" : ""}>${esc(c.titolo)}${c.artista ? " – " + esc(c.artista) : ""}</option>`).join("")}
+      </select>
+      <input class="field up-label" data-row="${i}" data-campo="etichetta" data-keep="up-label-${i}" value="${esc(r.etichetta)}" placeholder="Etichetta" maxlength="60" autocomplete="off" aria-label="Etichetta" ${r.salta ? "disabled" : ""}>
+    </div>`).join("");
   $("#view-audio").innerHTML = `
     <div id="diretta-box"></div>
     ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.fan ? " per ora." : ". Carica l'audio delle prove qui sotto."}</p>`}
-    ${state.fan ? "" : `<form class="upload" data-form="upload">
-      <h3>+ Carica registrazione</h3>
+    ${state.fan ? "" : `<form class="upload${n ? " con-righe" : ""}" data-form="upload">
+      <h3>+ Carica registrazioni</h3>
       <div class="upload-grid">
-        <select class="field wide" name="canzoneId" data-keep="up-song" aria-label="Canzone">
-          <option value="">Canzone (facoltativo)</option>${opzioni}
-        </select>
-        <input class="field" name="etichetta" data-keep="up-label" placeholder="Etichetta, es. seconda take" maxlength="60" autocomplete="off">
-        <input class="field" type="date" name="data" data-keep="up-date" value="${oggi()}" aria-label="Data della prova">
-        <label class="file-btn wide"><input type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac" multiple><span>${esc(filesLabel)}</span></label>
-        <button class="btn fill wide" type="submit" ${up.active ? "disabled" : ""}>${up.active ? "Caricamento…" : "Carica"}</button>
+        <label class="file-btn${n ? "" : " wide"}"><input type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac" multiple><span>${n ? "Scegli altri file…" : "Scegli i file audio…"}</span></label>
+        ${n ? `<input class="field" type="date" name="data" data-keep="up-date" value="${esc(dataDalleRighe(righe))}" aria-label="Data della prova">` : ""}
+        ${n ? `<p class="up-hint wide">Pezzo e data della prova sono ricavati dal nome dei file: controlla e correggi. Le righe senza pezzo si caricano con la loro etichetta.</p>` : `<p class="up-hint wide">Puoi anche trascinare qui i file di una prova intera.</p>`}
+        ${n ? `<div class="up-rows wide">${righeHtml}</div>` : ""}
+        ${n ? `<button class="btn quiet" type="button" data-action="up-annulla">Annulla</button>` : ""}
+        ${n ? `<button class="btn fill" type="submit" ${up.active || !daCaricare ? "disabled" : ""}>${up.active ? "Caricamento…" : daCaricare === 1 ? "Carica 1 file" : `Carica ${daCaricare} file`}</button>` : ""}
       </div>
       <div class="upload-progress${up.active ? "" : " hidden"}" id="up-prog">
         <div class="bar"><i style="width:${up.pct}%"></i></div><span class="upload-txt">${esc(up.txt)}</span>
@@ -1745,6 +1755,82 @@ lettori.forEach(el => {
     }
   }));
 });
+
+// ---------- caricamento di più file: cosa dice il nome del file ----------
+// GarageBand esporta "<nome del progetto> - 27/10/26, 09.19.mp3": il nome del progetto è un nome breve
+// della canzone (anche storpiato: "shut", "foxey") seguito a volte dal giorno della prova ("26ott26").
+// Da qui si ricavano: il nome breve, il giorno della prova e l'ora dell'esportazione (per l'ordine).
+const MESI_BREVI = { gen: 1, feb: 2, mar: 3, apr: 4, mag: 5, giu: 6, lug: 7, ago: 8, set: 9, ott: 10, nov: 11, dic: 12 };
+function analizzaNomeFile(nome) {
+  let s = String(nome || "").replace(/\.[a-z0-9]{2,5}$/i, "");
+  let ora = null;
+  const m = s.match(/\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?\s*(\d{1,2})[.:](\d{2})\s*$/);
+  if (m) { ora = Number(m[4]) * 60 + Number(m[5]); s = s.slice(0, m.index); }
+  let data = null;
+  const d = s.match(/\b(\d{1,2})\s*(gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)[a-z]*\.?\s*(\d{2}|\d{4})?\b/i);
+  if (d) {
+    const anno = d[3] ? (d[3].length === 2 ? 2000 + Number(d[3]) : Number(d[3])) : annoCorrente;
+    data = `${anno}-${String(MESI_BREVI[d[2].toLowerCase()]).padStart(2, "0")}-${String(d[1]).padStart(2, "0")}`;
+    s = s.slice(0, d.index) + s.slice(d.index + d[0].length);
+  }
+  const breve = s.replace(/[_\s]+/g, " ").replace(/\s*[-–,]+\s*$/, "").trim();
+  return { breve: breve || String(nome || "").replace(/\.[a-z0-9]{2,5}$/i, ""), data, ora };
+}
+const senzaAccenti = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const parole = (s) => senzaAccenti(s).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+// Canzone per un nome breve: prima la memoria (una registrazione già caricata con lo stesso nome
+// breve e una canzone: se Mattia l'ha abbinata una volta, le volte dopo è automatico), poi il testo
+// (le parole del nome breve, senza numeri in coda, sono l'inizio delle parole del titolo, nell'ordine).
+// Se più canzoni vanno bene allo stesso modo non si sceglie: meglio un menu vuoto che un abbinamento sbagliato.
+function indovinaCanzone(breve) {
+  const chiave = parole(breve).join(" ");
+  if (!chiave) return "";
+  const memoria = [...state.registrazioni]
+    .sort((a, b) => msDi(b.creato) - msDi(a.creato))
+    .find(r => r.canzoneId && r.nomeFile && parole(analizzaNomeFile(r.nomeFile).breve).join(" ") === chiave && state.canzoni.some(c => c.id === r.canzoneId));
+  if (memoria) return memoria.canzoneId;
+  const cerca = parole(breve.replace(/\d+$/, ""));
+  if (!cerca.length) return "";
+  let migliori = [], punteggio = 0;
+  [...scaletta(), ...proposte()].forEach(c => {
+    const tit = parole(c.titolo);
+    let i = 0, p = 0;
+    for (const w of cerca) {
+      const j = tit.findIndex((t, k) => k >= i && t.startsWith(w));
+      if (j < 0) { p = 0; break; }
+      p += w.length === tit[j].length ? 2 : 1;
+      i = j + 1;
+    }
+    if (!p) return;
+    if (p > punteggio) { punteggio = p; migliori = [c]; }
+    else if (p === punteggio) migliori.push(c);
+  });
+  return migliori.length === 1 ? migliori[0].id : "";
+}
+// Righe del modulo: una per file, nell'ordine di esportazione (l'ordine della prova)
+function preparaRighe(files) {
+  const righe = [...files].map((file, i) => ({ file, i, ...analizzaNomeFile(file.name), canzoneId: "", etichetta: "", salta: false }));
+  righe.sort((a, b) => (a.ora ?? -1) - (b.ora ?? -1) || a.i - b.i);
+  righe.forEach(r => { r.canzoneId = indovinaCanzone(r.breve); if (!r.canzoneId) r.etichetta = r.breve; });
+  // lo stesso pezzo più volte nella stessa prova: "take 1", "take 2"…
+  const perCanzone = {};
+  righe.forEach(r => { if (r.canzoneId) (perCanzone[r.canzoneId] ||= []).push(r); });
+  Object.values(perCanzone).forEach(l => { if (l.length > 1) l.forEach((r, n) => { r.etichetta = `take ${n + 1}`; }); });
+  return righe;
+}
+// giorno della prova: quello scritto nel nome dei file (il più frequente), altrimenti oggi
+function dataDalleRighe(righe) {
+  const conta = {};
+  righe.forEach(r => { if (r.data) conta[r.data] = (conta[r.data] || 0) + 1; });
+  const [best] = Object.entries(conta).sort((a, b) => b[1] - a[1]);
+  return best ? best[0] : oggi();
+}
+function impostaFile(files) {
+  const audio = [...files].filter(f => /^audio\//.test(f.type) || /\.(m4a|mp3|wav|ogg|aac|aif|aiff|flac)$/i.test(f.name));
+  state.pendingFiles = audio;
+  state.righeUpload = preparaRighe(audio);
+  render();
+}
 
 function durataFile(file) {
   return new Promise(resolve => {
@@ -2357,6 +2443,7 @@ async function act(btn) {
       }
       break;
     }
+    case "up-annulla": state.pendingFiles = []; state.righeUpload = []; render(); break;
     case "del-rec": {
       const r = state.registrazioni.find(x => x.id === id);
       if (!r || !confirm("Eliminare questa registrazione?")) return;
@@ -2480,11 +2567,31 @@ mainEl.addEventListener("keydown", e => {
 });
 mainEl.addEventListener("change", e => {
   if (e.target.dataset.change === "dir-ingresso") { diretta.cambiaIngresso(e.target.value); return; }
+  if (e.target.dataset.row != null) {
+    const r = state.righeUpload[Number(e.target.dataset.row)];
+    if (!r) return;
+    if (e.target.dataset.campo === "carica") { r.salta = !e.target.checked; render(); }
+    else r[e.target.dataset.campo] = e.target.value.trim();
+    return;
+  }
   if (e.target.type !== "file") return;
-  state.pendingFiles = [...e.target.files];
-  const lbl = e.target.closest(".file-btn")?.querySelector("span");
-  const n = state.pendingFiles.length;
-  if (lbl) lbl.textContent = n === 0 ? "Scegli file audio…" : n === 1 ? state.pendingFiles[0].name : `${n} file selezionati`;
+  // altri file scelti dopo i primi si aggiungono (lo stesso file una volta sola)
+  const nuovi = [...e.target.files].filter(f => !state.pendingFiles.some(p => p.name === f.name && p.size === f.size));
+  impostaFile([...state.pendingFiles, ...nuovi]);
+});
+// trascinare i file di una prova sul modulo
+mainEl.addEventListener("dragover", e => {
+  const box = e.target.closest?.("form.upload");
+  if (!box) return;
+  e.preventDefault(); box.classList.add("drag");
+});
+mainEl.addEventListener("dragleave", e => { e.target.closest?.("form.upload")?.classList.remove("drag"); });
+mainEl.addEventListener("drop", e => {
+  const box = e.target.closest?.("form.upload");
+  if (!box) return;
+  e.preventDefault(); box.classList.remove("drag");
+  const nuovi = [...(e.dataTransfer?.files || [])].filter(f => !state.pendingFiles.some(p => p.name === f.name && p.size === f.size));
+  if (nuovi.length) impostaFile([...state.pendingFiles, ...nuovi]);
 });
 
 mainEl.addEventListener("submit", async e => {
@@ -2699,20 +2806,19 @@ mainEl.addEventListener("submit", async e => {
   }
 
   if (kind === "upload") {
-    const files = state.pendingFiles;
-    if (!files.length) { toast("Scegli almeno un file audio."); return; }
-    const canzoneId = form.canzoneId.value;
-    const etichetta = form.etichetta.value.trim();
-    const data = form.data.value || oggi();
+    const righe = state.righeUpload.filter(r => !r.salta);
+    if (!righe.length) { toast("Scegli almeno un file audio."); return; }
+    const data = form.data?.value || oggi();
     state.pendingFiles = [];
+    state.righeUpload = [];
     setUpload({ active: true, pct: 0, txt: "" });
     const submit = form.querySelector("button[type=submit]");
     if (submit) { submit.disabled = true; submit.textContent = "Caricamento…"; }
     const caricate = [];
     try {
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        setUpload({ pct: 0, txt: files.length > 1 ? `File ${i + 1} di ${files.length}: ${f.name}` : f.name });
+      for (let i = 0; i < righe.length; i++) {
+        const { file: f, canzoneId, etichetta } = righe[i];
+        setUpload({ pct: 0, txt: righe.length > 1 ? `File ${i + 1} di ${righe.length}: ${f.name}` : f.name });
         const durata = await durataFile(f);
         const up = await uploadAudio(f, p => setUpload({ pct: p }));
         const ref = await addDoc(collection(db, "registrazioni"), {
@@ -2721,10 +2827,9 @@ mainEl.addEventListener("submit", async e => {
         });
         caricate.push(ref.id);
       }
-      toast(files.length > 1 ? "Registrazioni caricate." : "Registrazione caricata.");
-      document.querySelectorAll('main [data-keep="up-label"]').forEach(el => { el.value = ""; });
+      toast(righe.length > 1 ? `${righe.length} registrazioni caricate.` : "Registrazione caricata.");
     } catch (ex) {
-      toast("Caricamento non riuscito: " + (ex.code || ex.message));
+      toast("Caricamento non riuscito: " + (ex.code || ex.message) + (caricate.length ? ` (caricate ${caricate.length} su ${righe.length})` : ""));
     } finally {
       setUpload({ active: false, pct: 0, txt: "" });
       render();

@@ -364,6 +364,27 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 .file-btn input { display: none; }
 .file-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload.drag { border-color: var(--ambra); background: var(--ambra-chiaro); }
+.up-hint { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.up-rows { display: grid; gap: 6px; margin: 2px 0 4px; }
+.up-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, .9fr);
+  gap: 8px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--rule);
+}
+.up-row:last-child { border-bottom: 0; }
+.up-row.salta .up-file, .up-row.salta .field { opacity: .4; }
+.up-row.salta .up-file b { text-decoration: line-through; }
+.up-file { min-width: 0; font: 500 14px var(--sans); color: var(--legno); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-file b { font-weight: 600; }
+.up-file small { color: var(--muted); font-weight: 500; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.up-row .field { font-size: 13.5px; padding: 7px 10px; }
+.up-row select.field { padding-right: 26px; }
+.up-chk { padding: 0; }
+@media (max-width: 560px) {
+  .up-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 6px; }
+  .up-row .up-song, .up-row .up-label { grid-column: 2; }
+}
 .upload-progress { margin-top: 10px; }
 .upload-progress .bar { margin: 0; }
 .upload-progress .bar i { background: var(--ambra); }
