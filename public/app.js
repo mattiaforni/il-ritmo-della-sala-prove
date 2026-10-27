@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "33";
+const APP_VERSION = "34";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1151,6 +1151,7 @@ function songPage(c) {
       <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta">↑</button>
       <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta">↓</button>
       <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">Modifica</button>
+      <button class="btn quiet" data-action="demote" data-id="${c.id}" aria-label="Rimetti fra le proposte">↩ Proposte</button>
       <span class="sp"></span>
       <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone">✕</button>
     </div>`)}
@@ -2074,7 +2075,8 @@ function renderPersonale() {
     return `<button class="ini${LIGHT_BG.has(col) ? " light" : ""}${m.nome === nome ? " sel" : ""}" style="background:${col}" data-action="view-person" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${m.nome === nome}">${esc(siglaOf(m.nome))}</button>`;
   }).join("")}</div>`;
 
-  const mine = state.tasks.filter(t => (t.assegnatari || []).includes(nome) && state.canzoni.some(c => c.id === t.canzoneId));
+  // i task di un pezzo tornato fra le proposte restano da parte e non si vedono finché non è di nuovo in scaletta
+  const mine = state.tasks.filter(t => (t.assegnatari || []).includes(nome) && state.canzoni.some(c => c.id === t.canzoneId && c.stato !== "proposta"));
   const aperti = mine.filter(t => !parteFatta(t, nome));
   const daFare = aperti.map(t => {
     const song = state.canzoni.find(c => c.id === t.canzoneId);
@@ -2307,6 +2309,22 @@ async function act(btn) {
       toast(`"${c?.titolo || "Pezzo"}" è in scaletta.`);
       playlistDaAggiornare();
       if (fatto) notifica("scaletta", { canzoneId: id });
+      break;
+    }
+    case "demote": {
+      // il contrario di "In scaletta": per i pezzi finiti in scaletta per sbaglio. Voti e commenti restano;
+      // task e setup restano nel database e ricompaiono se il pezzo torna in scaletta. Nessuna notifica.
+      const c = state.canzoni.find(x => x.id === id);
+      if (!c || c.stato === "proposta") return;
+      const nt = tasksOf(id).length;
+      if (!confirm(`Rimettere "${c.titolo}" fra le proposte?${nt ? (nt === 1 ? " Il suo task resta da parte." : ` I suoi ${nt} task restano da parte.`) : ""}`)) return;
+      const maxOrd = state.canzoni.reduce((m, x) => Math.max(m, x.ordine || 0), 0);
+      const eraAperta = state.songPage === id;
+      const fatto = await updateDoc(doc(db, "canzoni", id), { stato: "proposta", ordine: maxOrd + 1 }).then(() => true, erroreScrittura);
+      if (!fatto) return;
+      if (eraAperta) { if (history.state && history.state.canzone) history.back(); else chiudiCanzone(); }
+      toast(`"${c.titolo}" è tornata fra le proposte.`);
+      playlistDaAggiornare();
       break;
     }
     case "play": {
