@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "35";
+const APP_VERSION = "36";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -163,7 +163,7 @@ const state = {
   linkEdit: null,             // id della canzone con il modulo dei link aperto
   enrichTried: new Set(),
   votersOpen: new Set(),
-  addOpen: { scaletta: false, proposte: false, personale: false },
+  addOpen: { scaletta: false, proposte: false, personale: false, cassa: false },
   drafts: {},                 // songId → Set di nomi selezionati per il nuovo task
   tipoMov: "spesa",
   movOpen: null,
@@ -176,6 +176,7 @@ const state = {
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
   commentaPost: null,         // bacheca: post con il campo del commento aperto
+  recInfo: null,              // registrazione con i dettagli aperti (file, chi l'ha caricata, Elimina)
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
@@ -327,7 +328,11 @@ function linkSpotify(c) {
   if (!pl) return { url: c.spotifyUrl, kind: null };
   return { url: `https://open.spotify.com/track/${track[1]}?context=${encodeURIComponent("spotify:playlist:" + pl)}`, kind };
 }
-function linksHtml(c) {
+// icone a linea sottile (simboli in index.html)
+const IC = (nome, cls = "i") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${nome}"/></svg>`;
+// logo di Spotify a tinta unica (maschera sull'icona ufficiale, colore del testo)
+const SP_ICO = `<span class="ico-sp" aria-hidden="true"></span>`;
+function linksHtml(c, conTesto) {
   if (isNostro(c)) return `<span class="nostro-tag">pezzo nostro</span>`;
   const q = encodeURIComponent(songQuery(c));
   const ls = linkSpotify(c);
@@ -335,8 +340,8 @@ function linksHtml(c) {
   const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
   const tab = c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`;
   return `<div class="links">
-    <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}"><img class="ico ico-sp" src="${esc(state.spIcon)}" alt=""></a>
-    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg></a>
+    <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}">${SP_ICO}${conTesto ? "<span>Spotify</span>" : ""}</a>
+    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>
   </div>`;
 }
 // icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
@@ -369,9 +374,9 @@ function plStrip(kind) {
   const lista = kind === "scaletta" ? scaletta() : proposte();
   return `
     <a class="pl-strip" ${appLink(info[kind], "com.spotify.music")} data-link>
-      <img class="ico ico-sp" src="${esc(state.spIcon)}" alt="">
+      ${SP_ICO}
       <span class="pl-txt"><b>${kind === "scaletta" ? "Playlist della scaletta" : "Playlist delle proposte"}</b><small>${descriviBrani(lista)}${kind === "proposte" ? " · dalla più votata" : ""}</small></span>
-      <span class="pl-go" aria-hidden="true">Apri</span>
+      <span class="pl-go" aria-hidden="true">${IC("freccia")}</span>
     </a>`;
 }
 async function chiamaPlaylist(op, extra = {}, keepalive = false) {
@@ -481,7 +486,7 @@ function notificheCorpo() {
   }
   return eventiPush().map(e => {
     const on = state.push.eventi.includes(e.key);
-    return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? "✓" : ""}</span><span>${e.nome}</span></button>`;
+    return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? IC("check") : ""}</span><span>${e.nome}</span></button>`;
   }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
 }
 function notificheCard() {
@@ -582,7 +587,7 @@ function renderFan() {
       </form>`;
   } else {
     html = `
-      <div class="fan-top"><h2 class="overlay-title">${esc(state.fanNome)}</h2><button class="x" data-action="fan-chiudi" aria-label="Chiudi">✕</button></div>
+      <div class="fan-top"><h2 class="overlay-title">${esc(state.fanNome)}</h2><button class="x" data-action="fan-chiudi" aria-label="Chiudi">${IC("x")}</button></div>
       <section class="fan-sez">
         <h3 class="fan-h">Notifiche${state.push ? " <small>attive</small>" : ""}</h3>
         ${notificheCorpo()}
@@ -647,7 +652,7 @@ function spotifyCard() {
   const senza = [...scaletta(), ...proposte()].filter(c => !haLinkSpotify(c) && !isNostro(c)).map(c => c.titolo);
   const riga = (kind, nome, lista) => `
       <div class="sp-row">
-        <img class="ico ico-sp" src="${esc(state.spIcon)}" alt="">
+        ${SP_ICO}
         <span class="t"><b>${nome}</b><span>${descriviBrani(lista)}</span></span>
         <a class="btn quiet" ${appLink(info[kind], "com.spotify.music")} data-link>Apri</a>
       </div>`;
@@ -940,6 +945,43 @@ $("#user-chip").addEventListener("click", () => {
   ensureUser();
 });
 
+// ---------- testata: nome della sezione e una riga di contesto ----------
+const TITOLI = { scaletta: "Scaletta", proposte: "Proposte", audio: "Audio", bacheca: "Bacheca", cassa: "Cassa", personale: "Personale" };
+const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
+function contesto(tab) {
+  if (!state.account || !state.ready.canzoni) return "";
+  if (tab === "scaletta") {
+    const l = scaletta(), pronte = l.filter(c => statoTask(c).pronta).length;
+    return plurale(l.length, "pezzo", "pezzi") + (pronte ? ` · ${plurale(pronte, "pronto", "pronti")}` : "");
+  }
+  if (tab === "proposte") {
+    const l = proposte(), dv = state.user ? l.filter(c => !(c.reazioni || {})[state.user]).length : 0;
+    return plurale(l.length, "proposta", "proposte") + (dv ? ` · ${dv} da votare` : "");
+  }
+  if (tab === "audio") {
+    if (!state.ready.registrazioni) return "";
+    const giorni = new Set(state.registrazioni.map(r => r.data || "")).size;
+    return plurale(state.registrazioni.length, "registrazione", "registrazioni") + (giorni ? ` · ${plurale(giorni, "prova", "prove")}` : "");
+  }
+  if (tab === "bacheca") {
+    if (!state.ready.bacheca) return "";
+    return plurale(state.bacheca.filter(m => !m.postId).length, "post", "post");
+  }
+  if (tab === "personale") return state.ctxPersonale || "";
+  if (tab === "cassa") {
+    if (!state.ready.movimenti) return "";
+    const s = state.movimenti.reduce((t, m) => t + (m.tipo === "versamento" ? 1 : -1) * (m.importoCent || 0), 0);
+    return `In cassa ${euro(s)}`;
+  }
+  return "";
+}
+function testata() {
+  const t = $("#tb-titolo"), s = $("#tb-sub");
+  if (!t) return;
+  t.textContent = state.account ? (TITOLI[state.tab] || "") : "Il ritmo della sala prove";
+  s.textContent = contesto(state.tab);
+}
+
 // ---------- tab ----------
 function showTab(name) {
   if (!document.getElementById("view-" + name)) name = "scaletta";
@@ -950,6 +992,7 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   updateNavMe();
+  testata();
   window.scrollTo({ top: 0 });
   if (name === "bacheca") segnaBachecaVista();
   if (name === "personale" && state.account && !state.fan && !state.accesso && !state.accessoStato) caricaAccesso();
@@ -1042,6 +1085,7 @@ function render() {
   restoreInputs(kept);
   renderFan();
   updateNavMe();
+  testata();
   syncPlayer();
 }
 
@@ -1053,8 +1097,8 @@ function renderScaletta() {
   const gen = state.canzoni.find(c => c.id === GENERALE_ID);
   const lista = scaletta();
   let html = plStrip("scaletta") + (gen ? songCard(gen) : "");
-  html += lista.map(c => songCard(c)).join("");
-  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una qui sotto."}</p>`;
+  html += lista.map((c, i) => songCard(c, i + 1)).join("");
+  if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una con il +."}</p>`;
   if (!state.fan) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
   $("#view-scaletta").innerHTML = html;
 }
@@ -1064,21 +1108,21 @@ function statoTask(c) {
   const pronta = !isGenerale(c) && ts.length > 0 && done === ts.length;
   return { ts, done, pronta, p: pct(done, ts.length) };
 }
-// nella lista solo l'essenziale: toccando la canzone si apre la sua pagina
-function songCard(c) {
+// nella lista solo l'essenziale: numero in scaletta, titolo, link e task fatti;
+// il filetto sotto la riga si riempie con i task fatti. Toccando la canzone si apre la sua pagina.
+function songCard(c, n) {
   const gen = isGenerale(c);
   const { ts, done, pronta, p } = statoTask(c);
-  const count = pronta ? `<span class="cnt ok">pronta ✓</span>` : `<span class="cnt">${done} / ${ts.length} task</span>`;
+  const count = pronta ? `<span class="cnt ok">pronta</span>` : `<span class="cnt" aria-label="${done} task fatti su ${ts.length}">${done}/${ts.length}</span>`;
   return `
-  <article class="card song${gen ? " generale" : ""}${pronta ? " pronta" : ""}">
-    <div class="song-head" data-action="open-song" data-id="${c.id}" role="button" tabindex="0">
-      <div class="song-row">
-        <h2 class="song-title">${gen ? `Generale<span class="pin" aria-hidden="true">📌</span>` : esc(c.titolo)}</h2>
-        <div class="song-right">${gen ? "" : linksHtml(c)}${count}</div>
-        <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
-      </div>
-      <div class="bar"><i class="${pronta ? "ok" : ""}" style="width:${p}%"></i></div>
+  <article class="brano${gen ? " generale" : ""}${pronta ? " pronta" : ""}" data-action="open-song" data-id="${c.id}" role="button" tabindex="0">
+    <span class="num" aria-hidden="true">${gen ? IC("pin") : n}</span>
+    <div class="brano-testo">
+      <h2 class="song-title">${gen ? "Generale" : esc(c.titolo)}</h2>
+      <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
     </div>
+    <div class="brano-lato">${gen ? "" : linksHtml(c)}${count}</div>
+    <span class="brano-linea" aria-hidden="true"><i style="width:${p}%"></i></span>
   </article>`;
 }
 function apriCanzone(id) {
@@ -1120,49 +1164,45 @@ function songPage(c) {
       <form class="newtask" data-form="add-task" data-song="${c.id}">
         <div class="inrow">
           <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
-          <button class="btn amb" type="submit">Aggiungi</button>
+          <button class="btn fill" type="submit">Aggiungi</button>
         </div>
         <div class="picks">${picks}</div>
-      </form>` : `<button class="addline" data-action="addtask-open" data-id="${c.id}"><span class="plus">+</span>Nuovo task</button>`;
+      </form>` : `<button class="addline" data-action="addtask-open" data-id="${c.id}"><span class="plus">${IC("piu")}</span>Nuovo task</button>`;
   return `
   <div class="pagina">
     <div class="pg-top">
-      <button class="btn quiet pg-back" data-action="close-song" aria-label="Torna alla scaletta">← Scaletta</button>
+      <button class="pg-back" data-action="close-song" aria-label="Torna alla scaletta">${IC("indietro")}Scaletta</button>
       ${!gen && idx >= 0 ? `<span class="pg-pos">${idx + 1} di ${lista.length}</span>` : ""}
     </div>
     <header class="pg-head${gen ? " generale" : ""}${pronta ? " pronta" : ""}">
-      <div class="song-row">
-        <h2 class="pg-title">${gen ? "Generale" : esc(c.titolo)}</h2>
-        <div class="song-right">${gen ? "" : linksHtml(c)}</div>
-        <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
-      </div>
+      <h2 class="pg-title">${gen ? "Generale" : esc(c.titolo)}</h2>
+      <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
+      ${gen ? "" : `<div class="pg-link">${linksHtml(c, true)}</div>`}
       ${linkBlock(c)}
     </header>
-    <article class="card${gen ? " generale" : ""}">
-      <h3 class="sec-title">Task <small>${pronta ? "pronta ✓" : `${done} di ${ts.length}`}</small></h3>
-      <div class="pg-sec">
-        <div class="bar pg-bar"><i class="${pronta ? "ok" : ""}" style="width:${p}%"></i></div>
-        ${ts.length ? ts.map(taskRow).join("") : `<p class="empty">Nessun task per ${gen ? "ora" : "questo pezzo"}.</p>`}
-        ${nuovoTask}
-      </div>
-    </article>
+    <section class="sez">
+      <h3 class="fascia">Task <small${pronta ? ` class="ok"` : ""}>${pronta ? "pronta" : `${done} di ${ts.length}`}</small></h3>
+      <div class="bar pg-bar"><i class="${pronta ? "ok" : ""}" style="width:${p}%"></i></div>
+      ${ts.length ? ts.map(taskRow).join("") : `<p class="empty">Nessun task per ${gen ? "ora" : "questo pezzo"}.</p>`}
+      ${nuovoTask}
+    </section>
     ${gen ? "" : setupCard(c) + recsCard(c) + (state.fan ? "" : `
-    <div class="actions pg-actions">
-      <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta">↑</button>
-      <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta">↓</button>
-      <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">Modifica</button>
-      <button class="btn quiet" data-action="demote" data-id="${c.id}" aria-label="Rimetti fra le proposte">↩ Proposte</button>
+    <div class="pg-actions">
+      <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta" title="Sposta su">${IC("sopra")}</button>
+      <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta" title="Sposta giù">${IC("sotto")}</button>
+      <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">${IC("matita")}Modifica</button>
+      <button class="btn quiet" data-action="demote" data-id="${c.id}" aria-label="Rimetti fra le proposte">${IC("ritorno")}Proposte</button>
       <span class="sp"></span>
-      <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone">✕</button>
+      <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina canzone" title="Elimina">${IC("cestino")}</button>
     </div>`)}
   </div>`;
 }
 function taskRow(t) {
   const ro = state.fan;   // fan: si vede lo stato, non si tocca
-  const del = ro ? "" : `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">✕</button>`;
+  const del = ro ? "" : `<button class="del-mini" data-action="del-task" data-id="${t.id}" aria-label="Elimina task">${IC("x")}</button>`;
   if (!multipla(t)) return `
     <div class="task${t.fatto ? " fatto" : ""}">
-      <button class="chk" data-action="check" data-id="${t.id}" ${ro ? `disabled aria-label="${t.fatto ? "Fatto" : "Da fare"}"` : `aria-label="${t.fatto ? "Segna da fare" : "Segna fatto"}"`}>${t.fatto ? "✓" : ""}</button>
+      <button class="chk" data-action="check" data-id="${t.id}" ${ro ? `disabled aria-label="${t.fatto ? "Fatto" : "Da fare"}"` : `aria-label="${t.fatto ? "Segna da fare" : "Segna fatto"}"`}>${t.fatto ? IC("check") : ""}</button>
       <span><span class="tt">${esc(t.titolo)}</span>${t.fatto && t.fattoDa ? `<span class="by">fatto da ${esc(t.fattoDa)}</span>` : ""}</span>
       <span class="task-side">${whoTags(t.assegnatari)}${del}</span>
     </div>`;
@@ -1174,7 +1214,7 @@ function taskRow(t) {
     return `<button class="ini parte${on ? " on" : ""}${LIGHT_BG.has(col) ? " light" : ""}" style="--c:${col}" data-action="parte" data-id="${t.id}" data-nome="${esc(n)}"${ro ? " disabled" : ""} aria-pressed="${on}" title="${esc(n)}: ${on ? "fatto" : "da fare"}" aria-label="${esc(n)}: ${on ? "fatto, tocca per segnare da fare" : "da fare, tocca per segnare fatto"}">${esc(siglaOf(n))}</button>`;
   }).join("");
   const stato = tutta
-    ? `<span class="chk stato" aria-label="Fatto da tutti">✓</span>`
+    ? `<span class="chk stato" aria-label="Fatto da tutti">${IC("check")}</span>`
     : `<span class="pbox" aria-label="Fatto da ${fatti.length} su ${assegnati(t).length}">${fatti.length}/${assegnati(t).length}</span>`;
   return `
     <div class="task multi${tutta ? " fatto" : ""}">
@@ -1229,14 +1269,14 @@ function setupCard(c) {
       <div class="setup-row">
         <span class="setup-parte">${nome}</span>
         <span class="setup-txt" data-action="setup-edit" data-id="${c.id}" data-key="${esc(k)}" role="button" tabindex="0">${testo ? esc(testo) : `<span class="empty">Tocca per scrivere</span>`}</span>
-        <button class="del-mini" data-action="parte-del" data-id="${c.id}" data-key="${esc(k)}" aria-label="Togli ${nome}">✕</button>
+        <button class="del-mini" data-action="parte-del" data-id="${c.id}" data-key="${esc(k)}" aria-label="Togli ${nome}">${IC("x")}</button>
       </div>`;
   }).join("");
   let add;
   if (state.fan) {
     add = "";
   } else if (state.partePicker !== c.id) {
-    add = `<button class="addline" data-action="parte-picker" data-id="${c.id}"><span class="plus">+</span>Aggiungi parte</button>`;
+    add = `<button class="addline" data-action="parte-picker" data-id="${c.id}"><span class="plus">${IC("piu")}</span>Aggiungi parte</button>`;
   } else {
     const libere = STRUMENTI.map(s => s.key).concat(partiLibere()).filter(k => !parti.includes(k));
     add = `
@@ -1251,51 +1291,53 @@ function setupCard(c) {
       </div>`;
   }
   return `
-    <article class="card">
-      <h3 class="sec-title">Setup <small>${parti.length ? `${parti.length} ${parti.length === 1 ? "parte" : "parti"}${scritte < parti.length ? `, ${scritte} con appunti` : ""}` : ""}</small></h3>
-      <div class="pg-sec">
-        ${rows || `<p class="empty">${state.fan ? "Nessun appunto di setup per questo pezzo." : "Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo."}</p>`}
-        ${add}
-      </div>
-    </article>`;
+    <section class="sez">
+      <h3 class="fascia">Setup <small>${parti.length ? `${parti.length} ${parti.length === 1 ? "parte" : "parti"}${scritte < parti.length ? `, ${scritte} con appunti` : ""}` : ""}</small></h3>
+      ${rows || `<p class="empty">${state.fan ? "Nessun appunto di setup per questo pezzo." : "Nessuna parte ancora: aggiungi gli strumenti che suonano in questo pezzo."}</p>`}
+      ${add}
+    </section>`;
 }
 function recsCard(c) {
   const recs = recsOf(c.id);
   if (!recs.length) return "";
   return `
-    <article class="card">
-      <h3 class="sec-title">Registrazioni <small>${recs.length}</small></h3>
-      <div class="pg-sec">${recs.map(r => recRow(r, "song")).join("")}</div>
-    </article>`;
+    <section class="sez">
+      <h3 class="fascia">Registrazioni <small>${recs.length}</small></h3>
+      ${recs.map(r => recRow(r, "song")).join("")}
+    </section>`;
 }
 function linkBlock(c) {
   if (state.linkEdit !== c.id) return "";
   // si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo (niente link da incollare)
   return `
     <form class="link-form" data-form="links" data-song="${c.id}">
-      <label>Titolo
+      <label><span>Titolo</span>
         <input class="field" name="titolo" data-keep="ed-tit-${c.id}" value="${esc(c.titolo || "")}" maxlength="80" autocomplete="off" required></label>
-      <label>Artista
+      <label><span>Artista</span>
         <input class="field" name="artista" data-keep="ed-art-${c.id}" value="${esc(c.artista || "")}" maxlength="60" autocomplete="off"></label>
       <label class="chk-row"><input type="checkbox" name="nostro" data-keep="ed-nostro-${c.id}" ${isNostro(c) ? "checked" : ""}><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
       <div class="solo-cover">
-      <label>Link Songsterr della canzone
+      <label><span>Link Songsterr della canzone</span>
         <input class="field" name="songsterr" data-keep="link-ss-${c.id}" value="${esc(c.songsterrUrl || "")}" placeholder="https://www.songsterr.com/a/wsa/…" autocomplete="off" inputmode="url"></label>
       <p class="hint">Se correggi titolo o artista, il brano su Spotify si cerca di nuovo. Se il brano è sbagliato ma il testo è giusto, tocca «Cerca di nuovo».</p>
       </div>
       <div class="ed"><button type="submit" class="btn quiet solo-cover" name="cerca" value="1" title="Cerca di nuovo il brano su Spotify">Cerca di nuovo</button><span class="sp"></span><button type="button" class="btn quiet" data-action="link-cancel">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
     </form>`;
 }
+// + in basso a destra; toccandolo il modulo si apre in un foglio a tutta altezza, con il pulsante sotto il pollice
 function addSongBlock(where, label, cta) {
   if (!state.addOpen[where]) {
-    return `<button class="addline" data-action="add-open" data-where="${where}"><span class="plus">+</span>${label}</button>`;
+    return `<button class="fab" data-action="add-open" data-where="${where}" aria-label="${label}" title="${label}">${IC("piu")}</button>`;
   }
   return `
-    <form class="addform" data-form="add-song" data-stato="${where === "proposte" ? "proposta" : "scaletta"}">
-      <input class="field" name="titolo" data-keep="add-${where}-titolo" placeholder="Titolo" maxlength="80" autocomplete="off" required>
-      <input class="field" name="artista" data-keep="add-${where}-artista" placeholder="Artista" maxlength="60" autocomplete="off">
-      <button class="btn fill" type="submit">${cta}</button>
-      <label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
+    <form class="foglio addform" data-form="add-song" data-stato="${where === "proposte" ? "proposta" : "scaletta"}">
+      <div class="foglio-testa"><h2>${label}</h2><button type="button" class="x" data-action="add-chiudi" data-where="${where}" aria-label="Chiudi">${IC("x")}</button></div>
+      <div class="foglio-corpo">
+        <label class="campo"><span>Titolo</span><input class="field" name="titolo" data-keep="add-${where}-titolo" maxlength="80" autocomplete="off" required></label>
+        <label class="campo"><span>Artista</span><input class="field" name="artista" data-keep="add-${where}-artista" maxlength="60" autocomplete="off"></label>
+        <label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
+      </div>
+      <div class="foglio-barra"><span class="sp"></span><button class="btn fill" type="submit">${cta}</button></div>
     </form>`;
 }
 
@@ -1313,8 +1355,8 @@ function commentoForm(c) {
   return `
     <form class="vcomm${giu ? " giu" : ""}" data-form="commento" data-id="${c.id}" data-voto="${cv.voto}">
       <input class="field" name="testo" data-keep="vc-${c.id}" value="${esc(att)}" maxlength="100" autocomplete="off" placeholder="${giu ? "Perché no? (obbligatorio)" : "Un commento? (facoltativo)"}"${giu ? " required" : ""}>
-      <button class="btn ${giu ? "fill" : "quiet"}" type="submit">${giu ? "Vota 👎" : "Salva"}</button>
-      <button type="button" class="x" data-action="commento-chiudi" data-id="${c.id}" aria-label="${giu ? "Annulla il voto" : "Chiudi"}">✕</button>
+      <button type="button" class="x" data-action="commento-chiudi" data-id="${c.id}" aria-label="${giu ? "Annulla il voto" : "Chiudi"}">${IC("x")}</button>
+      <button class="btn ${giu ? "fill" : ""}" type="submit">${giu ? `${IC("giu")}Vota` : "Salva"}</button>
     </form>`;
 }
 function renderProposte() {
@@ -1326,7 +1368,7 @@ function renderProposte() {
   const nuove = tutte.filter(daVotare).sort((a, b) => (b.ordine || 0) - (a.ordine || 0));
   const classifica = tutte.filter(c => !daVotare(c)).sort(perClassifica);
   const lista = nuove.concat(classifica);
-  const card = (c) => {
+  const card = (c, rango) => {
     const r = c.reazioni || {};
     const su = Object.keys(r).filter(n => r[n] === "up");
     const giu = Object.keys(r).filter(n => r[n] === "down");
@@ -1336,42 +1378,51 @@ function renderProposte() {
     // chi ha commentato compare con il suo commento, gli altri solo con la sigla
     const conCom = new Set(com.map(([n]) => n));
     const suSolo = su.filter(n => !conCom.has(n)), giuSolo = giu.filter(n => !conCom.has(n));
-    const voters = !open ? "" : `
+    const pollice = (v) => `<span class="vl ${v === "down" ? "giu" : "su"}" aria-label="${v === "down" ? "Non mi piace" : "Mi piace"}">${IC(v === "down" ? "giu" : "su")}</span>`;
+    // sulla riga solo titolo e i due voti (si votano da lì); toccando la riga si aprono
+    // ascolto, chi ha votato, commenti e le azioni (Modifica, Elimina, In scaletta)
+    const voters = `
       <div class="voters">
-        ${suSolo.length ? `<span class="vg"><span class="vl" aria-label="Mi piace">👍</span>${suSolo.map(iniTag).join("")}</span>` : ""}
-        ${giuSolo.length ? `<span class="vg"><span class="vl" aria-label="Non mi piace">👎</span>${giuSolo.map(iniTag).join("")}</span>` : ""}
+        ${suSolo.length ? `<span class="vg">${pollice("up")}${suSolo.map(iniTag).join("")}</span>` : ""}
+        ${giuSolo.length ? `<span class="vg">${pollice("down")}${giuSolo.map(iniTag).join("")}</span>` : ""}
         ${!su.length && !giu.length ? `<span class="none">Nessun voto ancora.</span>` : ""}
-        ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom"><span class="vl" aria-label="${r[n] === "down" ? "Non mi piace" : "Mi piace"}">${r[n] === "down" ? "👎" : "👍"}</span>${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
+        ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom">${pollice(r[n])}${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
+      </div>`;
+    const pronta = su.length >= SOGLIA_SCALETTA;
+    const voti = state.fan ? `
+        <span class="voto sola" aria-label="Mi piace: ${su.length}">${IC("su")}${su.length}</span>
+        <span class="voto sola" aria-label="Non mi piace: ${giu.length}">${IC("giu")}${giu.length}</span>` : `
+        <button class="voto${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">${IC("su")}${su.length}</button>
+        <button class="voto${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">${IC("giu")}${giu.length}</button>`;
+    const dettagli = !(open || state.linkEdit === c.id) ? "" : `
+      <div class="prop-dett">
+        <div class="pg-link">${linksHtml(c, true)}</div>
+        ${voters}
+        ${state.linkEdit === c.id ? linkBlock(c) : ""}
+        ${state.fan ? "" : `
+        <div class="prop-az">
+          <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">${IC("matita")}Modifica</button>
+          <button class="btn quiet" data-action="del-song" data-id="${c.id}">${IC("cestino")}Elimina</button>
+          <span class="sp"></span>
+          <button class="btn${pronta ? " go" : ""}" data-action="promote" data-id="${c.id}">${IC("sopra")}In scaletta</button>
+        </div>`}
       </div>`;
     return `
-    <article class="card${daVotare(c) ? " da-votare" : ""}">
-      <div class="song-head" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${open}">
-        <div class="song-row">
+    <article class="prop${daVotare(c) ? " da-votare" : ""}${dettagli ? " aperta" : ""}">
+      <div class="prop-riga" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${!!dettagli}">
+        <span class="num" aria-hidden="true">${rango || ""}</span>
+        <div class="brano-testo">
           <h2 class="song-title">${esc(c.titolo)}</h2>
-          <div class="song-right">${linksHtml(c)}</div>
-          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
+          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}${pronta ? `<span class="ok"> · pronta per la scaletta</span>` : ""}</div>
         </div>
-      </div>
-      <div class="prop-bar">${state.fan ? `
-        <span class="vote sola" aria-label="Mi piace: ${su.length}">👍 ${su.length}</span>
-        <span class="vote sola" aria-label="Non mi piace: ${giu.length}">👎 ${giu.length}</span>
-        <span class="sp"></span>` : `
-        <button class="vote${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">👍 ${su.length}</button>
-        <button class="vote${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">👎 ${giu.length}</button>
-        <span class="sp"></span>
-        <button class="ico-btn" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}" aria-label="Modifica titolo, artista e link" title="Modifica"><svg class="ico" aria-hidden="true"><use href="#ico-matita"/></svg></button>
-        <button class="btn${su.length >= SOGLIA_SCALETTA ? " go" : ""}" data-action="promote" data-id="${c.id}">↑ In scaletta</button>
-        <button class="x" data-action="del-song" data-id="${c.id}" aria-label="Elimina proposta">✕</button>`}
+        <div class="prop-voti">${voti}</div>
       </div>
       ${commentoForm(c)}
-      ${state.linkEdit === c.id ? `<div class="prop-link">${linkBlock(c)}</div>` : ""}
-      ${voters}
+      ${dettagli}
     </article>`;
   };
-  const cards = nuove.length
-    ? `<h3 class="prop-sez">Da votare <small>${nuove.length}</small></h3>${nuove.map(card).join("")}` +
-      (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map(card).join("")}` : "")
-    : classifica.map(card).join("");
+  const cards = (nuove.length ? `<h3 class="prop-sez amb">Da votare <small>${nuove.length}</small></h3>${nuove.map(c => card(c)).join("")}` : "") +
+    (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map((c, i) => card(c, i + 1)).join("")}` : "");
   $("#view-proposte").innerHTML = plStrip("proposte") +
     (lista.length ? cards : `<p class="empty big">Nessuna proposta${state.fan ? " per ora." : ". Butta lì un pezzo da provare."}</p>`) +
     (state.fan ? "" : addSongBlock("proposte", "Proponi un pezzo", "Proponi"));
@@ -1380,27 +1431,36 @@ function renderProposte() {
 // ---------- registrazioni ----------
 function recRow(r, mode) {
   const song = state.canzoni.find(c => c.id === r.canzoneId);
-  const label = r.etichetta ? ` <em>· ${esc(r.etichetta)}</em>` : "";
-  let name;
-  if (mode === "song") name = esc(fmtGiorno(r.data)) + label;
-  else if (mode === "pref") name = (song ? esc(song.titolo) : esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`) + ` <em>· ${esc(fmtGiorno(r.data))}</em>` + (song ? label : "");
-  else if (song) name = esc(song.titolo) + label;
-  else name = esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`;
-  const meta = [r.caricatoDa, fmtMB(r.size)].filter(Boolean).map(esc).join(" · ");
-  // stellina: la band la accende e la spegne; i fan la vedono solo accesa
+  // sulla riga solo titolo, etichetta, data e durata; file, chi l'ha caricata e Elimina si aprono toccando il titolo
+  const senza = song ? r.etichetta : "senza canzone";
+  let titolo, sotto;
+  if (mode === "song") { titolo = fmtGiorno(r.data); sotto = [r.etichetta]; }
+  else if (mode === "pref") { titolo = song ? song.titolo : (r.etichetta || "Registrazione"); sotto = [fmtGiorno(r.data), senza]; }
+  else { titolo = song ? song.titolo : (r.etichetta || "Registrazione"); sotto = [senza]; }
+  sotto = sotto.filter(Boolean).map(esc);
+  // la stessa registrazione può stare sia fra le preferite sia nel suo giorno: si apre solo dove la si tocca
+  const aperta = !state.fan && state.recInfo === `${r.id}:${mode}`;
+  // stellina a destra, grande: la band la accende e la spegne; i fan la vedono solo accesa
   const stella = state.fan
-    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">★</span>` : "")
-    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${r.preferita ? "★" : "☆"}</button>`;
+    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">${IC("stella")}</span>` : "")
+    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${IC("stella")}</button>`;
+  const nome = state.fan
+    ? `<span class="rec-name">${esc(titolo)}</span>`
+    : `<span class="rec-name" data-action="rec-info" data-id="${r.id}" data-modo="${mode}" role="button" tabindex="0" aria-expanded="${aperta}">${esc(titolo)}</span>`;
+  const dettagli = !aperta ? "" : `
+      <div class="rec-det">
+        <span class="rec-det-t"><span class="rec-file">${esc(r.nomeFile || "nome del file non salvato")}</span>${[r.caricatoDa ? `caricata da ${esc(r.caricatoDa)}` : "", esc(fmtMB(r.size))].filter(Boolean).join(" · ")}</span>
+        <button class="btn quiet" data-action="del-rec" data-id="${r.id}">${IC("cestino")}Elimina</button>
+      </div>`;
   return `
-    <div class="rec${r.preferita ? " pref" : ""}" data-rec="${r.id}">
-      <span class="rec-name">${stella}${name}</span>
-      <span class="rec-meta">${meta}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
-      ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
+    <div class="rec${r.preferita ? " pref" : ""}${aperta ? " aperta" : ""}" data-rec="${r.id}">
+      ${nome}
+      <span class="rec-meta">${sotto.map(t => `<span>${t}</span>`).join("")}<span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span></span>
+      ${stella}
       <div class="player">
-        <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">▶</button>
+        <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">${IC("play")}</button>
         <div class="line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
-        <span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span>
-      </div>
+      </div>${dettagli}
     </div>`;
 }
 function renderAudio() {
@@ -1411,13 +1471,13 @@ function renderAudio() {
   });
   const pref = preferite();
   const blocco = pref.length ? `
-    <section class="card rec-group pref-group">
-      <h2 class="rec-date"><span class="stella on" aria-hidden="true">★</span> Preferite <small>${pref.length} ${pref.length === 1 ? "registrazione" : "registrazioni"}</small>${pref.length > 1 ? `<button class="btn quiet tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">▶ Tutte</button>` : ""}</h2>
+    <section class="rec-group pref-group">
+      <h2 class="rec-date"><span class="stella on" aria-hidden="true">${IC("stella")}</span>Preferite <small>${pref.length}</small>${pref.length > 1 ? `<button class="tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">${IC("play")}Tutte</button>` : ""}</h2>
       ${pref.map(r => recRow(r, "pref")).join("")}
     </section>` : "";
   const lista = blocco + gruppi.map(g => `
-    <section class="card rec-group">
-      <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small>${g.items.length > 1 ? `<button class="btn quiet tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">▶ Tutte</button>` : ""}</h2>
+    <section class="rec-group">
+      <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length}</small>${g.items.length > 1 ? `<button class="tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">${IC("play")}Tutte</button>` : ""}</h2>
       ${[...g.items].sort(perOrdineDiProva).map(r => recRow(r, "audio")).join("")}
     </section>`).join("");
   const righe = state.righeUpload || [];
@@ -1435,23 +1495,35 @@ function renderAudio() {
       </select>
       <input class="field up-label" data-row="${i}" data-campo="etichetta" data-keep="up-label-${i}" value="${esc(r.etichetta)}" placeholder="Etichetta" maxlength="60" autocomplete="off" aria-label="Etichetta" ${r.salta ? "disabled" : ""}>
     </div>`).join("");
+  const ACCETTA = `accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac" multiple`;
+  // + in basso a destra: sceglie i file; con i file scelti (o durante il caricamento) le righe stanno in un foglio.
+  // Sul computer resta anche una zona dove trascinare i file di una prova intera.
+  const caricamento = state.fan ? "" : (n || up.active) ? `
+    <form class="foglio upload con-righe" data-form="upload">
+      <div class="foglio-testa"><h2>Carica registrazioni</h2>${up.active ? "" : `<button type="button" class="x" data-action="up-annulla" aria-label="Annulla">${IC("x")}</button>`}</div>
+      <div class="foglio-corpo">
+        ${n ? `
+        <div class="up-testa">
+          <label class="campo" style="margin:0"><span>Data della prova</span><input class="field" type="date" name="data" data-keep="up-date" value="${esc(dataDalleRighe(righe))}"></label>
+          <label class="file-btn">${IC("piu")}<input type="file" ${ACCETTA}><span>Altri file</span></label>
+        </div>
+        <p class="up-hint">Pezzo e data sono ricavati dal nome dei file: controlla e correggi. Le righe senza pezzo si caricano con la loro etichetta.</p>
+        <div class="up-rows">${righeHtml}</div>` : `<p class="up-hint">Non chiudere l'app finché il caricamento non è finito.</p>`}
+      </div>
+      <div class="foglio-barra">
+        <div class="upload-progress${up.active ? "" : " hidden"}" id="up-prog">
+          <div class="bar"><i style="width:${up.pct}%"></i></div><span class="upload-txt">${esc(up.txt)}</span>
+        </div>
+        ${up.active ? "" : `<span class="sp"></span>`}
+        <button class="btn fill" type="submit" ${up.active || !daCaricare ? "disabled" : ""}>${up.active ? "Caricamento…" : daCaricare === 1 ? "Carica 1 file" : `Carica ${daCaricare} file`}</button>
+      </div>
+    </form>` : `
+    <form class="upload upload-zona" data-form="upload">${IC("carica")}<span>Trascina qui i file di una prova, oppure tocca il +.</span></form>
+    <label class="fab" title="Carica registrazioni" aria-label="Carica registrazioni"><input type="file" ${ACCETTA}>${IC("carica")}</label>`;
   $("#view-audio").innerHTML = `
     <div id="diretta-box"></div>
-    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.fan ? " per ora." : ". Carica l'audio delle prove qui sotto."}</p>`}
-    ${state.fan ? "" : `<form class="upload${n ? " con-righe" : ""}" data-form="upload">
-      <h3>+ Carica registrazioni</h3>
-      <div class="upload-grid">
-        <label class="file-btn${n ? "" : " wide"}"><input type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac" multiple><span>${n ? "Scegli altri file…" : "Scegli i file audio…"}</span></label>
-        ${n ? `<input class="field" type="date" name="data" data-keep="up-date" value="${esc(dataDalleRighe(righe))}" aria-label="Data della prova">` : ""}
-        ${n ? `<p class="up-hint wide">Pezzo e data della prova sono ricavati dal nome dei file: controlla e correggi. Le righe senza pezzo si caricano con la loro etichetta.</p>` : `<p class="up-hint wide">Puoi anche trascinare qui i file di una prova intera.</p>`}
-        ${n ? `<div class="up-rows wide">${righeHtml}</div>` : ""}
-        ${n ? `<button class="btn quiet" type="button" data-action="up-annulla">Annulla</button>` : ""}
-        ${n ? `<button class="btn fill" type="submit" ${up.active || !daCaricare ? "disabled" : ""}>${up.active ? "Caricamento…" : daCaricare === 1 ? "Carica 1 file" : `Carica ${daCaricare} file`}</button>` : ""}
-      </div>
-      <div class="upload-progress${up.active ? "" : " hidden"}" id="up-prog">
-        <div class="bar"><i style="width:${up.pct}%"></i></div><span class="upload-txt">${esc(up.txt)}</span>
-      </div>
-    </form>`}`;
+    ${state.registrazioni.length ? lista : `<p class="empty big">Nessuna registrazione${state.fan ? " per ora." : ". Carica l'audio delle prove con il pulsante in basso."}</p>`}
+    ${caricamento}`;
   diretta.render();
 }
 
@@ -1762,12 +1834,12 @@ function renderMini() {
   el.innerHTML = `
     <div class="line mini-line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
     <button class="mini-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro di 10 secondi">${ICO_INDIETRO}</button>
-    <button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">❚❚</button>
+    <button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">${IC("pausa")}</button>
     <button class="mini-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti di 10 secondi">${ICO_AVANTI}</button>
     <button class="mini-txt" data-action="mini-vai" data-id="${r.id}" aria-label="Vai alla registrazione">
       <b>${esc(titolo)}</b><span class="mini-sub"><span class="mini-quando">${esc(sotto)}</span><span class="mini-time" data-time="${r.id}"></span></span>
     </button>
-    <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">■</button>`;
+    <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">${IC("stop")}</button>`;
 }
 function syncPlayer() {
   // a schermo spento non serve ridisegnare: si aggiorna al ritorno
@@ -1778,7 +1850,8 @@ function syncPlayer() {
     const isCur = b.dataset.id === cur;
     b.classList.toggle("on", isCur);
     const p = isCur && playing;
-    b.textContent = p ? "❚❚" : "▶";
+    // l'icona si cambia solo quando cambia lo stato (timeupdate arriva più volte al secondo)
+    if (b.dataset.stato !== (p ? "pausa" : "play")) { b.dataset.stato = p ? "pausa" : "play"; b.innerHTML = IC(p ? "pausa" : "play"); }
     b.setAttribute("aria-label", p ? "Pausa" : "Riproduci");
   });
   document.querySelectorAll("[data-prog]").forEach(i => {
@@ -1998,7 +2071,7 @@ function chiMsg(m) {
 }
 function bottonePiace(m) {
   const n = quantiPiace(m), mio = !!(m.piace || {})[chiavePiace()];
-  return `<button class="piace${mio ? " on" : ""}" data-action="piace" data-id="${m.id}" aria-pressed="${mio}" aria-label="Mi piace${n ? ", " + n : ""}">♥${n ? ` ${n}` : ""}</button>`;
+  return `<button class="piace${mio ? " on" : ""}" data-action="piace" data-id="${m.id}" aria-pressed="${mio}" aria-label="Mi piace${n ? ", " + n : ""}">${IC("cuore")}${n ? n : ""}</button>`;
 }
 function renderBacheca() {
   const view = $("#view-bacheca");
@@ -2008,7 +2081,7 @@ function renderBacheca() {
     return;
   }
   if (state.tab === "bacheca" && state.ready.bacheca) segnaBachecaVista(); else aggiornaPuntoBacheca();
-  const togli = (m, cosa) => state.fan ? "" : `<button class="del-mini" data-action="del-msg" data-id="${m.id}" aria-label="Togli ${cosa}">✕</button>`;
+  const togli = (m, cosa) => state.fan ? "" : `<button class="del-mini" data-action="del-msg" data-id="${m.id}" aria-label="Togli ${cosa}" title="Togli">${IC("x")}</button>`;
   const posts = state.bacheca.filter(m => !m.postId);
   const commentiDi = (id) => state.bacheca.filter(m => m.postId === id).sort((a, b) => msMsg(a) - msMsg(b));
   const lista = posts.map(p => {
@@ -2034,7 +2107,7 @@ function renderBacheca() {
       </article>`;
   }).join("");
   view.innerHTML = `
-    <form class="msg-form card" data-form="bacheca">
+    <form class="msg-form" data-form="bacheca">
       <textarea class="field" name="testo" data-keep="bacheca-testo" maxlength="500" rows="3" placeholder="${state.fan ? "Scrivi un post per la band: un commento, un pezzo da suonare, un'idea per l'app…" : "Scrivi un post…"}" required></textarea>
       <div class="msg-azioni"><span class="msg-come">${state.fan ? `come <b>${esc(state.fanNome || "Fan")}</b>` : state.user ? `come <b>${esc(state.user)}</b>` : ""}</span><button class="btn fill" type="submit">Pubblica</button></div>
     </form>
@@ -2058,38 +2131,49 @@ function renderCassa() {
     const entrata = m.tipo === "versamento";
     const open = state.movOpen === m.id;
     const quando = m.creato?.toDate ? m.creato.toDate().toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : "";
+    // data a colonna: giorno sopra, mese sotto (l'anno solo se non è quello in corso)
+    const g = m.data ? parseIso(m.data) : null;
+    const mese = g ? g.toLocaleDateString("it-IT", { month: "short" }).replace(".", "") + (g.getFullYear() !== annoCorrente ? ` ${String(g.getFullYear()).slice(2)}` : "") : "";
     return `
       <div class="mov" data-action="mov" data-id="${m.id}" role="button" tabindex="0" aria-expanded="${open}">
-        <span class="d">${esc(fmtDdMm(m.data))}</span>
+        <span class="d">${g ? `<b>${g.getDate()}</b>${esc(mese)}` : ""}</span>
         <span><span class="what">${esc(m.descrizione)}</span><span class="w">${esc(m.chi || "")}</span></span>
         <span class="amt${entrata ? " in" : ""}">${entrata ? "+" : "−"} ${NUM.format((m.importoCent || 0) / 100)}</span>
         ${open ? `<div class="mov-detail"><span>Registrato da ${esc(m.registratoDa || "—")}${quando ? ` il ${esc(quando)}` : ""}</span><span class="sp"></span>
-          <button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento">✕</button></div>` : ""}
+          <button class="x" data-action="del-mov" data-id="${m.id}" aria-label="Elimina movimento" title="Elimina">${IC("cestino")}</button></div>` : ""}
       </div>`;
   }).join("");
   const spesa = state.tipoMov === "spesa";
   const chiOpts = state.membri.map(m =>
     `<option value="${esc(m.nome)}"${m.nome === state.user ? " selected" : ""}>${esc(m.nome)}</option>`).join("");
+  // nuovo movimento: + in basso a destra, il modulo in un foglio con «Registra» sotto il pollice
+  const modulo = !state.addOpen.cassa
+    ? `<button class="fab" data-action="add-open" data-where="cassa" aria-label="Nuovo movimento" title="Nuovo movimento">${IC("piu")}</button>`
+    : `
+      <form class="foglio" data-form="mov">
+        <div class="foglio-testa"><h2>Nuovo movimento</h2><button type="button" class="x" data-action="add-chiudi" data-where="cassa" aria-label="Chiudi">${IC("x")}</button></div>
+        <div class="foglio-corpo">
+          <div class="cassa-form">
+            <div class="seg" role="group" aria-label="Tipo di movimento">
+              <button type="button" class="${spesa ? "on" : ""}" data-action="tipo" data-tipo="spesa" aria-pressed="${spesa}">Spesa</button>
+              <button type="button" class="${spesa ? "" : "on"}" data-action="tipo" data-tipo="versamento" aria-pressed="${!spesa}">Versamento</button>
+            </div>
+            <label class="campo wide"><span>Importo</span><input class="field importo" name="importo" data-keep="mov-imp" inputmode="decimal" placeholder="0,00 €" autocomplete="off" required></label>
+            <label class="campo wide"><span>${spesa ? "Cosa è stato comprato" : "Per cosa"}</span><input class="field" name="descrizione" data-keep="mov-desc" placeholder="${spesa ? "es. corde, pelli, cavi" : "es. quota di ottobre"}" maxlength="80" autocomplete="off" required></label>
+            <label class="campo"><span>${spesa ? "Chi ha comprato" : "Chi ha versato"}</span><select class="field" name="chi" data-keep="mov-chi">${chiOpts}</select></label>
+            <label class="campo"><span>Data</span><input class="field" type="date" name="data" data-keep="mov-data" value="${oggi()}"></label>
+          </div>
+        </div>
+        <div class="foglio-barra"><span class="sp"></span><button class="btn fill" type="submit">Registra ${spesa ? "spesa" : "versamento"}</button></div>
+      </form>`;
   $("#view-cassa").innerHTML = `
-    <article class="card">
       <div class="saldo">
         <span class="lbl">In cassa</span>
         <span class="tot">versato <b>${euro(versato)}</b><br>speso <b>${euro(speso)}</b></span>
         <span class="big${saldo < 0 ? " neg" : ""}">${euro(saldo)}</span>
       </div>
-      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento. Registra il primo qui sotto.</div>`}
-      <form class="cassa-form" data-form="mov">
-        <div class="seg" role="group" aria-label="Tipo di movimento">
-          <button type="button" class="${spesa ? "on" : ""}" data-action="tipo" data-tipo="spesa" aria-pressed="${spesa}">Spesa</button>
-          <button type="button" class="${spesa ? "" : "on"}" data-action="tipo" data-tipo="versamento" aria-pressed="${!spesa}">Versamento</button>
-        </div>
-        <input class="field" name="importo" data-keep="mov-imp" inputmode="decimal" placeholder="€ 0,00" autocomplete="off" required aria-label="Importo">
-        <input class="field" type="date" name="data" data-keep="mov-data" value="${oggi()}" aria-label="Data">
-        <input class="field wide" name="descrizione" data-keep="mov-desc" placeholder="${spesa ? "Cosa è stato comprato" : "Per cosa, es. quota di ottobre"}" maxlength="80" autocomplete="off" required aria-label="Descrizione">
-        <select class="field wide" name="chi" data-keep="mov-chi" aria-label="${spesa ? "Chi ha comprato" : "Chi ha versato"}">${chiOpts}</select>
-        <button class="btn fill wide" type="submit">Registra ${spesa ? "spesa" : "versamento"}</button>
-      </form>
-    </article>`;
+      ${movs.length ? rows : `<div class="mov-empty">Nessun movimento. Registra il primo con il +.</div>`}
+      ${modulo}`;
 }
 
 // ---------- nomi nei dati: rinominare e unire ----------
@@ -2186,12 +2270,13 @@ function renderPersonale() {
   const votiHtml = daVotare.map(c => `
     <div class="vrow">
       <span class="t"><b>${esc(c.titolo)}</b><span>${esc(c.artista || "")}</span></span>
-      <button class="vote" data-action="react-up" data-id="${c.id}" aria-label="Mi piace">👍</button>
-      <button class="vote" data-action="react-down" data-id="${c.id}" aria-label="Non mi piace">👎</button>
+      <button class="vote" data-action="react-up" data-id="${c.id}" aria-label="Mi piace">${IC("su")}</button>
+      <button class="vote" data-action="react-down" data-id="${c.id}" aria-label="Non mi piace">${IC("giu")}</button>
     </div>${commentoForm(c)}`).join("");
 
   const stats = [`${aperti.length} ${aperti.length === 1 ? "task aperto" : "task aperti"}`]
-    .concat(mia && daVotare.length ? [`${daVotare.length} ${daVotare.length === 1 ? "proposta" : "proposte"} da votare`] : []).join(", ");
+    .concat(mia && daVotare.length ? [`${daVotare.length} da votare`] : []).join(" · ");
+  state.ctxPersonale = stats;   // riga di contesto nella testata
 
   const orfani = mia ? nomiOrfani() : [];
   const opzioniPersone = state.membri.map(m => `<option value="${esc(m.nome)}">${esc(m.nome)}</option>`).join("");
@@ -2210,7 +2295,7 @@ function renderPersonale() {
 
   const add = state.addOpen.personale
     ? `<form class="inline-form add-person" data-form="add-member" style="padding:6px 0"><input class="field" name="nome" data-keep="add-membro" placeholder="Nome" maxlength="30" autocomplete="off" required><button class="btn fill" type="submit">Aggiungi</button></form>`
-    : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">+</span>Aggiungi una persona</button>`;
+    : `<button class="addline add-person" data-action="add-open" data-where="personale"><span class="plus">${IC("piu")}</span>Aggiungi una persona</button>`;
 
   // l'accesso dei fan si legge dalla funzione solo quando si apre Personale
   if (mia && state.tab === "personale" && !state.accesso && !state.accessoStato) setTimeout(caricaAccesso, 0);
@@ -2225,8 +2310,7 @@ function renderPersonale() {
     </form>
     <p class="rename-hint">Il nome cambia anche in voti, task, spese e registrazioni. La sigla si aggiorna da sola.</p>` : `
     <div class="me-head"><h2>${esc(nome)}</h2>
-      <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">Rinomina</button></div>`}
-    <p class="me-stats">${stats}</p>
+      <button class="btn quiet rename-btn" data-action="rename" data-id="${persona.id}">${IC("matita")}Rinomina</button></div>`}
     <article class="card">
       <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
@@ -2300,6 +2384,9 @@ async function act(btn) {
     case "voters":
       state.votersOpen.has(id) ? state.votersOpen.delete(id) : state.votersOpen.add(id);
       render(); break;
+    case "rec-info":
+      state.recInfo = state.recInfo === `${id}:${btn.dataset.modo}` ? null : `${id}:${btn.dataset.modo}`;
+      render(); break;
     case "pick": {
       const song = btn.dataset.song, nome = btn.dataset.nome;
       const set = state.drafts[song] || (state.drafts[song] = new Set());
@@ -2369,7 +2456,6 @@ async function act(btn) {
       if (!c) return;
       const voto = action === "react-up" ? "up" : "down";
       const gia = (c.reazioni || {})[state.user] === voto;
-      if (!btn.closest("#view-personale")) state.votersOpen.add(id);
       if (gia) {
         // stesso voto di nuovo: si toglie, insieme al commento
         state.commentoVoto = null;
@@ -2566,7 +2652,7 @@ async function act(btn) {
     case "up-annulla": state.pendingFiles = []; state.righeUpload = []; render(); break;
     case "del-rec": {
       const r = state.registrazioni.find(x => x.id === id);
-      if (!r || !confirm("Eliminare questa registrazione?")) return;
+      if (!r || !confirm(`Eliminare questa registrazione?${r.nomeFile ? "\n" + r.nomeFile : ""}`)) return;
       if (state.playId === id) fermaRiproduzione();
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
       await deleteDoc(doc(db, "registrazioni", id)).catch(erroreScrittura);
@@ -2576,9 +2662,12 @@ async function act(btn) {
       const w = btn.dataset.where;
       state.addOpen[w] = true;
       render();
-      document.querySelector(w === "personale" ? '[data-keep="add-membro"]' : `[data-keep="add-${w}-titolo"]`)?.focus();
+      document.querySelector(w === "personale" ? '[data-keep="add-membro"]' : w === "cassa" ? '[data-keep="mov-imp"]' : `[data-keep="add-${w}-titolo"]`)?.focus();
       break;
     }
+    case "add-chiudi":
+      state.addOpen[btn.dataset.where] = false;
+      render(); break;
     case "tipo":
       state.tipoMov = btn.dataset.tipo;
       render(); break;
@@ -2681,6 +2770,8 @@ $("#mini")?.addEventListener("click", e => {
   if (btn && !btn.disabled) act(btn);
 });
 mainEl.addEventListener("keydown", e => {
+  // Esc chiude il foglio aperto
+  if (e.key === "Escape") { const x = e.target.closest?.(".foglio")?.querySelector("[data-action$='-chiudi']"); if (x) act(x); return; }
   if (e.key !== "Enter" && e.key !== " ") return;
   const el = e.target;
   if (el.matches?.('[role="button"][data-action]')) { e.preventDefault(); act(el); }
@@ -2772,11 +2863,14 @@ mainEl.addEventListener("submit", async e => {
     const stato = form.dataset.stato === "proposta" ? "proposta" : "scaletta";
     const where = stato === "proposta" ? "proposte" : "scaletta";
     form.titolo.value = ""; form.artista.value = ""; if (form.nostro) form.nostro.checked = false;
+    // il foglio si chiude subito; se il salvataggio fallisce si riapre con il testo di prima
+    state.addOpen[where] = false;
+    render();
     const maxOrd = state.canzoni.reduce((m, c) => Math.max(m, c.ordine || 0), 0);
     const ref = await scrivi(addDoc(collection(db, "canzoni"), {
       titolo, artista, stato, ordine: maxOrd + 1, spotifyUrl: "", reazioni: {}, nostro,
       propostaDa: stato === "proposta" ? (state.user || "") : "", creato: serverTimestamp()
-    }), () => { rimetti(`add-${where}-titolo`, titolo); rimetti(`add-${where}-artista`, artista); });
+    }), () => { state.addOpen[where] = true; render(); rimetti(`add-${where}-titolo`, titolo); rimetti(`add-${where}-artista`, artista); });
     if (ref) {
       toast(stato === "proposta" ? "Proposta aggiunta." : "Canzone aggiunta.");
       enrichSong({ id: ref.id, titolo, artista, nostro });
@@ -2919,9 +3013,12 @@ mainEl.addEventListener("submit", async e => {
     const tipo = state.tipoMov;
     const importoTesto = form.importo.value;
     form.importo.value = ""; form.descrizione.value = "";
+    // il foglio si chiude subito; se il salvataggio fallisce si riapre con il testo di prima
+    state.addOpen.cassa = false;
+    render();
     const ok = await scrivi(addDoc(collection(db, "movimenti"), {
       tipo, importoCent, data, descrizione, chi, registratoDa: state.user || "", creato: serverTimestamp()
-    }), () => { rimetti("mov-imp", importoTesto); rimetti("mov-desc", descrizione); });
+    }), () => { state.addOpen.cassa = true; render(); rimetti("mov-imp", importoTesto); rimetti("mov-desc", descrizione); });
     if (ok) toast(tipo === "spesa" ? `Spesa registrata: ${euro(importoCent)}.` : `Versamento registrato: ${euro(importoCent)}.`);
   }
 
