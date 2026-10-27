@@ -263,6 +263,16 @@ button.ini.on { border-color: transparent; color: #fff; }
   font-size: 15px; line-height: 1;
 }
 .addform { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 4px 0 8px; }
+.addform .chk-row { grid-column: 1 / -1; }
+/* pezzi nostri: casella quadrata (come nelle notifiche) e etichetta al posto delle icone */
+.chk-row { display: flex; align-items: center; gap: 10px; font: 500 13.5px var(--sans); color: var(--legno); padding: 2px 0; }
+.chk-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+.chk-row input:checked + .nt-box { background: var(--verde); border-color: var(--verde); }
+.chk-row input:checked + .nt-box::after { content: "✓"; }
+.chk-row input:focus-visible + .nt-box { outline: 2px solid var(--ambra); outline-offset: 2px; }
+.link-form .chk-row { display: flex; font: 500 13.5px var(--sans); color: var(--legno); }
+.link-form:has(input[name="nostro"]:checked) .solo-cover { display: none; }
+.nostro-tag { font: 600 11px var(--sans); color: var(--ambra-scuro); background: var(--ambra-chiaro); padding: 3px 7px; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
 .addform .field { min-width: 0; }
 
 /* ---------- proposte ---------- */
@@ -326,8 +336,8 @@ button.ini.on { border-color: transparent; color: #fff; }
 
 /* preferite: stellina sulla riga e blocco in cima ad Audio */
 .stella {
-  background: none; border: none; padding: 2px 3px; margin: -2px 0;
-  font-size: 17px; line-height: 1; color: var(--muted); opacity: .55;
+  background: none; border: none; padding: 4px 8px 4px 0; margin: -4px 0;
+  font-size: 18px; line-height: 1; color: var(--muted); opacity: .5; vertical-align: -2px;
 }
 .stella.on { color: var(--ambra); opacity: 1; }
 .rec-group .rec.pref { box-shadow: inset 4px 0 0 var(--ambra); }
