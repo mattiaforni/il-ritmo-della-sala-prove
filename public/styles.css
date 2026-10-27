@@ -324,6 +324,18 @@ button.ini.on { border-color: transparent; color: #fff; }
 .rec-group .rec:last-child { border-bottom: none; }
 .rec-song { font-size: 11.5px; color: var(--cotto); font-weight: 600; grid-column: 1 / -1; }
 
+/* preferite: stellina sulla riga e blocco in cima ad Audio */
+.stella {
+  background: none; border: none; padding: 2px 3px; margin: -2px 0;
+  font-size: 17px; line-height: 1; color: var(--muted); opacity: .55;
+}
+.stella.on { color: var(--ambra); opacity: 1; }
+.rec-group .rec.pref { box-shadow: inset 4px 0 0 var(--ambra); }
+.pref-group { background: var(--ambra-chiaro); }
+.pref-group .rec-date .stella { font-size: 15px; align-self: center; margin: 0 -2px 0 0; }
+.pref-group .rec.pref { box-shadow: none; border-bottom-color: rgba(138, 95, 18, .18); }
+.pref-group .rec.evidenzia { background: #efdcae; }
+
 .upload { margin-top: 4px; border: 1.5px dashed var(--muted); border-radius: var(--r); padding: 12px 14px; }
 .upload h3 { font: 600 14px var(--sans); color: var(--muted); margin: 0 0 8px; }
 .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

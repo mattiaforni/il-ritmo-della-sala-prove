@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "31";
+const APP_VERSION = "32";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -286,6 +286,21 @@ const perOrdineDiProva = (a, b) => msDi(a.creato) - msDi(b.creato) || String(a.n
 // riproduzione di fila: le registrazioni dello stesso giorno (da Audio) o della stessa canzone (dalla sua pagina)
 const codaGiorno = (data) => state.registrazioni.filter(r => (r.data || "") === (data || "")).sort(perOrdineDiProva).map(r => r.id);
 const codaCanzone = (canzoneId) => recsOf(canzoneId).map(r => r.id);
+// preferite: le registrazioni venute meglio (campo preferita), nell'ordine della scaletta, poi proposte,
+// poi quelle senza canzone; a parità di canzone dalla più recente
+const perData = (a, b) => String(b.data || "").localeCompare(String(a.data || "")) || perOrdineDiProva(b, a);
+function preferite() {
+  const ordine = [...scaletta(), ...proposte()].map(c => c.id);
+  const pos = (r) => { const i = ordine.indexOf(r.canzoneId); return i < 0 ? ordine.length : i; };
+  return state.registrazioni.filter(r => r.preferita).sort((a, b) => pos(a) - pos(b) || perData(a, b));
+}
+const codaPreferite = () => preferite().map(r => r.id);
+// la coda da cui parte una registrazione dipende da dove la si tocca: blocco delle preferite, pagina della canzone o giorno
+function codaDi(btn, id) {
+  const r = state.registrazioni.find(x => x.id === id);
+  if (btn.closest(".pref-group")) return codaPreferite();
+  return r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data);
+}
 const pct = (d, t) => t ? Math.round(d / t * 100) : 0;
 const songQuery = (c) => c.titolo + (c.artista ? " " + c.artista : "");
 
@@ -1358,13 +1373,18 @@ function recRow(r, mode) {
   const label = r.etichetta ? ` <em>· ${esc(r.etichetta)}</em>` : "";
   let name;
   if (mode === "song") name = esc(fmtGiorno(r.data)) + label;
+  else if (mode === "pref") name = (song ? esc(song.titolo) : esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`) + ` <em>· ${esc(fmtGiorno(r.data))}</em>` + (song ? label : "");
   else if (song) name = esc(song.titolo) + label;
   else name = esc(r.etichetta || "Registrazione") + ` <em>· senza canzone</em>`;
   const meta = [r.caricatoDa, fmtMB(r.size)].filter(Boolean).map(esc).join(" · ");
+  // stellina: la band la accende e la spegne; i fan la vedono solo accesa
+  const stella = state.fan
+    ? (r.preferita ? `<span class="stella on" aria-label="Preferita">★</span>` : "")
+    : `<button class="stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${r.preferita ? "★" : "☆"}</button>`;
   return `
-    <div class="rec" data-rec="${r.id}">
+    <div class="rec${r.preferita ? " pref" : ""}" data-rec="${r.id}">
       <span class="rec-name">${name}</span>
-      <span class="rec-meta">${meta}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
+      <span class="rec-meta">${meta}${stella}${state.fan ? "" : `<button class="del-mini" data-action="del-rec" data-id="${r.id}" aria-label="Elimina registrazione">✕</button>`}</span>
       ${mode === "audio" && r.nomeFile ? `<span class="rec-file">${esc(r.nomeFile)}</span>` : ""}
       <div class="player">
         <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">▶</button>
@@ -1379,7 +1399,13 @@ function renderAudio() {
     const g = gruppi.find(x => x.data === r.data);
     g ? g.items.push(r) : gruppi.push({ data: r.data, items: [r] });
   });
-  const lista = gruppi.map(g => `
+  const pref = preferite();
+  const blocco = pref.length ? `
+    <section class="card rec-group pref-group">
+      <h2 class="rec-date"><span class="stella on" aria-hidden="true">★</span> Preferite <small>${pref.length} ${pref.length === 1 ? "registrazione" : "registrazioni"}</small>${pref.length > 1 ? `<button class="btn quiet tutte" data-action="play-preferite" aria-label="Ascolta tutte le preferite di fila">▶ Tutte</button>` : ""}</h2>
+      ${pref.map(r => recRow(r, "pref")).join("")}
+    </section>` : "";
+  const lista = blocco + gruppi.map(g => `
     <section class="card rec-group">
       <h2 class="rec-date">${esc(fmtDataLunga(g.data))} <small>${g.items.length} ${g.items.length === 1 ? "registrazione" : "registrazioni"}</small>${g.items.length > 1 ? `<button class="btn quiet tutte" data-action="play-giorno" data-data="${esc(g.data || "")}" aria-label="Ascolta tutte le registrazioni di questo giorno, di fila">▶ Tutte</button>` : ""}</h2>
       ${[...g.items].sort(perOrdineDiProva).map(r => recRow(r, "audio")).join("")}
@@ -2039,7 +2065,7 @@ async function aggiungiParte(songId, key) {
 // azioni che scrivono nel database: ai fan non arrivano (e il database le rifiuterebbe comunque)
 const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
-  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "add-open",
+  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "add-open",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg"
 ]);
@@ -2191,13 +2217,26 @@ async function act(btn) {
     }
     case "play": {
       if (state.playId === id || btn.closest("#mini")) { playToggle(id); break; }
-      const r = state.registrazioni.find(x => x.id === id);
-      playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
+      playToggle(id, codaDi(btn, id));
       break;
     }
     case "play-giorno": {
       const coda = codaGiorno(btn.dataset.data);
       if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      break;
+    }
+    case "play-preferite": {
+      const coda = codaPreferite();
+      if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      break;
+    }
+    case "pref": {
+      const r = state.registrazioni.find(x => x.id === id);
+      if (!r) return;
+      const on = !r.preferita;
+      await updateDoc(doc(db, "registrazioni", id), on
+        ? { preferita: true, preferitaDa: state.user || "", preferitaIl: serverTimestamp() }
+        : { preferita: false, preferitaDa: deleteField(), preferitaIl: deleteField() }).catch(erroreScrittura);
       break;
     }
     case "mini-stop": fermaRiproduzione(); break;
@@ -2295,11 +2334,7 @@ async function act(btn) {
       break;
     }
     case "seek": {
-      if (state.playId !== id) {
-        const r = state.registrazioni.find(x => x.id === id);
-        playToggle(id, r && btn.closest(".pagina") && r.canzoneId ? codaCanzone(r.canzoneId) : codaGiorno(r && r.data));
-        break;
-      }
+      if (state.playId !== id) { playToggle(id, codaDi(btn, id)); break; }
       if (isFinite(player.duration)) {
         const r = btn.getBoundingClientRect();
         player.currentTime = Math.max(0, Math.min(1, (window.__lastX - r.left) / r.width)) * player.duration;

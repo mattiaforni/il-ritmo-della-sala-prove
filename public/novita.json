@@ -2,6 +2,14 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "32", "data": "2026-10-27", "titolo": "Registrazioni preferite",
+      "punti": [
+        "Accanto a ogni registrazione c'è una stellina: toccala per segnare la take venuta meglio di un pezzo.",
+        "In cima ad Audio compare il blocco «Preferite» con tutte le registrazioni stellate, nell'ordine della scaletta, con «▶ Tutte» per ascoltarle di fila (anche in macchina).",
+        "La stellina è condivisa: la accende e la toglie chiunque della band; i fan la vedono soltanto."
+      ]
+    },
+    {
       "versione": "31", "data": "2026-10-22", "titolo": "Sicurezza",
       "punti": [
         "La ricerca automatica dei link Spotify risponde solo all'app della band: prima chiunque conoscesse l'indirizzo poteva usarla. Per voi non cambia niente."
