@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "36",
+      "data": "2026-10-27",
+      "titolo": "Un aspetto nuovo, più pulito",
+      "punti": [
+        "Stesse funzioni, grafica rifatta: caratteri più leggeri, righe al posto dei riquadri, in alto il nome della sezione con un riassunto (pezzi, proposte da votare, soldi in cassa).",
+        "Per aggiungere una canzone, una proposta, una spesa o delle registrazioni c'è il + in basso a destra: si apre un foglio con il pulsante per confermare sotto il pollice.",
+        "Proposte: si vota dalla riga, toccandola si vedono ascolto, voti e commenti. Registrazioni: stellina più grande a destra; nome del file ed Elimina toccando il titolo."
+      ]
+    },
+    {
       "versione": "35",
       "data": "2026-10-27",
       "titolo": "Registrazioni di fila più affidabili",

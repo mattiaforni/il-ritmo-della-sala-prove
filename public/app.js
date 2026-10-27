@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "35";
+const APP_VERSION = "36";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -592,7 +592,6 @@ function renderFan() {
         <h3 class="fan-h">Notifiche${state.push ? " <small>attive</small>" : ""}</h3>
         ${notificheCorpo()}
       </section>
-      <section class="fan-sez"><h3 class="fan-h">Aspetto</h3>${temaHtml()}</section>
       <div class="fan-fondo"><button class="btn quiet" data-action="fan-cambia">Cambia nome</button><button class="btn quiet" data-action="esci">Esci</button></div>`;
   }
   $("#fan-card").innerHTML = html;
@@ -945,21 +944,6 @@ $("#user-chip").addEventListener("click", () => {
   state.userId = null;
   ensureUser();
 });
-
-// ---------- tema: segue il telefono, oppure giorno o notte scelti a mano (solo su questo telefono) ----------
-const META_TEMA = [...document.querySelectorAll('meta[name="theme-color"]')].map(m => [m, m.content]);
-function applicaTema(t) {
-  const forzato = t === "giorno" || t === "notte";
-  if (forzato) document.documentElement.dataset.tema = t; else delete document.documentElement.dataset.tema;
-  // la barra del telefono prende il colore della testata del tema in uso
-  META_TEMA.forEach(([m, orig]) => { m.content = forzato ? (t === "notte" ? "#1B1714" : "#ECE7DF") : orig; });
-}
-applicaTema(store.get("prove_tema"));
-function temaHtml() {
-  const t = store.get("prove_tema") || "auto";
-  const b = (k, nome) => `<button type="button" data-action="tema" data-tema="${k}" aria-pressed="${t === k}">${nome}</button>`;
-  return `<div class="tema" role="group" aria-label="Aspetto">${b("auto", "Come il telefono")}${b("giorno", "Giorno")}${b("notte", "Notte")}</div>`;
-}
 
 // ---------- testata: nome della sezione e una riga di contesto ----------
 const TITOLI = { scaletta: "Scaletta", proposte: "Proposte", audio: "Audio", bacheca: "Bacheca", cassa: "Cassa", personale: "Personale" };
@@ -2336,7 +2320,6 @@ function renderPersonale() {
     ${mia ? accessoCard() : ""}
     ${mia ? spotifyCard() : ""}
     ${add}
-    <h3 class="fascia">Aspetto</h3>${temaHtml()}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · <button class="app-ver-btn" data-action="copia-diag">Copia diagnostica</button></p>`;
 }
 
@@ -2681,12 +2664,6 @@ async function act(btn) {
       render();
       document.querySelector(w === "personale" ? '[data-keep="add-membro"]' : w === "cassa" ? '[data-keep="mov-imp"]' : `[data-keep="add-${w}-titolo"]`)?.focus();
       break;
-    }
-    case "tema": {
-      const t = btn.dataset.tema;
-      if (t === "auto") store.del("prove_tema"); else store.set("prove_tema", t);
-      applicaTema(t);
-      render(); break;
     }
     case "add-chiudi":
       state.addOpen[btn.dataset.where] = false;

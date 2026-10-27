@@ -11,9 +11,7 @@
    Colori dalla sala: calce dei muri (fondo), legno delle travi
    (inchiostro), cotto del pavimento (accento), ambra della lampada
    (da votare, preferite, fan), verde per ciò che è pronto, rosso per
-   la diretta e i voti contrari. Di notte il fondo diventa il legno
-   scuro e i colori si schiariscono uno per uno.
-   Il tema segue il telefono; data-tema="giorno"/"notte" su <html> lo forza.
+   la diretta e i voti contrari. Solo tema chiaro (scelta di Mattia).
    ========================================================== */
 :root {
   --carta: #F4F1EC;
@@ -46,33 +44,6 @@
   --mini: 0px;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-tema="giorno"]) {
-    --carta: #151210; --testata: #1B1714; --foglio: #1F1B18; --foglio-2: #29231F;
-    --inchiostro: #EEE8E0; --inchiostro-2: #AFA498; --inchiostro-3: #877C71;
-    --linea: #322B26; --linea-forte: #4A413A;
-    --accento: #E1835A; --accento-tinta: #3B241A; --su-accento: #1A110C;
-    --ambra: #E3AE4C; --ambra-pieno: #E3AE4C; --ambra-tinta: #382B15;
-    --verde: #7DB685; --verde-tinta: #1E3122;
-    --rosso: #E36D5E; --rosso-tinta: #3D1F1A;
-    --ombra: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -18px rgba(0, 0, 0, .8);
-    --velo: rgba(0, 0, 0, .55);
-    color-scheme: dark;
-  }
-}
-:root[data-tema="notte"] {
-  --carta: #151210; --testata: #1B1714; --foglio: #1F1B18; --foglio-2: #29231F;
-  --inchiostro: #EEE8E0; --inchiostro-2: #AFA498; --inchiostro-3: #877C71;
-  --linea: #322B26; --linea-forte: #4A413A;
-  --accento: #E1835A; --accento-tinta: #3B241A; --su-accento: #1A110C;
-  --ambra: #E3AE4C; --ambra-pieno: #E3AE4C; --ambra-tinta: #382B15;
-  --verde: #7DB685; --verde-tinta: #1E3122;
-  --rosso: #E36D5E; --rosso-tinta: #3D1F1A;
-  --ombra: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -18px rgba(0, 0, 0, .8);
-  --velo: rgba(0, 0, 0, .55);
-  color-scheme: dark;
-}
-
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -774,9 +745,6 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .inline-form .field { flex: 1; min-width: 0; }
 .app-ver { font-size: 12px; color: var(--inchiostro-3); text-align: center; margin: 28px 0 0; }
 .app-ver-btn { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.tema { display: inline-flex; border: 1px solid var(--linea-forte); border-radius: var(--r); overflow: hidden; margin-top: 10px; }
-.tema button { background: none; border: none; padding: 7px 12px; font: 500 13px var(--ui); color: var(--inchiostro-2); }
-.tema button[aria-pressed="true"] { background: var(--inchiostro); color: var(--carta); }
 
 /* "card" resta come contenitore di una sezione, senza riquadro */
 .card { margin: 0; }
