@@ -413,12 +413,14 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
     const m = ms(t);
     return m ? new Date(m).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
   }
+  // una riga con l'icona, il titolo e lo stato; sotto, quando servono, i comandi
+  const ICO = `<svg class="i" aria-hidden="true"><use href="#i-diretta"/></svg>`;
+  const riga = (titolo, testo) => `<div class="dir-riga">${ICO}<div class="dir-testo"><b>${titolo}</b><p class="dir-txt">${testo}</p></div></div>`;
   function htmlScheda() {
-    if (!supportata) return `<article class="card dircard"><h3 class="sec-title">Diretta dalla sala</h3><p class="dir-txt">Questo browser non supporta la diretta.</p></article>`;
+    if (!supportata) return `<article class="dircard">${riga("Diretta dalla sala", "Questo browser non supporta la diretta.")}</article>`;
     if (!d.ready) return "";
     if (d.negata) {
-      return `<article class="card dircard"><h3 class="sec-title">Diretta dalla sala</h3>
-        <p class="dir-txt">Il database non accetta ancora la diretta: va aggiornata una volta la regola di Firestore (istruzioni nel README del progetto).</p></article>`;
+      return `<article class="dircard">${riga("Diretta dalla sala", "Il database non accetta ancora la diretta: va aggiornata una volta la regola di Firestore (istruzioni nel README del progetto).")}</article>`;
     }
     const s = inOnda();
 
@@ -428,13 +430,13 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
       const opzioni = d.ingressi.map((x, i) =>
         `<option value="${esc(x.deviceId)}"${x.deviceId === d.ingresso ? " selected" : ""}>${esc(x.label || `Ingresso ${i + 1}`)}</option>`).join("");
       return `
-      <article class="card dircard live">
-        <h3 class="sec-title"><span class="onair">In onda</span> Diretta dalla sala <small>dalle ${esc(quando(statoDoc()?.inizio))}</small></h3>
+      <article class="dircard live">
+        ${riga(`Diretta dalla sala <span class="onair">In onda</span>`, `dalle ${esc(quando(statoDoc()?.inizio))}`)}
         <div class="dir-meter" aria-hidden="true"><i id="dir-meter"></i></div>
         <label class="dir-lbl">Ingresso
           <select class="field" data-change="dir-ingresso" aria-label="Ingresso audio da trasmettere">${opzioni || `<option>Ingresso predefinito</option>`}</select></label>
         <p class="dir-txt">${collegati.length
-          ? `In ascolto: ${collegati.map(x => x.chi ? iniTag(x.chi) : `<span class="ini none">?</span>`).join("")}`
+          ? `In ascolto ${collegati.map(x => x.chi ? iniTag(x.chi) : `<span class="ini none">?</span>`).join("")}`
           : n.length ? "Un telefono si sta collegando…" : "Nessuno in ascolto per ora."}</p>
         <p class="dir-txt small">Tieni aperta questa pagina finché suonate: GarageBand registra normalmente dallo stesso ingresso.</p>
         <div class="dir-actions"><button class="btn fill" data-action="dir-ferma">Ferma la diretta</button></div>
@@ -461,9 +463,8 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
         bottoni = `<button class="btn fill" data-action="dir-ascolta">Riprova</button><button class="btn quiet" data-action="dir-smetti">Chiudi</button>`;
       }
       return `
-      <article class="card dircard live">
-        <h3 class="sec-title"><span class="onair">In onda</span> Diretta dalla sala</h3>
-        <p class="dir-txt">${corpo}</p>
+      <article class="dircard live">
+        ${riga(`Diretta dalla sala <span class="onair">In onda</span>`, corpo)}
         ${isIOS ? `<p class="dir-txt small">Su iPhone l'audio si ferma se si blocca lo schermo o si cambia app.</p>` : ""}
         <div class="dir-actions">${bottoni}</div>
       </article>`;
@@ -471,12 +472,11 @@ export function creaDiretta({ db, toast, utente, esc, iniTag, isMobile, isIOS, a
 
     // dal telefono, o con l'accesso dei fan, la diretta si ascolta soltanto
     if (isMobile || !puoTrasmettere()) {
-      return `<article class="card dircard spenta"><p class="dir-txt">Diretta dalla sala: <b>spenta</b>. Si avvia dal computer della sala.</p></article>`;
+      return `<article class="dircard spenta">${riga("Diretta dalla sala", "Spenta. Si avvia dal computer della sala.")}</article>`;
     }
     return `
-      <article class="card dircard">
-        <h3 class="sec-title">Diretta dalla sala</h3>
-        <p class="dir-txt">Manda ai telefoni quello che entra dal mixer, mentre GarageBand registra. Chi è di sotto ascolta dalla sezione Audio dell'app.</p>
+      <article class="dircard">
+        ${riga("Diretta dalla sala", "Manda ai telefoni quello che entra dal mixer, mentre GarageBand registra. Chi è di sotto ascolta dalla sezione Audio dell'app.")}
         <div class="dir-actions"><button class="btn fill" data-action="dir-avvia" ${d.avvio ? "disabled" : ""}>${d.avvio ? "Avvio…" : "Avvia la diretta"}</button></div>
       </article>`;
   }
