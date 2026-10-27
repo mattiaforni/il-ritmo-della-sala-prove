@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "35",
+      "data": "2026-10-27",
+      "titolo": "Registrazioni di fila più affidabili",
+      "punti": [
+        "Corretto un difetto per cui, dopo un inciampo della rete, un brano ripartiva da metà o veniva saltato del tutto.",
+        "Se la riproduzione si ferma senza motivo (rete sparita, telefono che la blocca a schermo spento) l'app prova a ripartire da sola.",
+        "In fondo a Personale c'è «Copia diagnostica»: se la riproduzione fa ancora i capricci, copia e incolla il testo nel gruppo."
+      ]
+    },
+    {
       "versione": "34",
       "data": "2026-10-27",
       "titolo": "Un pezzo torna fra le proposte",
