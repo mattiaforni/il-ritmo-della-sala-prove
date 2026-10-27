@@ -2,7 +2,19 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
-      "versione": "32", "data": "2026-10-27", "titolo": "Registrazioni preferite e pezzi nostri",
+      "versione": "33",
+      "data": "2026-10-27",
+      "titolo": "Le registrazioni di una prova si caricano tutte insieme",
+      "punti": [
+        "In Audio si scelgono (o si trascinano dal computer) tutti i file di una prova in una volta: compare una riga per file, nell'ordine in cui sono stati esportati.",
+        "L'app ricava da sola il pezzo e il giorno della prova dal nome del file; le righe che non riconosce si caricano con il nome come etichetta, e con la casella si possono escludere.",
+        "Un solo tasto «Carica», con la barra che dice a che punto è."
+      ]
+    },
+    {
+      "versione": "32",
+      "data": "2026-10-27",
+      "titolo": "Registrazioni preferite e pezzi nostri",
       "punti": [
         "Accanto a ogni registrazione c'è una stellina: toccala per segnare la take venuta meglio di un pezzo (una sola per pezzo: la nuova sostituisce la vecchia).",
         "In cima ad Audio compare il blocco «Preferite» con tutte le registrazioni stellate, nell'ordine della scaletta, con «▶ Tutte» per ascoltarle di fila (anche in macchina).",
@@ -11,13 +23,17 @@
       ]
     },
     {
-      "versione": "31", "data": "2026-10-22", "titolo": "Sicurezza",
+      "versione": "31",
+      "data": "2026-10-22",
+      "titolo": "Sicurezza",
       "punti": [
         "La ricerca automatica dei link Spotify risponde solo all'app della band: prima chiunque conoscesse l'indirizzo poteva usarla. Per voi non cambia niente."
       ]
     },
     {
-      "versione": "30", "data": "2026-10-21", "titolo": "Registrazioni di fila più solide",
+      "versione": "30",
+      "data": "2026-10-21",
+      "titolo": "Registrazioni di fila più solide",
       "punti": [
         "La registrazione successiva si carica in anticipo, due minuti prima della fine: il passaggio è quasi immediato e non dipende dalla rete.",
         "Con l'autoradio in Bluetooth il cambio di brano non si ferma più: la pausa che l'autoradio manda in quel momento viene ignorata. Le pause date da voi funzionano come prima.",
@@ -25,7 +41,9 @@
       ]
     },
     {
-      "versione": "29", "data": "2026-10-19", "titolo": "Fan e Bacheca",
+      "versione": "29",
+      "data": "2026-10-19",
+      "titolo": "Fan e Bacheca",
       "punti": [
         "Nuova sezione Bacheca: i fan scrivono alla band, voi rispondete e potete togliere i messaggi. I messaggi dei fan arrivano anche nel gruppo Telegram; un pallino sulla sezione segnala quelli nuovi.",
         "I fan entrano con il loro nome e una password da fan, oppure dal link d'invito (basta il nome). Vedono Scaletta, Proposte con i voti, Audio con la diretta e Bacheca; il nome resta sul telefono. Toccandolo in alto: notifiche, cambia nome, esci.",
@@ -34,7 +52,9 @@
       ]
     },
     {
-      "versione": "28", "data": "2026-10-14", "titolo": "Registrazioni di fila",
+      "versione": "28",
+      "data": "2026-10-14",
+      "titolo": "Registrazioni di fila",
       "punti": [
         "Finita una registrazione parte la successiva dello stesso giorno, nell'ordine della prova; dalla pagina di una canzone, la successiva di quella canzone.",
         "In Audio ogni giorno ha «▶ Tutte» per ascoltarle tutte dall'inizio; la barra in basso dice a che punto sei (es. «2 di 7»).",
@@ -42,21 +62,27 @@
       ]
     },
     {
-      "versione": "27", "data": "2026-10-12", "titolo": "Diretta a schermo bloccato (prova)",
+      "versione": "27",
+      "data": "2026-10-12",
+      "titolo": "Diretta a schermo bloccato (prova)",
       "punti": [
         "Ascoltando la diretta il telefono la vede come una riproduzione in corso, con titolo e comando di stop sullo schermo bloccato: così su Android l'audio dovrebbe continuare anche bloccando lo schermo.",
         "Se mentre ascolti la diretta stava andando una registrazione, si ferma da sola."
       ]
     },
     {
-      "versione": null, "data": "2026-10-11", "titolo": "Riepiloghi del bot più leggibili",
+      "versione": null,
+      "data": "2026-10-11",
+      "titolo": "Riepiloghi del bot più leggibili",
       "punti": [
         "Nelle novità i voti sono solo i totali (👍 e 👎) delle proposte votate, senza nomi né commenti, in ordine di classifica.",
         "In /proposte i commenti compaiono in un riquadro sotto la canzone, senza nomi; le proposte senza voti sono raccolte in fondo."
       ]
     },
     {
-      "versione": "26", "data": "2026-10-11", "titolo": "Notifiche sul telefono",
+      "versione": "26",
+      "data": "2026-10-11",
+      "titolo": "Notifiche sul telefono",
       "punti": [
         "Nella pagina Personale c'è «Attiva notifiche»: avvisi anche ad app chiusa per proposte nuove, task assegnate a te, registrazioni, diretta e passaggi in scaletta. Ognuno sceglie quali tenere.",
         "Su iPhone funzionano solo con l'app aggiunta alla schermata Home (Safari → Condividi → Aggiungi alla schermata Home).",
@@ -64,7 +90,9 @@
       ]
     },
     {
-      "versione": "25", "data": "2026-10-11", "titolo": "Barra della riproduzione",
+      "versione": "25",
+      "data": "2026-10-11",
+      "titolo": "Barra della riproduzione",
       "punti": [
         "Quando ascolti una registrazione compare una barra sopra le sezioni, come su Spotify: resta visibile anche cambiando sezione.",
         "Dalla barra: pausa, indietro e avanti di 10 secondi, stop (la barra si chiude); toccando il titolo vai alla registrazione.",
@@ -72,7 +100,9 @@
       ]
     },
     {
-      "versione": "24", "data": "2026-10-11", "titolo": "Proposte in classifica",
+      "versione": "24",
+      "data": "2026-10-11",
+      "titolo": "Proposte in classifica",
       "punti": [
         "Le proposte sono in ordine di 👍; a parità, prima quella con meno 👎.",
         "In alto, evidenziate, quelle che non hai ancora votato: appena voti vanno al loro posto e un avviso dice in che posizione sono finite.",
@@ -80,7 +110,9 @@
       ]
     },
     {
-      "versione": "23", "data": "2026-10-10", "titolo": "Pagina della canzone e parti libere",
+      "versione": "23",
+      "data": "2026-10-10",
+      "titolo": "Pagina della canzone e parti libere",
       "punti": [
         "Toccando una canzone in Scaletta si apre la sua pagina: task, setup, registrazioni e Modifica. Si torna indietro con la freccia o con il tasto indietro del telefono.",
         "Il setup ha le parti che servono a quel pezzo: «Aggiungi parte» propone quelle comuni, quelle già usate in altre canzoni o un nome nuovo (es. Banjo, Cori); la ✕ toglie una parte.",
@@ -88,13 +120,17 @@
       ]
     },
     {
-      "versione": "22", "data": "2026-10-09", "titolo": "Voti più leggibili",
+      "versione": "22",
+      "data": "2026-10-09",
+      "titolo": "Voti più leggibili",
       "punti": [
         "Toccando una proposta, il pollice è sempre all'inizio della riga, anche accanto ai commenti."
       ]
     },
     {
-      "versione": "21", "data": "2026-10-09", "titolo": "Commenti ai voti",
+      "versione": "21",
+      "data": "2026-10-09",
+      "titolo": "Commenti ai voti",
       "punti": [
         "Votando 👎 si scrive in una riga il perché (obbligatorio); con 👍 il commento è facoltativo.",
         "I commenti si leggono toccando la proposta, accanto a chi ha votato.",
@@ -102,7 +138,9 @@
       ]
     },
     {
-      "versione": "20", "data": "2026-10-09", "titolo": "Correggere titolo e artista",
+      "versione": "20",
+      "data": "2026-10-09",
+      "titolo": "Correggere titolo e artista",
       "punti": [
         "Con «Modifica» (in scaletta) o la matita (nelle proposte) si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo.",
         "«Cerca di nuovo» rifà la ricerca se il brano trovato è sbagliato.",
@@ -110,52 +148,68 @@
       ]
     },
     {
-      "versione": "18", "data": "2026-10-08", "titolo": "Task spuntati uno per uno",
+      "versione": "18",
+      "data": "2026-10-08",
+      "titolo": "Task spuntati uno per uno",
       "punti": [
         "Nei task assegnati a più persone ognuno spunta la sua parte: sigla colorata = deve ancora farlo, grigia e barrata = fatto.",
         "Il task è fatto quando l'hanno fatto tutti."
       ]
     },
     {
-      "versione": null, "data": "2026-10-08", "titolo": "Bot Telegram",
+      "versione": null,
+      "data": "2026-10-08",
+      "titolo": "Bot Telegram",
       "punti": [
         "Nel gruppo della band arrivano i riepiloghi di cosa si muove nell'app; con i comandi si vedono scaletta, proposte, task e cassa."
       ]
     },
     {
-      "versione": "17", "data": "2026-10-07", "titolo": "Diretta dalla sala",
+      "versione": "17",
+      "data": "2026-10-07",
+      "titolo": "Diretta dalla sala",
       "punti": [
         "Dal computer della sala si trasmette l'audio del mixer; dai telefoni si ascolta in diretta, dalla scheda in cima ad Audio."
       ]
     },
     {
-      "versione": "16", "data": "2026-10-05", "titolo": "Tablature",
+      "versione": "16",
+      "data": "2026-10-05",
+      "titolo": "Tablature",
       "punti": [
         "Il link a Songsterr si incolla a mano e apre l'app sulla canzone; senza link l'icona apre la ricerca su Songsterr."
       ]
     },
     {
-      "versione": "14", "data": "2026-10-05", "titolo": "Brani dentro la playlist",
+      "versione": "14",
+      "data": "2026-10-05",
+      "titolo": "Brani dentro la playlist",
       "punti": [
         "Toccando l'icona Spotify di una canzone il brano parte dentro la playlist della scaletta (o delle proposte) e poi continua con i successivi."
       ]
     },
     {
-      "versione": "13", "data": "2026-10-04", "titolo": "Playlist Spotify",
+      "versione": "13",
+      "data": "2026-10-04",
+      "titolo": "Playlist Spotify",
       "punti": [
         "Due playlist pubbliche, Scaletta e Proposte, che si aggiornano da sole quando cambia qualcosa nell'app.",
         "Icona ufficiale di Spotify."
       ]
     },
     {
-      "versione": "12", "data": "2026-10-04", "titolo": "Rinomina",
+      "versione": "12",
+      "data": "2026-10-04",
+      "titolo": "Rinomina",
       "punti": [
         "Si può cambiare il nome di una persona: voti, task e spese la seguono.",
         "«Nomi da sistemare» unisce un vecchio nome alla persona giusta."
       ]
     },
     {
-      "versione": "9–11", "data": "2026-10-04", "titolo": "Più affidabile",
+      "versione": "9–11",
+      "data": "2026-10-04",
+      "titolo": "Più affidabile",
       "punti": [
         "Salvataggi più sicuri su iPhone, con un messaggio se qualcosa non va.",
         "Su Android viene sempre chiesta la password della band.",
@@ -163,7 +217,9 @@
       ]
     },
     {
-      "versione": "1–8", "data": "2026-10-02", "titolo": "Le basi",
+      "versione": "1–8",
+      "data": "2026-10-02",
+      "titolo": "Le basi",
       "punti": [
         "Scaletta con task e setup per strumento, proposte con voti, registrazioni, cassa e pagina personale."
       ]
