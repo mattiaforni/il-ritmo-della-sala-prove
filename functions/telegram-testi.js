@@ -142,8 +142,8 @@ function contesto(dati) {
   const membri = [...(dati.membri || [])].sort((a, b) => (a.creato || 0) - (b.creato || 0));
   const nomi = membri.map(m => m.nome).filter(Boolean);
   const nomeCanzone = (id) => (id === GENERALE_ID ? "Generale" : (perId.get(id) || {}).titolo || "");
-  // come nell'app: si contano solo i task di canzoni che esistono ancora
-  const tasks = (dati.tasks || []).filter(t => perId.has(t.canzoneId));
+  // come nell'app: si contano solo i task di canzoni che esistono ancora e non sono tornate fra le proposte
+  const tasks = (dati.tasks || []).filter(t => perId.has(t.canzoneId) && perId.get(t.canzoneId).stato !== "proposta");
   const chiTask = (ass) => {
     const a = (ass || []).filter(Boolean);
     if (nomi.length > 1 && nomi.every(n => a.includes(n))) return "tutti";

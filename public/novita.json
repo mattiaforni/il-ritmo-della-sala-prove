@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "34",
+      "data": "2026-10-27",
+      "titolo": "Un pezzo torna fra le proposte",
+      "punti": [
+        "In fondo alla pagina di una canzone c'è «↩ Proposte»: rimette fra le proposte un pezzo finito in scaletta per sbaglio.",
+        "Voti e commenti restano; task e setup restano da parte e ricompaiono se il pezzo torna in scaletta.",
+        "La playlist Spotify si aggiorna da sola; nessuna notifica, è solo una correzione."
+      ]
+    },
+    {
       "versione": "33",
       "data": "2026-10-27",
       "titolo": "Le registrazioni di una prova si caricano tutte insieme",
