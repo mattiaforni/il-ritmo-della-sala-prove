@@ -1908,14 +1908,8 @@ function renderMini() {
 // Si apre toccando la barra in basso o facendo partire una registrazione dalla sua riga (o con «Tutte»).
 // Si chiude con la freccia in alto a sinistra, con il gesto o il tasto indietro del telefono (una voce
 // nella cronologia, come la pagina della canzone) o trascinandolo verso il basso.
-// Non avendo copertine, ogni pezzo ha la sua: un quadrato del colore del pezzo con il pentagramma e il titolo.
+// Copertina: il piccione dell'icona, stilizzato a linee, con data e titolo.
 const lettoreEl = $("#lettore");
-function coloreCopertina(r) {
-  if (!r.canzoneId) return "#6F6358";
-  let h = 0;
-  for (const ch of r.canzoneId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
 // da dove parte la coda, per la riga in alto del lettore
 function fonteDi(btn, id) {
   const r = state.registrazioni.find(x => x.id === id);
@@ -1944,8 +1938,6 @@ function renderLettore() {
     dopo.map(x => x.id + ":" + (x.durata || 0)).join(",")].join("|");
   if (lettoreEl.dataset.chiave === chiave) return;
   lettoreEl.dataset.chiave = chiave;
-  const col = coloreCopertina(r);
-  const suCol = LIGHT_BG.has(col) ? "#231B15" : "#FFFFFF";
   const sotto = [song && r.etichetta ? r.etichetta : (song ? "" : "senza canzone"), fmtGiorno(r.data)].filter(Boolean).join(" · ");
   const stella = state.fan
     ? (r.preferita ? `<span class="stella on lt-stella" aria-label="Preferita">${IC("stella")}</span>` : "")
@@ -1959,9 +1951,9 @@ function renderLettore() {
       <button class="lt-icona lt-ferma" data-action="mini-stop" aria-label="Ferma e chiudi">${IC("stop")}</button>
     </div>
     <div class="lt-corpo">
-      <div class="lt-copertina" style="--cop:${col};--su-cop:${suCol}">
+      <div class="lt-copertina">
+        <svg class="cop-piccione" aria-hidden="true"><use href="#piccione"/></svg>
         <span class="cop-testa"><span>${esc(fmtGiorno(r.data) || "")}</span><span>${esc(pos)}</span></span>
-        <span class="cop-righe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
         <span class="cop-titolo">${esc(info.titolo)}</span>
       </div>
       <div class="lt-info">
@@ -1984,10 +1976,10 @@ function renderLettore() {
     </div>
     ${dopo.length ? `<section class="lt-coda">
       <h3 class="fascia">Dopo <small>${dopo.length}</small></h3>
-      ${dopo.map(x => {
+      ${dopo.map((x, k) => {
         const ix = infoRegistrazione(x);
         return `<button class="lt-riga" data-action="lt-coda" data-id="${x.id}">
-          <span class="lt-riga-c" style="background:${coloreCopertina(x)}"></span>
+          <span class="lt-riga-n">${i + k + 2}</span>
           <span class="lt-riga-t"><b>${esc(ix.titolo)}</b><small>${esc(ix.sotto)}</small></span>
           <span class="time">${fmtTime(x.durata)}</span>
         </button>`;
