@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "38";
+const APP_VERSION = "39";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -175,6 +175,10 @@ const state = {
   push: null,                 // { endpoint, membroId, eventi } se le notifiche sono attive su questo telefono
   pushOcc: false,
   vaiCanzone: null,           // canzone da aprire appena arrivano i dati (tocco su una notifica)
+  lettore: false,             // lettore a schermo intero aperto
+  codaFonte: "",              // da dove viene la coda in ascolto ("Prova del 26 ottobre", "Preferite", il pezzo)
+  dopoLettore: null,          // cosa fare appena il lettore si è chiuso (aprire la canzone, andare in Audio)
+  ltTrascina: false,          // si sta trascinando la linea del lettore
   commentaPost: null,         // bacheca: post con il campo del commento aperto
   recInfo: null,              // registrazione con i dettagli aperti (file, chi l'ha caricata, Elimina)
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
@@ -1147,8 +1151,12 @@ function chiudiCanzone() {
   render();
   window.scrollTo({ top: state.listScroll });
 }
-// tasto indietro del telefono (o freccia nella pagina): si torna alla lista
-window.addEventListener("popstate", () => { if (state.songPage) chiudiCanzone(); });
+// tasto indietro del telefono (o freccia nella pagina): si chiude il lettore a schermo intero se è aperto,
+// altrimenti si torna dalla pagina della canzone alla lista
+window.addEventListener("popstate", () => {
+  if (state.lettore) { chiudiLettore(true); return; }
+  if (state.songPage) chiudiCanzone();
+});
 
 function songPage(c) {
   const gen = isGenerale(c);
@@ -1676,6 +1684,7 @@ function fermaRiproduzione() {
   riproduzione.posUrl = null;
   state.playId = null;
   state.coda = null;
+  if (state.lettore) chiudiLettore();
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = null;
     try { navigator.mediaSession.playbackState = "none"; } catch (e) { /* niente */ }
@@ -1890,15 +1899,203 @@ function renderMini() {
     <button class="mini-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro di 10 secondi">${ICO_INDIETRO}</button>
     <button class="play on mini-play" data-action="play" data-id="${r.id}" aria-label="Pausa">${IC("pausa")}</button>
     <button class="mini-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti di 10 secondi">${ICO_AVANTI}</button>
-    <button class="mini-txt" data-action="mini-vai" data-id="${r.id}" aria-label="Vai alla registrazione">
+    <button class="mini-txt" data-action="lt-apri" data-id="${r.id}" aria-label="Apri il lettore">
       <b>${esc(titolo)}</b><span class="mini-sub"><span class="mini-quando">${esc(sotto)}</span><span class="mini-time" data-time="${r.id}"></span></span>
     </button>
     <button class="mini-stop" data-action="mini-stop" aria-label="Ferma e chiudi">${IC("stop")}</button>`;
+}
+// ---------- lettore a schermo intero ----------
+// Si apre toccando la barra in basso o facendo partire una registrazione dalla sua riga (o con «Tutte»).
+// Si chiude con la freccia in alto a sinistra, con il gesto o il tasto indietro del telefono (una voce
+// nella cronologia, come la pagina della canzone) o trascinandolo verso il basso.
+// Copertina: l'illustrazione dell'icona dell'app (il piccione con le cuffie), con data e titolo.
+const lettoreEl = $("#lettore");
+// da dove parte la coda, per la riga in alto del lettore
+function fonteDi(btn, id) {
+  const r = state.registrazioni.find(x => x.id === id);
+  if (btn && btn.closest(".pref-group")) return "Preferite";
+  if (btn && btn.closest(".pagina") && r && r.canzoneId) {
+    const c = state.canzoni.find(x => x.id === r.canzoneId);
+    if (c) return c.titolo;
+  }
+  return r && r.data ? `Prova del ${fmtGiorno(r.data)}` : "Registrazioni";
+}
+// le registrazioni che vengono dopo quella in ascolto
+function codaDopo() {
+  const c = (state.coda || []).filter(id => state.registrazioni.some(r => r.id === id));
+  const i = c.indexOf(state.playId);
+  return i < 0 ? [] : c.slice(i + 1).map(id => state.registrazioni.find(r => r.id === id));
+}
+function renderLettore() {
+  if (!lettoreEl || !state.lettore) return;
+  const r = state.playId && state.registrazioni.find(x => x.id === state.playId);
+  if (!r) return;
+  const song = state.canzoni.find(c => c.id === r.canzoneId);
+  const info = infoRegistrazione(r);
+  const pos = posizioneInCoda();
+  const dopo = codaDopo();
+  const chiave = [r.id, info.titolo, info.sotto, pos, r.preferita ? 1 : 0, state.codaFonte, state.fan ? 1 : 0,
+    dopo.map(x => x.id + ":" + (x.durata || 0)).join(",")].join("|");
+  if (lettoreEl.dataset.chiave === chiave) return;
+  lettoreEl.dataset.chiave = chiave;
+  const sotto = [song && r.etichetta ? r.etichetta : (song ? "" : "senza canzone"), fmtGiorno(r.data)].filter(Boolean).join(" · ");
+  const stella = state.fan
+    ? (r.preferita ? `<span class="stella on lt-stella" aria-label="Preferita">${IC("stella")}</span>` : "")
+    : `<button class="stella lt-stella${r.preferita ? " on" : ""}" data-action="pref" data-id="${r.id}" aria-label="${r.preferita ? "Togli dalle preferite" : "Segna come preferita"}" aria-pressed="${r.preferita ? "true" : "false"}">${IC("stella")}</button>`;
+  const c = state.coda || [], i = c.indexOf(r.id);
+  const paginaOk = song && !isGenerale(song) && song.stato !== "proposta";
+  lettoreEl.innerHTML = `
+    <div class="lt-testa">
+      <button class="lt-icona" data-action="lt-chiudi" aria-label="Chiudi il lettore">${IC("chiudi-giu")}</button>
+      <div class="lt-fonte"><small>In ascolto</small><b>${esc(state.codaFonte || "Registrazioni")}</b></div>
+      <button class="lt-icona lt-ferma" data-action="mini-stop" aria-label="Ferma e chiudi">${IC("stop")}</button>
+    </div>
+    <div class="lt-corpo">
+      <div class="lt-copertina">
+        <span class="cop-img"><img src="icons/icon-512.png" alt=""></span>
+        <span class="cop-testa"><span>${esc(fmtGiorno(r.data) || "")}</span><span>${esc(pos)}</span></span>
+        <span class="cop-titolo">${esc(info.titolo)}</span>
+      </div>
+      <div class="lt-info">
+        <div class="lt-nomi"><b>${esc(info.titolo)}</b><span>${esc(sotto)}</span></div>
+        ${stella}
+      </div>
+      <div class="lt-barra" role="slider" aria-label="Posizione"><span><i data-prog="${r.id}"></i></span></div>
+      <div class="lt-tempi"><span data-lt-ora>0:00</span><span data-lt-tot>${fmtTime(r.durata) || "–:––"}</span></div>
+      <div class="lt-comandi">
+        <button class="lt-btn lt-salta" data-action="mini-salta" data-sec="-10" aria-label="Indietro di 10 secondi">${IC("meno10")}</button>
+        <button class="lt-btn" data-action="lt-prec" aria-label="Brano precedente">${IC("prec")}</button>
+        <button class="play on lt-play" data-action="play" data-id="${r.id}" aria-label="Pausa">${IC(player.paused ? "play" : "pausa")}</button>
+        <button class="lt-btn" data-action="lt-succ" aria-label="Brano successivo" ${i >= 0 && i < c.length - 1 ? "" : "disabled"}>${IC("succ")}</button>
+        <button class="lt-btn lt-salta" data-action="mini-salta" data-sec="10" aria-label="Avanti di 10 secondi">${IC("piu10")}</button>
+      </div>
+      <div class="lt-vai">
+        ${paginaOk ? `<button data-action="lt-canzone" data-id="${song.id}">Pagina del pezzo ${IC("freccia")}</button>` : ""}
+        <button data-action="lt-audio" data-id="${r.id}">In Audio ${IC("freccia")}</button>
+      </div>
+    </div>
+    ${dopo.length ? `<section class="lt-coda">
+      <h3 class="fascia">Dopo <small>${dopo.length}</small></h3>
+      ${dopo.map((x, k) => {
+        const ix = infoRegistrazione(x);
+        return `<button class="lt-riga" data-action="lt-coda" data-id="${x.id}">
+          <span class="lt-riga-n">${i + k + 2}</span>
+          <span class="lt-riga-t"><b>${esc(ix.titolo)}</b><small>${esc(ix.sotto)}</small></span>
+          <span class="time">${fmtTime(x.durata)}</span>
+        </button>`;
+      }).join("")}
+    </section>` : ""}`;
+}
+function apriLettore() {
+  if (!lettoreEl || !state.playId || state.lettore) return;
+  state.lettore = true;
+  lettoreEl.dataset.chiave = "";
+  lettoreEl.style.transform = "";
+  lettoreEl.classList.remove("hidden", "via");
+  lettoreEl.classList.add("entra");
+  lettoreEl.scrollTop = 0;
+  document.documentElement.classList.add("con-lettore");
+  history.pushState({ lettore: true }, "");
+  renderLettore();
+  syncPlayer();
+}
+// daStoria: la chiusura arriva dal tasto indietro (la voce nella cronologia è già stata tolta)
+function chiudiLettore(daStoria = false) {
+  if (!state.lettore) return;
+  if (!daStoria && history.state && history.state.lettore) { history.back(); return; }
+  state.lettore = false;
+  state.ltTrascina = false;
+  lettoreEl.classList.remove("entra");
+  lettoreEl.style.transform = "";
+  lettoreEl.classList.add("via");
+  document.documentElement.classList.remove("con-lettore");
+  setTimeout(() => {
+    if (state.lettore) return;
+    lettoreEl.classList.add("hidden");
+    lettoreEl.classList.remove("via");
+    lettoreEl.innerHTML = "";
+    lettoreEl.dataset.chiave = "";
+  }, 280);
+  const dopo = state.dopoLettore;
+  state.dopoLettore = null;
+  if (dopo) dopo();
+}
+// si va alla registrazione nella sezione Audio
+function vaiARegistrazione(id) {
+  showTab("audio");
+  const riga = document.querySelector(`#view-audio [data-rec="${CSS.escape(id)}"]`);
+  if (riga) {
+    riga.scrollIntoView({ block: "center" });
+    riga.classList.add("evidenzia");
+    setTimeout(() => riga.classList.remove("evidenzia"), 1600);
+  }
+}
+if (lettoreEl) {
+  lettoreEl.addEventListener("click", e => {
+    window.__lastX = e.clientX;
+    const btn = e.target.closest("[data-action]");
+    if (btn && !btn.disabled) act(btn);
+  });
+  // la linea si tocca o si trascina per spostarsi nel brano
+  lettoreEl.addEventListener("pointerdown", e => {
+    const barra = e.target.closest(".lt-barra");
+    const dur = player.duration;
+    if (!barra || !isFinite(dur) || dur <= 0) return;
+    e.preventDefault();
+    try { barra.setPointerCapture(e.pointerId); } catch (err) { /* niente */ }
+    state.ltTrascina = true;
+    const fill = barra.querySelector("i"), ora = lettoreEl.querySelector("[data-lt-ora]");
+    let f = 0;
+    const muovi = (ev) => {
+      const b = barra.getBoundingClientRect();
+      f = Math.max(0, Math.min(1, (ev.clientX - b.left) / b.width));
+      fill.style.width = `${f * 100}%`;
+      if (ora) ora.textContent = fmtTime(f * dur) || "0:00";
+    };
+    const fine = (ev) => {
+      barra.removeEventListener("pointermove", muovi);
+      barra.removeEventListener("pointerup", fine);
+      barra.removeEventListener("pointercancel", fine);
+      state.ltTrascina = false;
+      if (ev.type === "pointerup") {
+        player.currentTime = Math.min(dur - 0.1, f * dur);
+        diag("spostato con la linea (lettore)", `a ${Math.round(player.currentTime)} s su ${Math.round(dur)}`);
+      }
+      syncPlayer();
+    };
+    muovi(e);
+    barra.addEventListener("pointermove", muovi);
+    barra.addEventListener("pointerup", fine);
+    barra.addEventListener("pointercancel", fine);
+  });
+  // trascinato verso il basso (dall'alto del lettore) si chiude, come su Spotify
+  let y0 = null, dy = 0;
+  lettoreEl.addEventListener("touchstart", e => {
+    if (lettoreEl.scrollTop > 0 || e.touches.length !== 1 || e.target.closest(".lt-barra")) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0;
+    lettoreEl.style.transition = "none";
+  }, { passive: true });
+  lettoreEl.addEventListener("touchmove", e => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy > 0 && lettoreEl.scrollTop <= 0) { e.preventDefault(); lettoreEl.style.transform = `translateY(${dy}px)`; }
+    else if (dy < 0) { y0 = null; lettoreEl.style.transform = ""; lettoreEl.style.transition = ""; }
+  }, { passive: false });
+  const lascia = () => {
+    if (y0 == null) return;
+    y0 = null;
+    lettoreEl.style.transition = "";
+    if (dy > 110) chiudiLettore();
+    else lettoreEl.style.transform = "";
+  };
+  lettoreEl.addEventListener("touchend", lascia);
+  lettoreEl.addEventListener("touchcancel", lascia);
 }
 function syncPlayer() {
   // a schermo spento non serve ridisegnare: si aggiorna al ritorno
   if (document.hidden) return;
   renderMini();
+  renderLettore();
   const cur = state.playId, playing = cur && !player.paused, dur = player.duration;
   document.querySelectorAll(".play").forEach(b => {
     const isCur = b.dataset.id === cur;
@@ -1909,6 +2106,7 @@ function syncPlayer() {
     b.setAttribute("aria-label", p ? "Pausa" : "Riproduci");
   });
   document.querySelectorAll("[data-prog]").forEach(i => {
+    if (state.ltTrascina && i.closest(".lt-barra")) return;
     i.style.width = (i.dataset.prog === cur && isFinite(dur) && dur > 0) ? `${player.currentTime / dur * 100}%` : "0%";
   });
   document.querySelectorAll("[data-time]").forEach(s => {
@@ -1916,6 +2114,11 @@ function syncPlayer() {
     if (id === cur && isFinite(dur) && dur > 0) s.textContent = `${fmtTime(player.currentTime) || "0:00"} / ${fmtTime(dur)}`;
     else s.textContent = fmtTime(state.registrazioni.find(x => x.id === id)?.durata);
   });
+  if (state.lettore && !state.ltTrascina) {
+    const ora = lettoreEl.querySelector("[data-lt-ora]"), tot = lettoreEl.querySelector("[data-lt-tot]");
+    if (ora) ora.textContent = fmtTime(player.currentTime) || "0:00";
+    if (tot && isFinite(dur) && dur > 0) tot.textContent = fmtTime(dur);
+  }
 }
 // gli eventi contano solo per il lettore in uso (l'altro sta solo caricando la successiva)
 lettori.forEach(el => {
@@ -2568,15 +2771,38 @@ async function act(btn) {
       break;
     }
     case "play": {
-      if (state.playId === id || btn.closest("#mini")) { playToggle(id); break; }
+      if (state.playId === id || btn.closest("#mini") || btn.closest("#lettore")) { playToggle(id); break; }
+      // una registrazione fatta partire dalla sua riga apre il lettore a schermo intero
+      state.codaFonte = fonteDi(btn, id);
       playToggle(id, codaDi(btn, id));
+      apriLettore();
       break;
     }
     case "play-giorno": {
       const coda = codaGiorno(btn.dataset.data);
-      if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      if (coda.length) {
+        if (state.playId) fermaRiproduzione();
+        state.codaFonte = `Prova del ${fmtGiorno(btn.dataset.data)}`;
+        playToggle(coda[0], coda);
+        apriLettore();
+      }
       break;
     }
+    case "lt-apri": if (state.playId) apriLettore(); break;
+    case "lt-chiudi": chiudiLettore(); break;
+    case "lt-prec":
+      if (player.currentTime > 3 || !vaiInCoda(-1)) { try { player.currentTime = 0; } catch (e) { /* niente */ } }
+      break;
+    case "lt-succ": vaiInCoda(1); break;
+    case "lt-coda": if (id && id !== state.playId) playToggle(id); break;
+    case "lt-canzone":
+      state.dopoLettore = () => { if (state.tab !== "scaletta") showTab("scaletta"); apriCanzone(id); };
+      chiudiLettore();
+      break;
+    case "lt-audio":
+      state.dopoLettore = () => vaiARegistrazione(id);
+      chiudiLettore();
+      break;
     case "copia-diag": {
       // il registro della riproduzione, da incollare nel messaggio a chi segue l'app
       const testo = testoDiagnostica();
@@ -2586,7 +2812,12 @@ async function act(btn) {
     }
     case "play-preferite": {
       const coda = codaPreferite();
-      if (coda.length) { if (state.playId) fermaRiproduzione(); playToggle(coda[0], coda); }
+      if (coda.length) {
+        if (state.playId) fermaRiproduzione();
+        state.codaFonte = "Preferite";
+        playToggle(coda[0], coda);
+        apriLettore();
+      }
       break;
     }
     case "pref": {
@@ -2689,19 +2920,9 @@ async function act(btn) {
       render();
       break;
     }
-    case "mini-vai": {
-      // si va alla registrazione nella sezione Audio
-      showTab("audio");
-      const riga = document.querySelector(`#view-audio [data-rec="${CSS.escape(id)}"]`);
-      if (riga) {
-        riga.scrollIntoView({ block: "center" });
-        riga.classList.add("evidenzia");
-        setTimeout(() => riga.classList.remove("evidenzia"), 1600);
-      }
-      break;
-    }
+    case "mini-vai": vaiARegistrazione(id); break;
     case "seek": {
-      if (state.playId !== id) { playToggle(id, codaDi(btn, id)); break; }
+      if (state.playId !== id) { state.codaFonte = fonteDi(btn, id); playToggle(id, codaDi(btn, id)); apriLettore(); break; }
       if (isFinite(player.duration)) {
         const r = btn.getBoundingClientRect();
         player.currentTime = Math.max(0, Math.min(1, (window.__lastX - r.left) / r.width)) * player.duration;

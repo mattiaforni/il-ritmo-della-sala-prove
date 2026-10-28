@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "39",
+      "data": "2026-10-28",
+      "titolo": "Il lettore a schermo intero",
+      "punti": [
+        "Facendo partire una registrazione (o «Tutte») si apre il lettore a schermo intero, come su Spotify: copertina con il piccione, titolo, linea da trascinare, brano precedente e successivo, ±10 secondi, stellina.",
+        "Più in basso c'è «Dopo», le registrazioni che seguono: toccandone una parte quella e la coda continua da lì.",
+        "Si chiude con la freccia in alto a sinistra, con il tasto indietro o trascinandolo in basso; la musica continua e resta la barra in basso, che toccata lo riapre."
+      ]
+    },
+    {
       "versione": "38",
       "data": "2026-10-28",
       "titolo": "Registrazioni di fila senza buchi",
