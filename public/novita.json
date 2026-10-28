@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "37",
+      "data": "2026-10-28",
+      "titolo": "Righe più facili da distinguere",
+      "punti": [
+        "Le linee tra una riga e l'altra sono più scure e le righe hanno un po' più di spazio.",
+        "La striscia gialla delle proposte da votare ora sta accanto al titolo, non più sul bordo dello schermo; nei giorni di Audio le preferite si riconoscono dalla stellina piena."
+      ]
+    },
+    {
       "versione": "36",
       "data": "2026-10-27",
       "titolo": "Un aspetto nuovo, più pulito",
