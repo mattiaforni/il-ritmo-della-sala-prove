@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "37";
+const APP_VERSION = "38";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1545,7 +1545,10 @@ const riproduzione = {
   errori: 0, timer: null,
   pos: 0, posUrl: null, // ultima posizione vista mentre suonava, e di quale file è (solo quello può ripartire da lì)
   ultimoT: -1, fermoDa: 0, // per il controllo periodico: ultima posizione vista e da quando non si muove
-  ripartenze: 0        // ripartenze automatiche dopo l'ultimo cambio di brano (al massimo poche)
+  ripartenze: 0,       // ripartenze automatiche dopo l'ultimo cambio di brano (al massimo poche)
+  uscente: null,       // il lettore del brano precedente, tenuto finché il nuovo non suona (vedi metti)
+  senzaPausa: false,   // passaggio anticipato: il brano precedente suona fino a quando parte il nuovo
+  anticipoTimer: null
 };
 // ---------- diagnostica ----------
 // Gli ultimi eventi della riproduzione (avvii, fine brano, pause e da dove vengono, errori, riprese)
@@ -1592,21 +1595,42 @@ function suona() {
 function riparti() {
   if (player.error || riproduzione.timer) { riproduzione.vuole = true; riprendi(); } else suona();
 }
+// Il cambio di brano non lascia mai il telefono senza un lettore attivo: per Android (schermo bloccato,
+// notifiche, autoradio) un momento senza lettori è la fine della sessione, e il riquadro con i comandi
+// sparisce per ricomparire un secondo dopo; toccato in quel momento chiede di sbloccare il telefono.
+// Per questo la nuova registrazione va sempre nell'altro lettore, e quello del brano precedente resta
+// (in pausa, o ancora in riproduzione nel passaggio anticipato) finché il nuovo non suona davvero.
+function congedaUscente() {
+  const el = riproduzione.uscente;
+  riproduzione.uscente = null;
+  if (el && el !== player) svuotaLettore(el);
+}
 function metti(r) {
-  // la registrazione è già caricata nell'altro lettore: si scambiano
+  clearTimeout(riproduzione.anticipoTimer);
+  riproduzione.anticipoTimer = null;
+  const prima = player;
   const el = altroLettore();
+  // l'altro lettore era ancora quello di un cambio precedente non finito: si riusa
+  if (riproduzione.uscente === el) riproduzione.uscente = null;
+  if (riproduzione.uscente) congedaUscente();
   if (riproduzione.pronto === r.id && el.getAttribute("src") === r.url && !el.error) {
-    const prima = player;
-    player = altroLettore();
-    riproduzione.srcCambiato = Date.now();
-    svuotaLettore(prima);
+    // la registrazione è già caricata nell'altro lettore: si scambiano
+    player = el;
     try { player.currentTime = 0; } catch (e) { /* niente */ }
     diag("scambio lettori", "pronta in anticipo");
   } else {
-    // scelta a mano un'altra registrazione: quella caricata in anticipo non serve più
-    if (altroLettore().getAttribute("src")) svuotaLettore(altroLettore());
-    caricaIn(player, r.url);
+    // non caricata in anticipo (scelta a mano, o precarico non riuscito): si carica nell'altro lettore
+    el.preload = "auto";
+    player = el;
+    caricaIn(el, r.url);
     diag("carico", riproduzione.pronto === r.id ? "precarico non utilizzabile" : "non precaricata");
+  }
+  riproduzione.srcCambiato = Date.now();
+  // il lettore di prima resta finché il nuovo non suona (evento "playing"); se il passaggio è a mano si
+  // mette in pausa (la sua pausa non conta: non è più il lettore in uso)
+  if (prima.getAttribute("src")) {
+    riproduzione.uscente = prima;
+    if (!riproduzione.senzaPausa && !prima.paused) prima.pause();
   }
   riproduzione.pronto = null;
   riproduzione.riprendiDa = null;
@@ -1640,6 +1664,9 @@ function fermaRiproduzione() {
   if (state.playId) diag("stop");
   riproduzione.vuole = false;
   annullaRipresa();
+  clearTimeout(riproduzione.anticipoTimer);
+  riproduzione.anticipoTimer = null;
+  riproduzione.uscente = null;
   player.pause();
   try { player.currentTime = 0; } catch (e) { /* file non ancora caricato */ }
   svuotaLettore(altroLettore());
@@ -1675,6 +1702,8 @@ function prossimaInCoda() {
 // si carica la successiva quando mancano due minuti alla fine (subito, per i brani brevi)
 function preparaProssima() {
   const r = prossimaInCoda();
+  // finché il lettore del brano precedente non è stato chiuso l'altro lettore è ancora occupato
+  if (riproduzione.uscente) return;
   if (!r || riproduzione.pronto === r.id || Date.now() - riproduzione.prontoErrore < 20000) return;
   const dur = player.duration;
   if (!isFinite(dur) || dur - player.currentTime > 120) return;
@@ -1684,6 +1713,31 @@ function preparaProssima() {
   try { el.load(); } catch (e) { /* niente */ }
   riproduzione.pronto = r.id;
   diag("precarico", `prossima: ${infoRegistrazione(r).titolo.slice(0, 22)}`);
+}
+// Passaggio anticipato: se la successiva è già caricata, parte quando a questo brano mancano 0,3 s.
+// Il brano che finisce suona finché il nuovo non è partito (poi si chiude): il telefono non vede mai
+// una registrazione "finita" senza un'altra in corso, e il riquadro dello schermo bloccato non sparisce.
+// Se qualcosa non torna (successiva non pronta, tempi sbagliati) resta il passaggio a fine brano.
+const ANTICIPO = 0.3;
+function controllaAnticipo() {
+  clearTimeout(riproduzione.anticipoTimer);
+  riproduzione.anticipoTimer = null;
+  if (!state.playId || !riproduzione.vuole || player.paused || player.ended || riproduzione.uscente || riproduzione.timer) return;
+  const r = prossimaInCoda();
+  const el = altroLettore();
+  if (!r || riproduzione.pronto !== r.id || el.getAttribute("src") !== r.url || el.error) return;
+  const dur = player.duration;
+  if (!isFinite(dur) || dur <= 0) return;
+  const resta = (dur - player.currentTime) / (player.playbackRate || 1);
+  if (resta > 3) return;
+  if (resta > ANTICIPO) {
+    // gli aggiornamenti della posizione arrivano ogni quarto di secondo circa: per il momento giusto un timer
+    riproduzione.anticipoTimer = setTimeout(controllaAnticipo, Math.max(20, (resta - ANTICIPO) * 1000));
+    return;
+  }
+  diag("passaggio anticipato", `${resta.toFixed(2)} s dalla fine`);
+  riproduzione.senzaPausa = true;
+  try { vaiInCoda(1, true); } finally { riproduzione.senzaPausa = false; }
 }
 // posizione nella coda, es. "2 di 7" (vuoto se si ascolta una registrazione sola)
 function posizioneInCoda() {
@@ -1874,6 +1928,7 @@ lettori.forEach(el => {
       if (riproduzione.errori && player.currentTime > 0) riproduzione.errori = 0;
     }
     preparaProssima();
+    controllaAnticipo();
   }));
   el.addEventListener("loadedmetadata", delPlayer(() => {
     const rd = riproduzione.riprendiDa;
@@ -1888,7 +1943,12 @@ lettori.forEach(el => {
     statoSessione(); preparaProssima();
   }));
   el.addEventListener("play", delPlayer(() => { riproduzione.vuole = true; statoSessione(); }));
-  el.addEventListener("playing", delPlayer(() => diag("suona")));
+  // il nuovo brano suona: ora si può chiudere il lettore del precedente
+  el.addEventListener("playing", delPlayer(() => {
+    const cambio = !!riproduzione.uscente;
+    congedaUscente();
+    diag("suona", cambio ? "cambio senza buco" : "");
+  }));
   el.addEventListener("waiting", delPlayer(() => diag("in attesa di dati", `stato ${player.readyState}`)));
   el.addEventListener("stalled", delPlayer(() => diag("rete ferma")));
   // pausa decisa dal telefono (cuffie staccate, telefonata): chi ascolta non vuole più che suoni.
@@ -1914,7 +1974,7 @@ lettori.forEach(el => {
       return;
     }
     // fallito il caricamento in anticipo: al passaggio si caricherà normalmente
-    if (riproduzione.pronto && el.getAttribute("src")) { diag("precarico fallito"); riproduzione.pronto = null; riproduzione.prontoErrore = Date.now(); }
+    if (riproduzione.pronto && el !== riproduzione.uscente && el.getAttribute("src")) { diag("precarico fallito"); riproduzione.pronto = null; riproduzione.prontoErrore = Date.now(); }
   });
   el.addEventListener("loadedmetadata", delPlayer(() => {
     const r = state.registrazioni.find(x => x.id === state.playId);
