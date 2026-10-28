@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "38",
+      "data": "2026-10-28",
+      "titolo": "Registrazioni di fila senza buchi",
+      "punti": [
+        "Fra una registrazione e l'altra non c'è più l'istante di silenzio: sul telefono bloccato il riquadro con i comandi non sparisce più al cambio di brano.",
+        "Vale anche per avanti e indietro dallo schermo bloccato, dalle cuffie o dal volante."
+      ]
+    },
+    {
       "versione": "37",
       "data": "2026-10-28",
       "titolo": "Righe più facili da distinguere",
