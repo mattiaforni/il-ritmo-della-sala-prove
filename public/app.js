@@ -1908,7 +1908,7 @@ function renderMini() {
 // Si apre toccando la barra in basso o facendo partire una registrazione dalla sua riga (o con «Tutte»).
 // Si chiude con la freccia in alto a sinistra, con il gesto o il tasto indietro del telefono (una voce
 // nella cronologia, come la pagina della canzone) o trascinandolo verso il basso.
-// Copertina: il piccione dell'icona, stilizzato a linee, con data e titolo.
+// Copertina: l'illustrazione dell'icona dell'app (il piccione con le cuffie), con data e titolo.
 const lettoreEl = $("#lettore");
 // da dove parte la coda, per la riga in alto del lettore
 function fonteDi(btn, id) {
@@ -1952,7 +1952,7 @@ function renderLettore() {
     </div>
     <div class="lt-corpo">
       <div class="lt-copertina">
-        <svg class="cop-piccione" aria-hidden="true"><use href="#piccione"/></svg>
+        <span class="cop-img"><img src="icons/icon-512.png" alt=""></span>
         <span class="cop-testa"><span>${esc(fmtGiorno(r.data) || "")}</span><span>${esc(pos)}</span></span>
         <span class="cop-titolo">${esc(info.titolo)}</span>
       </div>
