@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "39";
+const APP_VERSION = "40";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1830,7 +1830,12 @@ function statoSessione() {
   // senza una registrazione in corso la sessione non è delle registrazioni (può essere della diretta)
   if (!("mediaSession" in navigator) || !state.playId) return;
   const ms = navigator.mediaSession;
-  try { ms.playbackState = riproduzione.vuole ? "playing" : "paused"; } catch (e) { /* niente */ }
+  // Lo stato mostrato sullo schermo bloccato deve essere quello vero. Prima l'app dichiarava "playing"
+  // finché chi ascolta voleva sentire: se la riproduzione si fermava senza che l'app potesse intervenire
+  // (telefono che sospende la pagina a schermo spento) restava il pulsante di pausa ma non suonava niente.
+  // Quando un lettore suona davvero non si dichiara niente ("none"): Chrome guarda i lettori della
+  // pagina e mostra "in riproduzione" finché ce n'è uno che suona, anche se la pagina è sospesa.
+  try { ms.playbackState = player.paused ? "paused" : "none"; } catch (e) { /* niente */ }
   const dur = player.duration;
   if (state.playId && ms.setPositionState && isFinite(dur) && dur > 0) {
     try { ms.setPositionState({ duration: dur, playbackRate: player.playbackRate || 1, position: Math.min(player.currentTime || 0, dur) }); } catch (e) { /* niente */ }
@@ -1865,8 +1870,11 @@ function comandiRegistrazioni() {
   const appenaCambiato = () => Date.now() - riproduzione.cambio < 2500;
   prova("pause", () => { if (appenaCambiato()) { diag("pausa (comando esterno) ignorata", "subito dopo il cambio"); return; } diag("pausa (comando esterno)"); riproduzione.vuole = false; player.pause(); statoSessione(); });
   prova("stop", () => { if (appenaCambiato()) { diag("stop (comando esterno) ignorato", "subito dopo il cambio"); return; } diag("stop (comando esterno)"); fermaRiproduzione(); });
-  prova("seekbackward", (d) => salta(-(d.seekOffset || 10)));
-  prova("seekforward", (d) => salta(d.seekOffset || 10));
+  // niente −10/+10 s sullo schermo bloccato (restano nell'app): come su Spotify, precedente, play/pausa,
+  // successivo e stop. Il pulsante "preferita" di Spotify non si può avere: le pagine web hanno solo le
+  // azioni fisse della Media Session, niente pulsanti personalizzati.
+  prova("seekbackward", null);
+  prova("seekforward", null);
   prova("seekto", (d) => { if (isFinite(player.duration)) player.currentTime = d.seekTime; });
   // tasti avanti/indietro di brano (schermo bloccato, cuffie, volante dell'auto)
   const c = state.coda || [], i = c.indexOf(state.playId);
@@ -2146,6 +2154,7 @@ lettori.forEach(el => {
     statoSessione(); preparaProssima();
   }));
   el.addEventListener("play", delPlayer(() => { riproduzione.vuole = true; statoSessione(); }));
+  ["playing", "pause", "ended", "emptied"].forEach(ev => el.addEventListener(ev, delPlayer(statoSessione)));
   // il nuovo brano suona: ora si può chiudere il lettore del precedente
   el.addEventListener("playing", delPlayer(() => {
     const cambio = !!riproduzione.uscente;
