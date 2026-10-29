@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "40",
+      "data": "2026-10-29",
+      "titolo": "Schermo bloccato più simile a Spotify",
+      "punti": [
+        "Sullo schermo bloccato restano brano precedente, play/pausa, brano successivo (e lo stop, se il telefono lo mostra); −10/+10 secondi restano nell'app.",
+        "Se la riproduzione si ferma da sola, sullo schermo bloccato compare il tasto play invece della pausa: basta toccarlo per ripartire."
+      ]
+    },
+    {
       "versione": "39",
       "data": "2026-10-28",
       "titolo": "Il lettore a schermo intero",
