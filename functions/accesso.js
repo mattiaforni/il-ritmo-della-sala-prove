@@ -9,8 +9,9 @@
 //
 //   privato/fan   { attivo, password, generazione, aggiornata, da }
 //   bacheca/*     post { nome, testo, band, creato, piace } e commenti (in più postId).
-//                 Post e commenti dei fan li scrive questa funzione (op "messaggio");
-//                 la band scrive e toglie direttamente; i "mi piace" li scrivono tutti.
+//                 Post e commenti dei fan li scrive questa funzione (op "messaggio"), con
+//                 "fanId" (id del telefono del fan, lo stesso dei mi piace: serve alle
+//                 notifiche); la band scrive e toglie direttamente; i "mi piace" li scrivono tutti.
 //
 // La password resta leggibile alla band (serve a mandare l'invito a chi arriva
 // dopo). "generazione" cresce a ogni cambio o disattivazione: le iscrizioni alle
@@ -19,7 +20,8 @@
 // funzioni sono rifiutate subito, il database smette di rispondere entro un'ora.
 //
 // I messaggi dei fan in bacheca finiscono anche nel gruppo Telegram della band,
-// se il bot è collegato (vedi telegram.js).
+// se il bot è collegato (vedi telegram.js), e fanno partire la notifica push
+// "bacheca" (vedi notifiche.js): la band la segnala dall'app, i fan da qui.
 // ============================================================
 const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -50,7 +52,9 @@ async function generazioneFan() {
   return d && d.attivo ? (d.generazione || 1) : null;
 }
 
-function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, segreti = [] }) {
+const pulisciId = (v) => (typeof v === "string" ? v.trim().slice(0, 40) : "") || null;
+
+function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, notifica = null, segreti = [] }) {
   const accesso = onRequest({ region: REGIONE, maxInstances: 1, secrets: segreti }, async (req, res) => {
     cors(req, res);
     if (req.method === "OPTIONS") return res.status(204).send("");
@@ -77,7 +81,12 @@ function crea({ cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo = null, segreti =
         // limite per tutti i fan insieme (si contano solo i loro, la band non ha limiti)
         const recenti = await bacheca().where("creato", ">", new Date(Date.now() - 3600 * 1000)).get();
         if (recenti.docs.filter(d => !d.data().band).length >= MAX_MESSAGGI_ORA) return res.status(200).json({ error: "troppi messaggi in poco tempo, riprova più tardi" });
-        await bacheca().add({ nome: da || "Fan", testo, band: false, creato: FieldValue.serverTimestamp(), ...(postId ? { postId } : {}) });
+        const fanId = pulisciId(b.fanId);
+        const ref = await bacheca().add({ nome: da || "Fan", testo, band: false, creato: FieldValue.serverTimestamp(), ...(fanId ? { fanId } : {}), ...(postId ? { postId } : {}) });
+        if (notifica) {
+          try { await notifica({ tipo: "bacheca", id: ref.id, da }); }
+          catch (e) { console.warn(`[accesso] notifica non mandata: ${e.message}`); }
+        }
         let telegram = false;
         if (mandaAlGruppo) {
           const dove = post ? ` commenta il post di ${escHtml(post.nome || "un fan")}` : " in bacheca";

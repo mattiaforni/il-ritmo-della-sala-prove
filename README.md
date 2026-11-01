@@ -97,7 +97,7 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 | `tasks` | `canzoneId`, `titolo`, `assegnatari` (array di nomi), `fatto`, `fattoDa`, `fattoIl`, `creato` |
 | `membri` | `nome`, `creato` |
 | `diretta` | `stato`: `attiva`, `sessione`, `da`, `inizio`, `battito`; `ascolto-…`: `tipo`, `sessione`, `chi`, `offer`, `answer`, `creato` |
-| `bacheca` | post: `nome`, `testo`, `band` (vero se l'ha scritto la band), `creato`, `piace` (mappa chiave → true); commenti: gli stessi campi più `postId` |
+| `bacheca` | post: `nome`, `testo`, `band` (vero se l'ha scritto la band), `creato`, `piace` (mappa chiave → true), per i fan anche `fanId` (id del telefono, per le notifiche); commenti: gli stessi campi più `postId` |
 | `privato` | solo per le funzioni, i telefoni non la leggono: `spotify` (playlist), `telegram` (gruppo e impostazioni del bot) con la sottocollezione `eventi`, `telegram-foto` (ultima fotografia del database), `push` (chiavi delle notifiche) con la sottocollezione `iscrizioni` (un documento per telefono iscritto), `fan` (password dei fan, generazione, chi l'ha impostata) |
 
 ## Costi
@@ -158,7 +158,7 @@ Funzioni presenti:
 
 - `telegram` e `telegramOgniOra` — il bot Telegram della band (secret `TELEGRAM_TOKEN`), vedi sotto.
 - `accesso` — password dei fan (stato, imposta, disattiva: solo la band) e post/commenti dei fan in Bacheca, girati nel gruppo Telegram (secret `TELEGRAM_TOKEN`).
-- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta). Gli eventi li segnala l'app di chi fa l'azione; il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
+- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca). Gli eventi li segnala l'app di chi fa l'azione (i post dei fan la funzione `accesso`); il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
 
 Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
 

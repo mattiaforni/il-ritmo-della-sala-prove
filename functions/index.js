@@ -429,8 +429,9 @@ exports.telegramOgniOra = telegram.telegramOgniOra;
 // ============================================================
 // Notifiche push ai telefoni della band: vedi notifiche.js
 // ============================================================
-exports.notifiche = require("./notifiche").crea({ cors, ruolo, REGIONE }).notifiche;
-// accesso dei fan e messaggi dei fan alla band (inoltrati nel gruppo Telegram): vedi accesso.js
+const notifiche = require("./notifiche");
+exports.notifiche = notifiche.crea({ cors, ruolo, REGIONE }).notifiche;
+// accesso dei fan e messaggi dei fan alla band (inoltrati nel gruppo Telegram e notificati ai telefoni): vedi accesso.js
 exports.accesso = require("./accesso").crea({
-  cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, segreti: [telegram.TELEGRAM_TOKEN]
+  cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, notifica: notifiche.evento, segreti: [telegram.TELEGRAM_TOKEN]
 }).accesso;

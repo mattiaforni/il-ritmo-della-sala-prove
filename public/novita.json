@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "41",
+      "data": "2026-11-01",
+      "titolo": "Notifiche per la Bacheca",
+      "punti": [
+        "Quando qualcuno scrive un post in Bacheca arriva una notifica sul telefono a tutti gli altri, fan compresi (prima lo diceva solo il bot nel gruppo Telegram).",
+        "Chi commenta un post avvisa chi l'ha scritto e chi aveva già commentato; più post in pochi minuti stanno nella stessa notifica.",
+        "L'evento è acceso per chi ha già le notifiche attive; si spegne dalla casella «Post e commenti in Bacheca» in Personale (i fan dal pannello del nome)."
+      ]
+    },
+    {
       "versione": "40",
       "data": "2026-10-29",
       "titolo": "Schermo bloccato più simile a Spotify",

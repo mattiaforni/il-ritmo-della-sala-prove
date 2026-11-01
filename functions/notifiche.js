@@ -7,12 +7,18 @@
 // espongono ai telefoni: scrive e legge solo questa funzione.
 //
 //   privato/push                  { vapid: { publicKey, privateKey }, ultimi: { <evento>: ms } }
-//   privato/push/iscrizioni/<id>  { sub, membroId, eventi[], aggiornata, ua }
-//                                 fan:   { sub, fan: true, membroId: null, generazione, eventi[], … }
+//   privato/push/iscrizioni/<id>  { sub, membroId, eventi[], eventiV, aggiornata, ua }
+//                                 fan:   { sub, fan: true, membroId: null, fanId, generazione, eventi[], … }
 //
 // Anche i fan (accesso in sola lettura, vedi accesso.js) possono iscriversi:
-// ricevono proposte, registrazioni, diretta e passaggi in scaletta, mai le task.
-// Valgono solo le iscrizioni fatte con la password dei fan di adesso.
+// ricevono proposte, registrazioni, diretta, passaggi in scaletta e Bacheca, mai le task.
+// Valgono solo le iscrizioni fatte con la password dei fan di adesso. "fanId" è l'id
+// del telefono del fan (lo stesso dei mi piace): serve a non mandargli i suoi post e a
+// trovarlo quando qualcuno commenta un suo post.
+//
+// "eventiV" dice con quale elenco di eventi è stata scritta l'iscrizione: le iscrizioni
+// senza (fatte prima della Bacheca, v41) ricevono anche la Bacheca finché l'app non le
+// aggiorna, così l'evento nuovo parte acceso per tutti.
 //
 // Le chiavi VAPID (che firmano le notifiche) si creano da sole alla prima
 // richiesta: nessun segreto da impostare a mano.
@@ -26,8 +32,11 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { generazioneFan } = require("./accesso");
 
-const EVENTI = ["proposta", "task", "registrazione", "diretta", "scaletta"];
-const EVENTI_FAN = ["proposta", "registrazione", "diretta", "scaletta"];
+const EVENTI = ["proposta", "task", "registrazione", "diretta", "scaletta", "bacheca"];
+const EVENTI_FAN = ["proposta", "registrazione", "diretta", "scaletta", "bacheca"];
+const EVENTI_V = 2;                                   // 2 = elenco con "bacheca"
+const NUOVI_DA_V = { 2: ["bacheca"] };                // eventi che le iscrizioni più vecchie ricevono comunque
+const FINESTRA_POST_MS = 10 * 60 * 1000;              // i post ravvicinati si contano insieme nella stessa notifica
 const RIPETIZIONE_MS = { diretta: 15 * 60 * 1000 };   // la stessa diretta non si annuncia due volte
 const RIPETIZIONE_STANDARD_MS = 10 * 60 * 1000;      // stesso evento sulla stessa cosa: una volta ogni 10 minuti
 const TTL = 6 * 60 * 60;                              // una notifica non consegnata dopo 6 ore si butta
@@ -63,6 +72,15 @@ function subValida(sub) {
     sub.keys && typeof sub.keys.p256dh === "string" && typeof sub.keys.auth === "string";
 }
 const soloEventi = (lista, ammessi = EVENTI) => (Array.isArray(lista) ? lista : ammessi).filter(e => ammessi.includes(e));
+// gli eventi di un'iscrizione, con quelli arrivati dopo che è stata scritta (partono accesi)
+function eventiDi(x, ammessi) {
+  const scelti = soloEventi(x.eventi, ammessi);
+  const v = Number(x.eventiV) || 1;
+  const nuovi = Object.entries(NUOVI_DA_V).filter(([ver]) => Number(ver) > v).flatMap(([, ev]) => ev).filter(e => ammessi.includes(e));
+  return [...new Set([...scelti, ...nuovi])];
+}
+const pulisciId = (v) => (typeof v === "string" ? v.trim().slice(0, 40) : "") || null;
+const accorcia = (t, n = 90) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s; };
 
 async function membri() {
   const snap = await db().collection("membri").get();
@@ -155,6 +173,46 @@ async function preparaEvento(corpo, persone) {
       url: "./?vai=audio", tag: "diretta"
     };
   }
+  if (tipo === "bacheca") {
+    // un post (a tutti tranne chi l'ha scritto) o un commento (a chi ha scritto il post e a chi
+    // aveva già commentato). Chi scrive: la persona della band (nome → id) o il telefono del fan (fanId).
+    if (!corpo.id || typeof corpo.id !== "string") return null;
+    const s = await db().collection("bacheca").doc(corpo.id).get();
+    if (!s.exists) return null;
+    const m = { id: s.id, ...s.data() };
+    const autore = (x) => x.band ? { idDa: (persone.find(p => p.nome === x.nome) || {}).id || null, fanDa: null } : { idDa: null, fanDa: pulisciId(x.fanId) };
+    const chi = m.nome || (m.band ? "Qualcuno della band" : "Un fan");
+    if (!m.postId) {
+      // post: i post ravvicinati di altri finiscono nella stessa notifica (stesso tag: il telefono la
+      // aggiorna senza risuonare)
+      const creato = m.creato && m.creato.toMillis ? m.creato.toMillis() : Date.now();
+      const rec = await db().collection("bacheca").where("creato", ">", new Date(creato - FINESTRA_POST_MS)).get();
+      const post = rec.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => !p.postId);
+      const n = Math.max(1, post.length);
+      return {
+        chiave: `bacheca:post:${m.id}`, ...autore(m),
+        titolo: n === 1 ? "Nuovo post in Bacheca" : `${n} post nuovi in Bacheca`,
+        testo: n === 1 ? `${chi}: ${accorcia(m.testo)}` : `L'ultimo è di ${chi}: ${accorcia(m.testo, 70)}`,
+        url: "./?vai=bacheca", tag: "bacheca"
+      };
+    }
+    const ps = await db().collection("bacheca").doc(m.postId).get();
+    if (!ps.exists) return null;
+    const post = { id: ps.id, ...ps.data() };
+    const altri = await db().collection("bacheca").where("postId", "==", post.id).get();
+    const stessoAutore = (x) => !!x.band === !!m.band && (m.band ? x.nome === m.nome : pulisciId(x.fanId) === pulisciId(m.fanId));
+    const coinvolti = [post, ...altri.docs.filter(d => d.id !== m.id).map(d => d.data())].filter(x => !stessoAutore(x));
+    const soloA = [...new Set(coinvolti.filter(x => x.band).map(x => (persone.find(p => p.nome === x.nome) || {}).id).filter(Boolean))];
+    const soloAFan = [...new Set(coinvolti.filter(x => !x.band).map(x => pulisciId(x.fanId)).filter(Boolean))];
+    if (!soloA.length && !soloAFan.length) return null;
+    const dove = post.nome ? `il post di ${post.nome}` : "un post";
+    return {
+      chiave: `bacheca:commento:${m.id}`, ...autore(m), soloA, soloAFan,
+      titolo: "Nuovo commento in Bacheca",
+      testo: `${chi} ha commentato ${dove}: ${accorcia(m.testo)}`,
+      url: "./?vai=bacheca", tag: `bacheca-${post.id}`
+    };
+  }
   return null;
 }
 
@@ -165,9 +223,13 @@ async function invia(ev, tipo, persone) {
     const x = d.data();
     if (x.fan) {
       // fan: solo con l'accesso attivo e la password di adesso; niente task
-      return gen !== null && x.generazione === gen && !ev.soloA && soloEventi(x.eventi, EVENTI_FAN).includes(tipo);
+      if (gen === null || x.generazione !== gen || !eventiDi(x, EVENTI_FAN).includes(tipo)) return false;
+      const id = pulisciId(x.fanId);
+      if (ev.fanDa && id && id === ev.fanDa) return false;            // il fan che ha scritto non la riceve
+      if (ev.soloA) return !!(ev.soloAFan && id && ev.soloAFan.includes(id));   // eventi mirati: solo i fan coinvolti
+      return true;
     }
-    if (!soloEventi(x.eventi).includes(tipo)) return false;
+    if (!eventiDi(x, EVENTI).includes(tipo)) return false;
     if (!esistenti.has(x.membroId)) return false;
     if (ev.idDa && x.membroId === ev.idDa) return false;          // chi fa l'azione non la riceve
     if (ev.soloA && !ev.soloA.includes(x.membroId)) return false;
@@ -241,7 +303,7 @@ function crea({ cors, ruolo, REGIONE }) {
           if (gen === null) return res.status(200).json({ error: "accesso dei fan spento" });
           await iscrizioni().doc(idIscrizione(b.sub.endpoint)).set({
             sub: { endpoint: b.sub.endpoint, keys: { p256dh: b.sub.keys.p256dh, auth: b.sub.keys.auth } },
-            fan: true, membroId: null, generazione: gen, eventi: soloEventi(b.eventi, EVENTI_FAN),
+            fan: true, membroId: null, fanId: pulisciId(b.fanId), generazione: gen, eventi: soloEventi(b.eventi, EVENTI_FAN), eventiV: EVENTI_V,
             ua: String(req.get("User-Agent") || "").slice(0, 160), aggiornata: FieldValue.serverTimestamp()
           });
           return res.status(200).json({ ok: true });
@@ -250,7 +312,7 @@ function crea({ cors, ruolo, REGIONE }) {
         if (!persone.some(p => p.id === b.membroId)) return res.status(400).json({ error: "persona sconosciuta" });
         await iscrizioni().doc(idIscrizione(b.sub.endpoint)).set({
           sub: { endpoint: b.sub.endpoint, keys: { p256dh: b.sub.keys.p256dh, auth: b.sub.keys.auth } },
-          membroId: b.membroId, eventi: soloEventi(b.eventi),
+          membroId: b.membroId, eventi: soloEventi(b.eventi), eventiV: EVENTI_V,
           ua: String(req.get("User-Agent") || "").slice(0, 160), aggiornata: FieldValue.serverTimestamp()
         });
         return res.status(200).json({ ok: true });
@@ -259,7 +321,7 @@ function crea({ cors, ruolo, REGIONE }) {
         const ref = iscrizioni().doc(idIscrizione(b.endpoint));
         const s = await ref.get();
         if (!s.exists || (fan && !s.data().fan)) return res.status(200).json({ error: "iscrizione non trovata" });
-        await ref.update({ eventi: soloEventi(b.eventi, s.data().fan ? EVENTI_FAN : EVENTI), aggiornata: FieldValue.serverTimestamp() });
+        await ref.update({ eventi: soloEventi(b.eventi, s.data().fan ? EVENTI_FAN : EVENTI), eventiV: EVENTI_V, aggiornata: FieldValue.serverTimestamp() });
         return res.status(200).json({ ok: true });
       }
       if (b.op === "disiscrivi") {
@@ -282,4 +344,4 @@ function crea({ cors, ruolo, REGIONE }) {
   return { notifiche };
 }
 
-module.exports = { crea, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, EVENTI, EVENTI_FAN } };
+module.exports = { crea, evento, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, eventiDi, EVENTI, EVENTI_FAN } };
