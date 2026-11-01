@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "40";
+const APP_VERSION = "41";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -87,8 +87,13 @@ const EVENTI_PUSH = [
   { key: "task", nome: "Task assegnate a te" },
   { key: "registrazione", nome: "Nuove registrazioni" },
   { key: "diretta", nome: "Diretta dalla sala avviata" },
-  { key: "scaletta", nome: "Proposte passate in scaletta" }
+  { key: "scaletta", nome: "Proposte passate in scaletta" },
+  { key: "bacheca", nome: "Post e commenti in Bacheca" }
 ];
+// con quale elenco di eventi è stata salvata l'iscrizione sul telefono: le iscrizioni fatte prima della
+// Bacheca (v41) ricevono anche quella (la funzione lo sa) e qui si aggiornano alla prima apertura
+const EVENTI_PUSH_V = 2;
+const NUOVI_EVENTI_PUSH = ["bacheca"];
 // i fan non hanno task e non votano: le proposte arrivano solo come novità
 const eventiPush = () => state.fan
   ? EVENTI_PUSH.filter(e => e.key !== "task").map(e => e.key === "proposta" ? { ...e, nome: "Nuove proposte" } : e)
@@ -419,6 +424,13 @@ function notifica(tipo, extra = {}) {
   if (!auth.currentUser || state.fan) return;
   chiamaNotifiche("evento", { tipo, da: state.user || "", ...extra }, true).catch(e => console.warn("[notifiche]", e.message));
 }
+// l'id del telefono del fan: lo stesso dei mi piace in Bacheca; nelle iscrizioni alle notifiche
+// e nei post serve a non mandargli i suoi post e a trovarlo quando qualcuno gli risponde
+function fanId() {
+  let id = store.get("prove_fan_id");
+  if (!id) { id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); store.set("prove_fan_id", id); }
+  return id;
+}
 async function attivaNotifiche() {
   if (!state.userId && !state.fan) { toast("Scegli prima il tuo nome."); return; }
   state.pushOcc = true; render();
@@ -435,8 +447,8 @@ async function attivaNotifiche() {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiaveInByte(publicKey) });
     const eventi = eventiPush().map(e => e.key);
     const membroId = state.fan ? null : state.userId;
-    await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
-    salvaPush({ endpoint: sub.endpoint, membroId, fan: state.fan, eventi });
+    await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi, ...(state.fan ? { fanId: fanId() } : {}) });
+    salvaPush({ endpoint: sub.endpoint, membroId, fan: state.fan, eventi, eventiV: EVENTI_PUSH_V });
     toast("Notifiche attive su questo telefono.");
   } catch (e) {
     toast("Notifiche non attivate: " + (e.message || e));
@@ -466,13 +478,19 @@ async function riallineaNotifiche() {
     if (!sub || Notification.permission !== "granted") { salvaPush(null); render(); return; }
     const membroId = state.fan ? null : state.userId;
     const cambiata = sub.endpoint !== state.push.endpoint || (state.push.membroId || null) !== membroId || !!state.push.fan !== state.fan;
+    // eventi arrivati dopo l'iscrizione (es. Bacheca): partono accesi
+    const vecchia = (Number(state.push.eventiV) || 1) < EVENTI_PUSH_V;
+    const ammessi = eventiPush().map(e => e.key);
+    const eventi = [...state.push.eventi, ...(vecchia ? NUOVI_EVENTI_PUSH : [])].filter((k, i, a) => ammessi.includes(k) && a.indexOf(k) === i);
     if (cambiata || state.fan) {
       if (!membroId && !state.fan) return;
-      const ammessi = eventiPush().map(e => e.key);
-      const eventi = state.push.eventi.filter(k => ammessi.includes(k));
-      await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi });
+      await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi, ...(state.fan ? { fanId: fanId() } : {}) });
       if (sub.endpoint !== state.push.endpoint) chiamaNotifiche("disiscrivi", { endpoint: state.push.endpoint }).catch(() => {});
-      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId, fan: state.fan, eventi });
+      salvaPush({ ...state.push, endpoint: sub.endpoint, membroId, fan: state.fan, eventi, eventiV: EVENTI_PUSH_V });
+    } else if (vecchia) {
+      await chiamaNotifiche("preferenze", { endpoint: sub.endpoint, eventi });
+      salvaPush({ ...state.push, eventi, eventiV: EVENTI_PUSH_V });
+      render();
     }
   } catch (e) { console.warn("[notifiche] riallineamento", e.message); }
 }
@@ -485,11 +503,12 @@ function notificheCorpo() {
     return `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
   }
   if (!state.push) {
-    return `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.fan ? "" : "task assegnate a te, "}registrazioni, diretta e passaggi in scaletta. Poi scegli quali tenere.</p>
+    return `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.fan ? "" : "task assegnate a te, "}registrazioni, diretta, passaggi in scaletta e post in Bacheca. Poi scegli quali tenere.</p>
       <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
   }
+  const vecchia = (Number(state.push.eventiV) || 1) < EVENTI_PUSH_V;
   return eventiPush().map(e => {
-    const on = state.push.eventi.includes(e.key);
+    const on = state.push.eventi.includes(e.key) || (vecchia && NUOVI_EVENTI_PUSH.includes(e.key));
     return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? IC("check") : ""}</span><span>${e.nome}</span></button>`;
   }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
 }
@@ -610,7 +629,7 @@ function salvaNomeFan(nome) {
   render();
 }
 
-// tocco su una notifica: la pagina giusta (?vai=proposte|audio|canzone&id=…)
+// tocco su una notifica: la pagina giusta (?vai=proposte|audio|bacheca|canzone&id=…)
 function vaiA(url) {
   let q;
   try { q = new URL(url, location.href).searchParams; } catch { return; }
@@ -619,7 +638,7 @@ function vaiA(url) {
     const id = q.get("id");
     if (state.ready.canzoni && state.canzoni.some(c => c.id === id)) { showTab("scaletta"); apriCanzone(id); }
     else { state.vaiCanzone = id; showTab("scaletta"); }
-  } else if (vai === "proposte" || vai === "audio") showTab(vai);
+  } else if (vai === "proposte" || vai === "audio" || vai === "bacheca") showTab(vai);
 }
 navigator.serviceWorker?.addEventListener("message", e => {
   if (e.data && e.data.tipo === "vai") vaiA(e.data.url);
@@ -1020,7 +1039,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   if (!vai) return;
   history.replaceState(null, "", location.pathname);
   if (vai === "canzone") { state.tab = "scaletta"; state.vaiCanzone = q.get("id"); }
-  else if (vai === "proposte" || vai === "audio") state.tab = vai;
+  else if (vai === "proposte" || vai === "audio" || vai === "bacheca") state.tab = vai;
 })();
 showTab(state.tab);
 
@@ -2307,7 +2326,8 @@ function setUpload(patch) {
 }
 
 // ---------- bacheca: post, commenti sotto ai post, mi piace ----------
-// Documenti in "bacheca": post { nome, testo, band, creato, piace } e commenti con in più postId.
+// Documenti in "bacheca": post { nome, testo, band, creato, piace } e commenti con in più postId
+// (quelli dei fan anche fanId, l'id del telefono, per le notifiche).
 // I fan pubblicano passando dalla funzione "accesso" (che li gira anche nel gruppo Telegram);
 // la band scrive direttamente e può togliere post e commenti. I "mi piace" (campo piace:
 // chiave → true) li scrivono tutti direttamente: per i fan le regole permettono solo quel campo.
@@ -2322,9 +2342,7 @@ const mioMsg = (m) => state.fan ? !m.band && m.nome === state.fanNome : m.band &
 // chi mette mi piace: la persona della band, o il telefono del fan (due fan con lo stesso nome restano distinti)
 function chiavePiace() {
   if (!state.fan) return "b:" + (state.userId || state.user || "band");
-  let id = store.get("prove_fan_id");
-  if (!id) { id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); store.set("prove_fan_id", id); }
-  return "f:" + id;
+  return "f:" + fanId();
 }
 const quantiPiace = (m) => Object.keys(m.piace || {}).length;
 function segnaBachecaVista() {
@@ -2853,8 +2871,9 @@ async function act(btn) {
       const p = state.push;
       if (!p) return;
       const k = btn.dataset.key;
-      const eventi = p.eventi.includes(k) ? p.eventi.filter(x => x !== k) : [...p.eventi, k];
-      salvaPush({ ...p, eventi });
+      const attuali = (Number(p.eventiV) || 1) < EVENTI_PUSH_V ? [...new Set([...p.eventi, ...NUOVI_EVENTI_PUSH])] : p.eventi;
+      const eventi = attuali.includes(k) ? attuali.filter(x => x !== k) : [...attuali, k];
+      salvaPush({ ...p, eventi, eventiV: EVENTI_PUSH_V });
       render();
       chiamaNotifiche("preferenze", { endpoint: p.endpoint, eventi })
         .catch(e => { if (/non trovata/.test(e.message)) riallineaNotifiche(); else toast("Scelta non salvata: controlla la connessione."); });
@@ -3111,10 +3130,12 @@ mainEl.addEventListener("submit", async e => {
     const btn = form.querySelector("button[type=submit]");
     btn.disabled = true;
     try {
-      if (state.fan) await chiamaAccesso("messaggio", postId ? { testo, postId } : { testo });
+      // i fan passano dalla funzione, che manda anche la notifica; per la band la segnala l'app
+      if (state.fan) await chiamaAccesso("messaggio", { testo, fanId: fanId(), ...(postId ? { postId } : {}) });
       else {
         if (!state.user) { toast("Scegli prima il tuo nome."); return; }
-        await addDoc(collection(db, "bacheca"), { nome: state.user, testo, band: true, creato: serverTimestamp(), ...(postId ? { postId } : {}) });
+        const ref = await addDoc(collection(db, "bacheca"), { nome: state.user, testo, band: true, creato: serverTimestamp(), ...(postId ? { postId } : {}) });
+        notifica("bacheca", { id: ref.id });
       }
       campo.value = "";
       document.querySelectorAll(`main [data-keep="${postId ? "cmt-" + postId : "bacheca-testo"}"]`).forEach(el => { el.value = ""; });
