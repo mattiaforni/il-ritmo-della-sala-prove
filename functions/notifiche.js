@@ -25,6 +25,8 @@
 //
 // Gli eventi li segnala l'app di chi fa l'azione (op "evento"); il testo della
 // notifica lo scrive la funzione leggendo il database, non il telefono.
+// La band può chiedere chi ha le notifiche attive (op "riepilogo": persone della band
+// e numero di telefoni dei fan con la password di adesso).
 // ============================================================
 const crypto = require("crypto");
 const webpush = require("web-push");
@@ -280,6 +282,16 @@ async function evento(corpo) {
   return esito;
 }
 
+// chi ha le notifiche attive: id delle persone della band e telefoni dei fan (null se l'accesso è spento)
+async function riepilogo() {
+  const [persone, snap, gen] = await Promise.all([membri(), iscrizioni().get(), generazioneFan()]);
+  const esistenti = new Set(persone.map(p => p.id));
+  const tutte = snap.docs.map(d => d.data());
+  const band = [...new Set(tutte.filter(x => !x.fan && esistenti.has(x.membroId)).map(x => x.membroId))];
+  const fan = gen === null ? null : tutte.filter(x => x.fan && x.generazione === gen).length;
+  return { band, fan };
+}
+
 function crea({ cors, ruolo, REGIONE }) {
   const notifiche = onRequest({ region: REGIONE, maxInstances: 2 }, async (req, res) => {
     cors(req, res);
@@ -335,6 +347,9 @@ function crea({ cors, ruolo, REGIONE }) {
       if (b.op === "evento") {
         return res.status(200).json(await evento(b));
       }
+      if (b.op === "riepilogo") {
+        return res.status(200).json(await riepilogo());
+      }
       return res.status(400).json({ error: "operazione sconosciuta" });
     } catch (e) {
       console.error(`[notifiche] ${b.op}: ${e.message}`);
@@ -344,4 +359,4 @@ function crea({ cors, ruolo, REGIONE }) {
   return { notifiche };
 }
 
-module.exports = { crea, evento, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, eventiDi, EVENTI, EVENTI_FAN } };
+module.exports = { crea, evento, _interni: { preparaEvento, evento, invia, chiavi, idIscrizione, eventiDi, riepilogo, EVENTI, EVENTI_FAN } };

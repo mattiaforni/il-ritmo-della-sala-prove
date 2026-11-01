@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "42",
+      "data": "2026-11-01",
+      "titolo": "Invito ad attivare le notifiche",
+      "punti": [
+        "Chi non ha ancora le notifiche trova, una volta sola, un invito ad attivarle: «Non ora» o «Attiva». Se dice «Non ora» non ricompare più; si possono sempre attivare da Personale (i fan dal loro nome in alto).",
+        "Su iPhone, se l'app non è aggiunta alla schermata Home, l'invito spiega come aggiungerla (senza quel passaggio le notifiche non arrivano).",
+        "In Personale, sotto le notifiche, si vede chi della band le ha attive, chi manca e quanti telefoni di fan le ricevono."
+      ]
+    },
+    {
       "versione": "41",
       "data": "2026-11-01",
       "titolo": "Notifiche per la Bacheca",
