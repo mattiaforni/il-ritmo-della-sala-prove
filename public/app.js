@@ -35,7 +35,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "41";
+const APP_VERSION = "42";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -188,6 +188,8 @@ const state = {
   recInfo: null,              // registrazione con i dettagli aperti (file, chi l'ha caricata, Elimina)
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
+  pushRiep: null,               // { band: [id], fan: n | null }: chi ha le notifiche attive (solo band)
+  pushRiepStato: "",            // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
   spIcon: "icons/spotify.png",
   sigle: {},
@@ -450,6 +452,7 @@ async function attivaNotifiche() {
     await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi, ...(state.fan ? { fanId: fanId() } : {}) });
     salvaPush({ endpoint: sub.endpoint, membroId, fan: state.fan, eventi, eventiV: EVENTI_PUSH_V });
     toast("Notifiche attive su questo telefono.");
+    if (!state.fan) caricaRiepilogoPush();
   } catch (e) {
     toast("Notifiche non attivate: " + (e.message || e));
   } finally {
@@ -467,6 +470,7 @@ async function disattivaNotifiche() {
   salvaPush(null);
   render();
   toast("Notifiche disattivate su questo telefono.");
+  if (!state.fan) setTimeout(caricaRiepilogoPush, 800);
 }
 // tiene allineata l'iscrizione: persona cambiata sul telefono, permesso tolto, iscrizione rinnovata dal browser.
 // I fan si riscrivono a ogni apertura: se la band ha cambiato la password, l'iscrizione passa a quella nuova.
@@ -516,9 +520,76 @@ function notificheCard() {
   return `
     <article class="card ntcard">
       <h3 class="sec-title">Notifiche <small>${state.push ? "attive su questo telefono" : ""}</small></h3>
-      <div class="pg-sec">${notificheCorpo()}</div>
+      <div class="pg-sec">${notificheCorpo()}${riepilogoPush()}</div>
     </article>`;
 }
+// chi della band ha le notifiche attive e quanti fan: si legge dalla funzione quando si apre Personale
+async function caricaRiepilogoPush() {
+  if (state.fan || !auth.currentUser || state.pushRiepStato === "carico") return;
+  state.pushRiepStato = "carico";
+  try { state.pushRiep = await chiamaNotifiche("riepilogo"); state.pushRiepStato = ""; }
+  catch (e) { console.warn("[notifiche] riepilogo", e.message); state.pushRiepStato = "errore"; }
+  render();
+}
+const elencoNomi = (l) => l.length > 1 ? l.slice(0, -1).join(", ") + " e " + l[l.length - 1] : (l[0] || "");
+function riepilogoPush() {
+  const r = state.pushRiep;
+  if (!r || !Array.isArray(r.band)) return "";
+  const con = state.membri.filter(m => r.band.includes(m.id)).map(m => m.nome);
+  const senza = state.membri.filter(m => !r.band.includes(m.id)).map(m => m.nome);
+  const fan = typeof r.fan === "number" ? ` · ${r.fan === 1 ? "1 telefono" : r.fan + " telefoni"} di fan` : "";
+  const t = (con.length ? `Attive per ${elencoNomi(con)}` : "Nessuno della band le ha attive") + fan + "."
+    + (con.length && senza.length ? ` Mancano ${elencoNomi(senza)}.` : "");
+  return `<p class="nt-riep">${esc(t)}</p>`;
+}
+
+// ---------- invito alle notifiche ----------
+// Una volta sola per telefono: appena l'app è pronta e la persona ha un nome, chi non ha le notifiche
+// e può ancora attivarle trova un foglio con «Non ora» e «Attiva» (il telefono chiede il permesso solo
+// dentro un tocco, quindi non si possono accendere da sole). Su iPhone, fuori dall'app aggiunta alla
+// Home, spiega come aggiungerla. Chi le ha bloccate nelle impostazioni non vede niente.
+let invitoTimer = null;
+function invitoPossibile() {
+  if (!state.account || state.push || store.get("prove_invito_push")) return null;
+  if (state.fan ? !state.fanNome : !state.userId) return null;
+  if (IS_IOS && !IN_APP) return "ios";
+  if (!PUSH_OK || Notification.permission === "denied") return null;
+  return "attiva";
+}
+function controllaInvito() {
+  if (invitoTimer || !invitoPossibile()) return;
+  invitoTimer = setTimeout(() => {
+    invitoTimer = null;
+    const tipo = invitoPossibile();
+    // non sopra altre finestre (nome, pannello del fan, lettore): riprova al prossimo aggiornamento
+    if (!tipo || document.hidden || state.lettore || document.querySelector(".overlay:not(.hidden)")) return;
+    store.set("prove_invito_push", String(Date.now()));
+    mostraInvito(tipo);
+  }, 1500);
+}
+function mostraInvito(tipo) {
+  const cosa = state.fan
+    ? "Un avviso sul telefono quando c'è un post nuovo in Bacheca o qualcuno risponde ai tuoi, quando la band propone un pezzo, carica una registrazione o va in diretta."
+    : "Un avviso sul telefono quando qualcuno scrive in Bacheca, propone un pezzo, carica una registrazione o avvia la diretta, e quando ti assegnano una task.";
+  const dove = state.fan ? "Le scegli e le spegni toccando il tuo nome in alto." : "Le scegli e le spegni da Personale.";
+  $("#invito-card").innerHTML = tipo === "ios" ? `
+      <h2 class="overlay-title">Notifiche su iPhone</h2>
+      <p class="overlay-sub">${cosa}</p>
+      <p class="overlay-sub">Su iPhone arrivano solo all'app aggiunta alla schermata Home: in Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, poi apri l'app da lì e attivale.</p>
+      <div class="fan-azioni"><button class="btn fill" data-action="invito-chiudi">Ho capito</button></div>`
+    : `
+      <h2 class="overlay-title">Vuoi le notifiche?</h2>
+      <p class="overlay-sub">${cosa}</p>
+      <p class="overlay-sub">${dove}</p>
+      <div class="fan-azioni"><button class="btn quiet" data-action="invito-chiudi">Non ora</button><button class="btn fill" data-action="invito-attiva">Attiva</button></div>`;
+  $("#invito-push").classList.remove("hidden");
+}
+const chiudiInvito = () => $("#invito-push")?.classList.add("hidden");
+$("#invito-push")?.addEventListener("click", e => {
+  if (e.target.id === "invito-push") { chiudiInvito(); return; }
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
 // ---------- accesso dei fan ----------
 // la band imposta la password; i fan pubblicano in Bacheca
 async function chiamaAccesso(op, extra = {}) {
@@ -711,6 +782,8 @@ onAuthStateChanged(auth, (account) => {
   if (state.fan) { state.user = null; state.userId = null; if (state.tab === "cassa" || state.tab === "personale") showTab("scaletta"); }
   else { state.user = store.get("prove_user"); state.userId = store.get("prove_user_id"); }
   state.accesso = null; state.accessoStato = ""; state.fanMenu = false; state.fanCambia = false;
+  state.pushRiep = null; state.pushRiepStato = "";
+  if (!account) $("#invito-push")?.classList.add("hidden");
   if (account) {
     $("#gate").classList.add("hidden");
     subscribe();
@@ -1019,6 +1092,7 @@ function showTab(name) {
   window.scrollTo({ top: 0 });
   if (name === "bacheca") segnaBachecaVista();
   if (name === "personale" && state.account && !state.fan && !state.accesso && !state.accessoStato) caricaAccesso();
+  if (name === "personale" && state.account && !state.fan) caricaRiepilogoPush();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 // ritorno dalla pagina di consenso di Spotify (?spotify=ok|annullato|errore)
@@ -1110,6 +1184,7 @@ function render() {
   updateNavMe();
   testata();
   syncPlayer();
+  controllaInvito();
 }
 
 // ---------- scaletta ----------
@@ -2589,6 +2664,7 @@ function renderPersonale() {
 
   // l'accesso dei fan si legge dalla funzione solo quando si apre Personale
   if (mia && state.tab === "personale" && !state.accesso && !state.accessoStato) setTimeout(caricaAccesso, 0);
+  if (mia && state.tab === "personale" && !state.pushRiep && !state.pushRiepStato) setTimeout(caricaRiepilogoPush, 0);
   view.innerHTML = `
     ${whoBar}
     ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
@@ -2866,6 +2942,8 @@ async function act(btn) {
     }
     case "mini-stop": fermaRiproduzione(); break;
     case "push-attiva": attivaNotifiche(); break;
+    case "invito-chiudi": chiudiInvito(); break;
+    case "invito-attiva": chiudiInvito(); attivaNotifiche(); break;
     case "push-disattiva": disattivaNotifiche(); break;
     case "push-evento": {
       const p = state.push;

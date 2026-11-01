@@ -158,7 +158,7 @@ Funzioni presenti:
 
 - `telegram` e `telegramOgniOra` — il bot Telegram della band (secret `TELEGRAM_TOKEN`), vedi sotto.
 - `accesso` — password dei fan (stato, imposta, disattiva: solo la band) e post/commenti dei fan in Bacheca, girati nel gruppo Telegram (secret `TELEGRAM_TOKEN`).
-- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca). Gli eventi li segnala l'app di chi fa l'azione (i post dei fan la funzione `accesso`); il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
+- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca). Gli eventi li segnala l'app di chi fa l'azione (i post dei fan la funzione `accesso`); con `riepilogo` la band vede chi ha le notifiche attive (persone della band e numero di telefoni dei fan). Chi non le ha trova nell'app, una volta sola per telefono, un invito ad attivarle; il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
 
 Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
 

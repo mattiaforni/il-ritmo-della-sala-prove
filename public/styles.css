@@ -714,6 +714,10 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .nt-row { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: none; border-bottom: 1px solid var(--linea); padding: 11px 0; text-align: left; font-size: 15px; color: var(--inchiostro); }
 .nt-row[aria-pressed="true"] .nt-box { background: var(--accento); border-color: var(--accento); }
 .nt-off { margin-top: 6px; padding-left: 0 !important; }
+.nt-riep { font-size: 13px; color: var(--inchiostro-2); margin: 10px 0 0; line-height: 1.45; }
+.invito-push .overlay-sub { line-height: 1.5; }
+.invito-push .fan-azioni { margin-top: 22px; }
+.invito-push .fan-azioni .btn { min-height: 46px; padding: 0 20px; }
 .ntcard .btn.fill, .spcard .btn.fill { margin-top: 2px; }
 .am-row { display: flex; align-items: center; gap: 10px; padding: 12px 0 2px; }
 .am-lbl { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-3); flex: none; }
