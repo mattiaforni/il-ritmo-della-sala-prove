@@ -1,9 +1,11 @@
 // Regole Firestore — Console Firebase → Firestore Database → Regole
 // Account condiviso della band: legge e scrive tutto.
 // Account dei fan (sola lettura): legge scaletta, proposte, task, persone, registrazioni,
-// diretta e bacheca, non la cassa. Scrive solo la propria richiesta di ascolto della
-// diretta, che crea e cancella, e i "mi piace" in bacheca; post e commenti in bacheca
-// li scrive per loro la funzione "accesso". La password dei fan la gestisce la band dall'app.
+// diretta, bacheca e commenti, non la cassa. Scrive solo la propria richiesta di ascolto
+// della diretta, che crea e cancella, e i "mi piace" in bacheca e sui commenti; post,
+// commenti, proposte e voti dei fan li scrive per loro la funzione "accesso".
+// La password dei fan la gestisce la band dall'app.
+// Versione 43: aggiunta la collezione "commenti" (commenti alle registrazioni).
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -14,10 +16,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'fan@il-ritmo-della-sala-prove.web.app';
     }
     match /{collection}/{doc} {
-      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'])
-        || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta', 'bacheca']);
+      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti'])
+        || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta', 'bacheca', 'commenti']);
       allow write: if band()
-        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca'];
+        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti'];
     }
     match /diretta/{id} {
       allow create: if fan() && id != 'stato'
@@ -26,6 +28,10 @@ service cloud.firestore {
       allow delete: if fan() && resource.data.tipo == 'ascolto';
     }
     match /bacheca/{id} {
+      allow update: if fan()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['piace']);
+    }
+    match /commenti/{id} {
       allow update: if fan()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['piace']);
     }

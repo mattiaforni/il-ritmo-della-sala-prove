@@ -93,11 +93,12 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 
 | Collezione | Campi |
 |---|---|
-| `canzoni` | `titolo`, `artista`, `ordine`, `spotifyUrl`, `creato` |
+| `canzoni` | `titolo`, `artista`, `ordine`, `spotifyUrl`, `creato`; proposte: `stato` "proposta", `reazioni` (voti della band, nome → "up"/"down"), `commenti`, `propostaDa`; dalla v43 `votiFan` (voti dei fan, id del telefono → `{ voto, nome, il }`) e, per le proposte dei fan, `daFan` e `fanId`. Ogni voto vale uno |
 | `tasks` | `canzoneId`, `titolo`, `assegnatari` (array di nomi), `fatto`, `fattoDa`, `fattoIl`, `creato` |
 | `membri` | `nome`, `creato` |
 | `diretta` | `stato`: `attiva`, `sessione`, `da`, `inizio`, `battito`; `ascolto-…`: `tipo`, `sessione`, `chi`, `offer`, `answer`, `creato` |
 | `bacheca` | post: `nome`, `testo`, `band` (vero se l'ha scritto la band), `creato`, `piace` (mappa chiave → true), per i fan anche `fanId` (id del telefono, per le notifiche); commenti: gli stessi campi più `postId` |
+| `commenti` | commenti alle registrazioni (dalla v43): `su` ("registrazione"), `rifId` (id della registrazione), `nome`, `band`, `fanId` (fan), `testo`, `creato`, `piace` |
 | `privato` | solo per le funzioni, i telefoni non la leggono: `spotify` (playlist), `telegram` (gruppo e impostazioni del bot) con la sottocollezione `eventi`, `telegram-foto` (ultima fotografia del database), `push` (chiavi delle notifiche) con la sottocollezione `iscrizioni` (un documento per telefono iscritto), `fan` (password dei fan, generazione, chi l'ha impostata) |
 
 ## Costi
@@ -133,6 +134,8 @@ In cima alla sezione **Audio**. Il computer della sala trasmette quello che entr
 - **Due account condivisi:** `band@…` (tutto) e `fan@…` (sola lettura). All'ingresso si sceglie Band o Fan; i fan scrivono il loro nome, che resta sul telefono, e la password da fan. Il link d'invito (`/?fan=<password>`) porta già la password: al fan resta solo il nome.
 - **La password dei fan** la imposta chiunque della band da Personale, card «Accesso fan» (funzione `accesso`, che crea o aggiorna l'account `fan@…` e tiene la password in `privato/fan`). Cambiandola, le sessioni aperte vengono revocate: le funzioni rifiutano subito, il database entro un'ora; le iscrizioni alle notifiche fatte con la password vecchia smettono di ricevere. «Disattiva» spegne l'account dei fan.
 - **I fan vedono** Scaletta, Proposte (voti visibili, non votano), Audio con la diretta e Bacheca. Non vedono Cassa e Personale: la cassa è chiusa anche dalle regole del database.
+- **Fan che propongono e votano (v43):** il + in Proposte e i voti 👍/👎 passano dalla funzione `accesso` (doppioni rifiutati, al massimo 3 proposte a settimana per telefono, limiti orari), che riallinea anche la playlist Proposte. Le proposte dei fan entrano subito fra le altre con l'etichetta «fan»; i voti dei fan stanno in `votiFan` e contano come quelli della band. Non c'è più una soglia «pronta per la scaletta»: in scaletta sposta solo la band.
+- **Commenti alle registrazioni (v43):** collezione `commenti`, nel lettore a schermo intero e toccando «N commenti» sulla riga; mi piace come in Bacheca; la band toglie i commenti, i fan scrivono tramite `accesso`. Servono le regole nuove (`firestore.rules`, collezione `commenti`) in Console Firebase.
 - **Bacheca:** post e commenti sotto i post, con «mi piace». I fan pubblicano tramite la funzione `accesso` (limite: 20 all'ora per tutti i fan insieme), che gira il messaggio anche nel gruppo Telegram; la band scrive direttamente e può togliere post e commenti. I «mi piace» li scrivono tutti direttamente (per i fan le regole permettono solo il campo `piace`).
 - **Regole del database:** con questa funzione cambiano; il file `firestore.rules` va copiato in Console Firebase → Firestore Database → Regole → Pubblica. Finché non c'è, la Bacheca lo segnala e il resto funziona come prima.
 
@@ -157,8 +160,8 @@ Funzioni presenti:
 - `playlist` e `spotifyCallback` — collegano l'account Spotify e tengono aggiornate le playlist "Scaletta" e "Proposte". Serve il Client ID dell'app Spotify in `functions/.env` (`SPOTIFY_CLIENT_ID=...`, non è un segreto) e, nell'app Spotify, il Redirect URI `https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/spotifyCallback`.
 
 - `telegram` e `telegramOgniOra` — il bot Telegram della band (secret `TELEGRAM_TOKEN`), vedi sotto.
-- `accesso` — password dei fan (stato, imposta, disattiva: solo la band) e post/commenti dei fan in Bacheca, girati nel gruppo Telegram (secret `TELEGRAM_TOKEN`).
-- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca). Gli eventi li segnala l'app di chi fa l'azione (i post dei fan la funzione `accesso`); con `riepilogo` la band vede chi ha le notifiche attive (persone della band e numero di telefoni dei fan). Chi non le ha trova nell'app, una volta sola per telefono, un invito ad attivarle; il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
+- `accesso` — password dei fan (stato, imposta, disattiva: solo la band) e post/commenti dei fan in Bacheca, girati nel gruppo Telegram (secret `TELEGRAM_TOKEN`); dalla v43 anche proposte (`proposta`), voti (`voto`) e commenti alle registrazioni (`commento`) dei fan.
+- `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca, commenti alle registrazioni). Gli eventi li segnala l'app di chi fa l'azione (quelli dei fan la funzione `accesso`); con `riepilogo` la band vede chi ha le notifiche attive (persone della band e numero di telefoni dei fan). Chi non le ha trova nell'app, una volta sola per telefono, un invito ad attivarle; il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
 
 Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).
 

@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "43",
+      "data": "2026-11-04",
+      "titolo": "I fan propongono, votano e commentano",
+      "punti": [
+        "Anche i fan possono proporre canzoni (al massimo 3 a settimana per telefono): entrano subito fra le proposte, con l'etichetta «fan».",
+        "I fan votano 👍 o 👎 e ogni voto conta uno, come quelli della band: in classifica, nella playlist Proposte e nel bot. Non c'è più la soglia «pronta per la scaletta»: in scaletta li spostate voi.",
+        "Sotto ogni registrazione si può commentare (band e fan), con il cuore come in Bacheca: nel lettore a schermo intero o toccando «N commenti». Chi l'ha caricata e chi l'ha già commentata riceve una notifica."
+      ]
+    },
+    {
       "versione": "42",
       "data": "2026-11-01",
       "titolo": "Invito ad attivare le notifiche",
