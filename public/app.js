@@ -24,7 +24,6 @@ const BAND_EMAIL = window.BAND_EMAIL || "band@il-ritmo-della-sala-prove.web.app"
 // (lo impongono le regole del database) e non vedono cassa e pagine personali. La password la imposta la band da Personale.
 const FAN_EMAIL = window.FAN_EMAIL || "fan@il-ritmo-della-sala-prove.web.app";
 const GENERALE_ID = "generale";
-const SOGLIA_SCALETTA = 5;          // da quanti 👍 il bottone "In scaletta" diventa verde
 const PALETTE = ["#b4552d", "#d99a2b", "#5b7553", "#5a6b8c", "#8c5a7a", "#3a6b6b", "#a04a4a"];
 const LIGHT_BG = new Set(["#d99a2b"]); // sfondi chiari: testo scuro
 const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
@@ -35,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "42";
+const APP_VERSION = "43";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -88,12 +87,15 @@ const EVENTI_PUSH = [
   { key: "registrazione", nome: "Nuove registrazioni" },
   { key: "diretta", nome: "Diretta dalla sala avviata" },
   { key: "scaletta", nome: "Proposte passate in scaletta" },
-  { key: "bacheca", nome: "Post e commenti in Bacheca" }
+  { key: "bacheca", nome: "Post e commenti in Bacheca" },
+  { key: "commento", nome: "Commenti alle registrazioni" }
 ];
 // con quale elenco di eventi è stata salvata l'iscrizione sul telefono: le iscrizioni fatte prima della
 // Bacheca (v41) ricevono anche quella (la funzione lo sa) e qui si aggiornano alla prima apertura
-const EVENTI_PUSH_V = 2;
-const NUOVI_EVENTI_PUSH = ["bacheca"];
+const EVENTI_PUSH_V = 3;
+// eventi arrivati con ogni versione dell'elenco: le iscrizioni più vecchie li ricevono accesi
+const NUOVI_DA_V = { 2: ["bacheca"], 3: ["commento"] };
+const nuoviDopo = (v) => Object.entries(NUOVI_DA_V).filter(([k]) => Number(k) > (Number(v) || 1)).flatMap(([, e]) => e);
 // i fan non hanno task e non votano: le proposte arrivano solo come novità
 const eventiPush = () => state.fan
   ? EVENTI_PUSH.filter(e => e.key !== "task").map(e => e.key === "proposta" ? { ...e, nome: "Nuove proposte" } : e)
@@ -189,6 +191,10 @@ const state = {
   accesso: null,              // per la band: { attivo, password, aggiornata, da } dell'accesso dei fan
   accessoStato: "",             // "" | "carico" | "errore"
   pushRiep: null,               // { band: [id], fan: n | null }: chi ha le notifiche attive (solo band)
+  commenti: [],                 // commenti alle registrazioni (collezione "commenti", dalla v43)
+  commentiNegati: false,        // le regole del database non includono ancora "commenti"
+  commentiReg: null,            // "id:modo": commenti aperti sotto una registrazione
+  vaiReg: null,                 // registrazione da mostrare appena arrivano i dati (tocco su una notifica)
   pushRiepStato: "",            // "" | "carico" | "errore"
   accessoForm: false, accessoOcc: false, accessoVedi: false,
   spIcon: "icons/spotify.png",
@@ -271,15 +277,22 @@ const isGenerale = (c) => c.id === GENERALE_ID || c.stato === "generale";
 const isNostro = (c) => !!(c && c.nostro);
 const scaletta = () => state.canzoni.filter(c => !isGenerale(c) && c.stato !== "proposta");
 const proposte = () => state.canzoni.filter(c => c.stato === "proposta");
+// Voti: la band in "reazioni" (nome → "up"/"down"), dalla v43 i fan in "votiFan"
+// (id del telefono → { voto, nome, il }, li scrive la funzione "accesso"). Ogni voto vale uno.
+const votiFanDi = (c, v) => Object.values(c.votiFan || {}).filter(x => x && x.voto === v);
+const contaVoti = (c, v) => Object.values(c.reazioni || {}).filter(x => x === v).length + votiFanDi(c, v).length;
 // classifica delle proposte: più 👍 prima; a parità, meno 👎; poi la più vecchia
-const contaVoti = (c, v) => Object.values(c.reazioni || {}).filter(x => x === v).length;
 const perClassifica = (a, b) => contaVoti(b, "up") - contaVoti(a, "up") || contaVoti(a, "down") - contaVoti(b, "down") || (a.ordine || 0) - (b.ordine || 0);
+// il voto di chi usa l'app: la persona della band o il telefono del fan
+const mioVoto = (c) => state.fan ? ((c.votiFan || {})[fanId()] || {}).voto || null : (state.user ? (c.reazioni || {})[state.user] || null : null);
+const conMioVoto = (c, voto) => state.fan
+  ? { ...c, votiFan: { ...(c.votiFan || {}), [fanId()]: voto ? { voto, nome: state.fanNome || "" } : undefined } }
+  : { ...c, reazioni: { ...(c.reazioni || {}), [state.user]: voto } };
 // dove finisce una proposta nella classifica di chi usa l'app dopo il suo voto
 function posizioneDopoVoto(id, voto) {
-  const me = state.user;
   const lista = proposte()
-    .map(c => c.id === id ? { ...c, reazioni: { ...(c.reazioni || {}), [me]: voto } } : c)
-    .filter(c => (c.reazioni || {})[me]).sort(perClassifica);
+    .map(c => c.id === id ? conMioVoto(c, voto) : c)
+    .filter(c => mioVoto(c)).sort(perClassifica);
   return { pos: lista.findIndex(c => c.id === id) + 1, tot: lista.length };
 }
 const msgPosizione = (id, voto) => { const { pos, tot } = posizioneDopoVoto(id, voto); return pos ? ` Ora è ${pos}ª su ${tot}.` : ""; };
@@ -485,7 +498,7 @@ async function riallineaNotifiche() {
     // eventi arrivati dopo l'iscrizione (es. Bacheca): partono accesi
     const vecchia = (Number(state.push.eventiV) || 1) < EVENTI_PUSH_V;
     const ammessi = eventiPush().map(e => e.key);
-    const eventi = [...state.push.eventi, ...(vecchia ? NUOVI_EVENTI_PUSH : [])].filter((k, i, a) => ammessi.includes(k) && a.indexOf(k) === i);
+    const eventi = [...state.push.eventi, ...nuoviDopo(state.push.eventiV)].filter((k, i, a) => ammessi.includes(k) && a.indexOf(k) === i);
     if (cambiata || state.fan) {
       if (!membroId && !state.fan) return;
       await chiamaNotifiche("iscrivi", { sub: sub.toJSON(), membroId, eventi, ...(state.fan ? { fanId: fanId() } : {}) });
@@ -507,12 +520,12 @@ function notificheCorpo() {
     return `<p class="nt-txt">Le notifiche dell'app sono bloccate nelle impostazioni del telefono: vanno riattivate lì, poi torna qui.</p>`;
   }
   if (!state.push) {
-    return `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.fan ? "" : "task assegnate a te, "}registrazioni, diretta, passaggi in scaletta e post in Bacheca. Poi scegli quali tenere.</p>
+    return `<p class="nt-txt">Avvisi sul telefono anche ad app chiusa: proposte nuove, ${state.fan ? "" : "task assegnate a te, "}registrazioni e commenti, diretta, passaggi in scaletta e post in Bacheca. Poi scegli quali tenere.</p>
       <button class="btn fill" data-action="push-attiva" ${state.pushOcc ? "disabled" : ""}>${state.pushOcc ? "Attivo…" : "Attiva notifiche"}</button>`;
   }
   const vecchia = (Number(state.push.eventiV) || 1) < EVENTI_PUSH_V;
   return eventiPush().map(e => {
-    const on = state.push.eventi.includes(e.key) || (vecchia && NUOVI_EVENTI_PUSH.includes(e.key));
+    const on = state.push.eventi.includes(e.key) || (vecchia && nuoviDopo(state.push.eventiV).includes(e.key));
     return `<button class="nt-row" data-action="push-evento" data-key="${e.key}" aria-pressed="${on}"><span class="nt-box">${on ? IC("check") : ""}</span><span>${e.nome}</span></button>`;
   }).join("") + `<button class="btn quiet nt-off" data-action="push-disattiva">Disattiva su questo telefono</button>`;
 }
@@ -551,6 +564,7 @@ function riepilogoPush() {
 let invitoTimer = null;
 function invitoPossibile() {
   if (!state.account || state.push || store.get("prove_invito_push")) return null;
+  if (novitaFanDaMostrare()) return null;   // prima le novità dei fan, poi (eventualmente) l'invito
   if (state.fan ? !state.fanNome : !state.userId) return null;
   if (IS_IOS && !IN_APP) return "ios";
   if (!PUSH_OK || Notification.permission === "denied") return null;
@@ -569,7 +583,7 @@ function controllaInvito() {
 }
 function mostraInvito(tipo) {
   const cosa = state.fan
-    ? "Un avviso sul telefono quando c'è un post nuovo in Bacheca o qualcuno risponde ai tuoi, quando la band propone un pezzo, carica una registrazione o va in diretta."
+    ? "Un avviso sul telefono quando c'è un post nuovo in Bacheca o qualcuno risponde ai tuoi commenti, quando arriva una proposta, la band carica una registrazione o va in diretta."
     : "Un avviso sul telefono quando qualcuno scrive in Bacheca, propone un pezzo, carica una registrazione o avvia la diretta, e quando ti assegnano una task.";
   const dove = state.fan ? "Le scegli e le spegni toccando il tuo nome in alto." : "Le scegli e le spegni da Personale.";
   $("#invito-card").innerHTML = tipo === "ios" ? `
@@ -585,6 +599,37 @@ function mostraInvito(tipo) {
   $("#invito-push").classList.remove("hidden");
 }
 const chiudiInvito = () => $("#invito-push")?.classList.add("hidden");
+
+// ---------- novità per i fan ----------
+// Una volta per telefono e per novità (prove_novita_fan = NOVITA_FAN), solo ai fan con il nome:
+// cosa possono fare di nuovo nell'app. Compare prima dell'invito alle notifiche.
+const NOVITA_FAN = "43";
+let novitaTimer = null;
+const novitaFanDaMostrare = () => !!(state.fan && state.account && state.fanNome && store.get("prove_novita_fan") !== NOVITA_FAN);
+function controllaNovitaFan() {
+  if (novitaTimer || !novitaFanDaMostrare()) return;
+  novitaTimer = setTimeout(() => {
+    novitaTimer = null;
+    if (!novitaFanDaMostrare() || document.hidden || state.lettore || document.querySelector(".overlay:not(.hidden)")) return;
+    store.set("prove_novita_fan", NOVITA_FAN);
+    $("#novita-card").innerHTML = `
+      <h2 class="overlay-title">Novità per i fan</h2>
+      <p class="overlay-sub">Tre cose nuove nell'app.</p>
+      <div class="nf-voci">
+        <div class="nf-voce">${IC("piu")}<div><b>Proponi canzoni</b><span>In Proposte tocca il + in basso a destra: la tua proposta va fra quelle della band.</span></div></div>
+        <div class="nf-voce">${IC("su")}<div><b>Vota le proposte</b><span>Pollice su o pollice giù su ogni proposta: il tuo voto conta come quello di chi suona.</span></div></div>
+        <div class="nf-voce">${IC("audio")}<div><b>Commenta le registrazioni</b><span>Mentre ascolti, in fondo al lettore. Sotto le registrazioni già commentate tocca «commenti».</span></div></div>
+      </div>
+      <div class="fan-azioni"><button class="btn quiet" data-action="novita-proposte">Vai alle proposte</button><button class="btn fill" data-action="novita-chiudi">Ho capito</button></div>`;
+    $("#novita-fan").classList.remove("hidden");
+  }, 900);
+}
+function chiudiNovitaFan() { $("#novita-fan")?.classList.add("hidden"); render(); }
+$("#novita-fan")?.addEventListener("click", e => {
+  if (e.target.id === "novita-fan") { chiudiNovitaFan(); return; }
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
 $("#invito-push")?.addEventListener("click", e => {
   if (e.target.id === "invito-push") { chiudiInvito(); return; }
   const btn = e.target.closest("[data-action]");
@@ -700,7 +745,7 @@ function salvaNomeFan(nome) {
   render();
 }
 
-// tocco su una notifica: la pagina giusta (?vai=proposte|audio|bacheca|canzone&id=…)
+// tocco su una notifica: la pagina giusta (?vai=proposte|audio|bacheca|canzone&id=…|registrazione&id=…)
 function vaiA(url) {
   let q;
   try { q = new URL(url, location.href).searchParams; } catch { return; }
@@ -709,7 +754,8 @@ function vaiA(url) {
     const id = q.get("id");
     if (state.ready.canzoni && state.canzoni.some(c => c.id === id)) { showTab("scaletta"); apriCanzone(id); }
     else { state.vaiCanzone = id; showTab("scaletta"); }
-  } else if (vai === "proposte" || vai === "audio" || vai === "bacheca") showTab(vai);
+  } else if (vai === "registrazione") { state.vaiReg = q.get("id"); showTab("audio"); render(); }
+  else if (vai === "proposte" || vai === "audio" || vai === "bacheca") showTab(vai);
 }
 navigator.serviceWorker?.addEventListener("message", e => {
   if (e.data && e.data.tipo === "vai") vaiA(e.data.url);
@@ -783,7 +829,7 @@ onAuthStateChanged(auth, (account) => {
   else { state.user = store.get("prove_user"); state.userId = store.get("prove_user_id"); }
   state.accesso = null; state.accessoStato = ""; state.fanMenu = false; state.fanCambia = false;
   state.pushRiep = null; state.pushRiepStato = "";
-  if (!account) $("#invito-push")?.classList.add("hidden");
+  if (!account) { $("#invito-push")?.classList.add("hidden"); $("#novita-fan")?.classList.add("hidden"); }
   if (account) {
     $("#gate").classList.add("hidden");
     subscribe();
@@ -931,6 +977,7 @@ function subscribe() {
     state[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     state.ready[key] = true;
     if (key === "bacheca") state.bachecaNegata = false;
+    if (key === "commenti") state.commentiNegati = false;
     if (key === "membri") { computeSigle(); ensureUser(); }
     if (key === "canzoni") ensureGenerale(snap);
     render();
@@ -944,6 +991,13 @@ function subscribe() {
     console.warn("[bacheca]", err);
     state.ready.bacheca = true;
     state.bachecaNegata = !!err && err.code === "permission-denied";
+    render();
+  });
+  // commenti alle registrazioni (v43): finché le regole non li includono, niente barra rossa
+  listen("commenti", query(collection(db, "commenti"), orderBy("creato")), "commenti", null, err => {
+    console.warn("[commenti]", err);
+    state.ready.commenti = true;
+    state.commentiNegati = !!err && err.code === "permission-denied";
     render();
   });
   // la cassa i fan non la vedono (e il database non gliela darebbe)
@@ -1051,7 +1105,7 @@ function contesto(tab) {
     return plurale(l.length, "pezzo", "pezzi") + (pronte ? ` · ${plurale(pronte, "pronto", "pronti")}` : "");
   }
   if (tab === "proposte") {
-    const l = proposte(), dv = state.user ? l.filter(c => !(c.reazioni || {})[state.user]).length : 0;
+    const l = proposte(), dv = state.user || state.fan ? l.filter(c => !mioVoto(c)).length : 0;
     return plurale(l.length, "proposta", "proposte") + (dv ? ` · ${dv} da votare` : "");
   }
   if (tab === "audio") {
@@ -1113,6 +1167,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   if (!vai) return;
   history.replaceState(null, "", location.pathname);
   if (vai === "canzone") { state.tab = "scaletta"; state.vaiCanzone = q.get("id"); }
+  else if (vai === "registrazione") { state.tab = "audio"; state.vaiReg = q.get("id"); }
   else if (vai === "proposte" || vai === "audio" || vai === "bacheca") state.tab = vai;
 })();
 showTab(state.tab);
@@ -1173,6 +1228,12 @@ function render() {
     state.vaiCanzone = null;
     if (state.canzoni.some(c => c.id === id)) { if (state.tab !== "scaletta") showTab("scaletta"); apriCanzone(id); return; }
   }
+  // dalla notifica di un commento: Audio con i commenti di quella registrazione aperti
+  let regDaMostrare = null;
+  if (state.vaiReg && state.ready.registrazioni) {
+    regDaMostrare = state.vaiReg; state.vaiReg = null;
+    if (state.registrazioni.some(r => r.id === regDaMostrare)) state.commentiReg = `${regDaMostrare}:audio`; else regDaMostrare = null;
+  }
   const kept = captureInputs();
   renderScaletta();
   renderProposte();
@@ -1184,7 +1245,9 @@ function render() {
   updateNavMe();
   testata();
   syncPlayer();
+  controllaNovitaFan();
   controllaInvito();
+  if (regDaMostrare) setTimeout(() => vaiARegistrazione(regDaMostrare), 0);
 }
 
 // ---------- scaletta ----------
@@ -1437,7 +1500,7 @@ function addSongBlock(where, label, cta) {
       <div class="foglio-corpo">
         <label class="campo"><span>Titolo</span><input class="field" name="titolo" data-keep="add-${where}-titolo" maxlength="80" autocomplete="off" required></label>
         <label class="campo"><span>Artista</span><input class="field" name="artista" data-keep="add-${where}-artista" maxlength="60" autocomplete="off"></label>
-        <label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>
+        ${state.fan ? "" : `<label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>`}
       </div>
       <div class="foglio-barra"><span class="sp"></span><button class="btn fill" type="submit">${cta}</button></div>
     </form>`;
@@ -1465,7 +1528,7 @@ function renderProposte() {
   // in alto, evidenziate, quelle che chi usa l'app non ha ancora votato (dalla più recente);
   // sotto la classifica. Dopo un 👍 la proposta resta in alto finché è aperto il campo del commento.
   const tieni = (c) => state.commentoVoto && state.commentoVoto.tieni && state.commentoVoto.id === c.id;
-  const daVotare = (c) => state.user && (!(c.reazioni || {})[state.user] || tieni(c));
+  const daVotare = (c) => (state.user || state.fan) && (!mioVoto(c) || tieni(c));
   const tutte = proposte();
   const nuove = tutte.filter(daVotare).sort((a, b) => (b.ordine || 0) - (a.ordine || 0));
   const classifica = tutte.filter(c => !daVotare(c)).sort(perClassifica);
@@ -1474,7 +1537,9 @@ function renderProposte() {
     const r = c.reazioni || {};
     const su = Object.keys(r).filter(n => r[n] === "up");
     const giu = Object.keys(r).filter(n => r[n] === "down");
-    const mia = state.user ? r[state.user] : null;
+    const fanSu = votiFanDi(c, "up").map(x => x.nome || "Fan"), fanGiu = votiFanDi(c, "down").map(x => x.nome || "Fan");
+    const nSu = su.length + fanSu.length, nGiu = giu.length + fanGiu.length;
+    const mia = mioVoto(c);
     const open = state.votersOpen.has(c.id);
     const com = commentiDi(c);
     // chi ha commentato compare con il suo commento, gli altri solo con la sigla
@@ -1483,19 +1548,22 @@ function renderProposte() {
     const pollice = (v) => `<span class="vl ${v === "down" ? "giu" : "su"}" aria-label="${v === "down" ? "Non mi piace" : "Mi piace"}">${IC(v === "down" ? "giu" : "su")}</span>`;
     // sulla riga solo titolo e i due voti (si votano da lì); toccando la riga si aprono
     // ascolto, chi ha votato, commenti e le azioni (Modifica, Elimina, In scaletta)
+    // i voti dei fan: una riga a parte con i nomi (i fan non hanno sigla)
+    const nomiFan = (l) => `<span class="vf">${l.map(esc).join(", ")}</span>`;
     const voters = `
       <div class="voters">
+        ${c.daFan ? `<span class="vda">Proposta da ${esc(c.propostaDa || "un fan")} <span class="etic-fan">fan</span></span>` : ""}
         ${suSolo.length ? `<span class="vg">${pollice("up")}${suSolo.map(iniTag).join("")}</span>` : ""}
         ${giuSolo.length ? `<span class="vg">${pollice("down")}${giuSolo.map(iniTag).join("")}</span>` : ""}
-        ${!su.length && !giu.length ? `<span class="none">Nessun voto ancora.</span>` : ""}
+        ${fanSu.length || fanGiu.length ? `<span class="vg vg-fan"><span class="etic-fan">fan</span>${fanSu.length ? `${pollice("up")}${nomiFan(fanSu)}` : ""}${fanGiu.length ? `${pollice("down")}${nomiFan(fanGiu)}` : ""}</span>` : ""}
+        ${!nSu && !nGiu ? `<span class="none">Nessun voto ancora.</span>` : ""}
         ${com.length ? `<div class="vcom-list">${com.map(([n, t]) => `<div class="vcom">${pollice(r[n])}${iniTag(n)}<span class="vcom-t">${esc(t)}</span></div>`).join("")}</div>` : ""}
       </div>`;
-    const pronta = su.length >= SOGLIA_SCALETTA;
-    const voti = state.fan ? `
-        <span class="voto sola" aria-label="Mi piace: ${su.length}">${IC("su")}${su.length}</span>
-        <span class="voto sola" aria-label="Non mi piace: ${giu.length}">${IC("giu")}${giu.length}</span>` : `
-        <button class="voto${mia === "up" ? " on up" : ""}" data-action="react-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${su.length}">${IC("su")}${su.length}</button>
-        <button class="voto${mia === "down" ? " on down" : ""}" data-action="react-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${giu.length}">${IC("giu")}${giu.length}</button>`;
+    // band e fan votano dalla riga; il voto dei fan passa dalla funzione (azione fan-voto)
+    const azione = state.fan ? "fan-voto" : "react";
+    const voti = `
+        <button class="voto${mia === "up" ? " on up" : ""}" data-action="${azione}-up" data-id="${c.id}" aria-pressed="${mia === "up"}" aria-label="Mi piace, ${nSu}">${IC("su")}${nSu}</button>
+        <button class="voto${mia === "down" ? " on down" : ""}" data-action="${azione}-down" data-id="${c.id}" aria-pressed="${mia === "down"}" aria-label="Non mi piace, ${nGiu}">${IC("giu")}${nGiu}</button>`;
     const dettagli = !(open || state.linkEdit === c.id) ? "" : `
       <div class="prop-dett">
         <div class="pg-link">${linksHtml(c, true)}</div>
@@ -1506,7 +1574,7 @@ function renderProposte() {
           <button class="btn quiet" data-action="link-edit" data-id="${c.id}" aria-expanded="${state.linkEdit === c.id}">${IC("matita")}Modifica</button>
           <button class="btn quiet" data-action="del-song" data-id="${c.id}">${IC("cestino")}Elimina</button>
           <span class="sp"></span>
-          <button class="btn${pronta ? " go" : ""}" data-action="promote" data-id="${c.id}">${IC("sopra")}In scaletta</button>
+          <button class="btn" data-action="promote" data-id="${c.id}">${IC("sopra")}In scaletta</button>
         </div>`}
       </div>`;
     return `
@@ -1514,8 +1582,8 @@ function renderProposte() {
       <div class="prop-riga" data-action="voters" data-id="${c.id}" role="button" tabindex="0" aria-expanded="${!!dettagli}">
         <span class="num" aria-hidden="true">${rango || ""}</span>
         <div class="brano-testo">
-          <h2 class="song-title">${esc(c.titolo)}</h2>
-          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}${pronta ? `<span class="ok"> · pronta per la scaletta</span>` : ""}</div>
+          <h2 class="song-title">${esc(c.titolo)}${c.daFan ? ` <span class="etic-fan">fan</span>` : ""}</h2>
+          <div class="song-artist">${esc(c.artista || "")}${com.length ? `<span class="ncom"> · ${com.length} ${com.length === 1 ? "commento" : "commenti"}</span>` : ""}</div>
         </div>
         <div class="prop-voti">${voti}</div>
       </div>
@@ -1526,8 +1594,8 @@ function renderProposte() {
   const cards = (nuove.length ? `<h3 class="prop-sez amb">Da votare <small>${nuove.length}</small></h3>${nuove.map(c => card(c)).join("")}` : "") +
     (classifica.length ? `<h3 class="prop-sez">Classifica</h3>${classifica.map((c, i) => card(c, i + 1)).join("")}` : "");
   $("#view-proposte").innerHTML = plStrip("proposte") +
-    (lista.length ? cards : `<p class="empty big">Nessuna proposta${state.fan ? " per ora." : ". Butta lì un pezzo da provare."}</p>`) +
-    (state.fan ? "" : addSongBlock("proposte", "Proponi un pezzo", "Proponi"));
+    (lista.length ? cards : `<p class="empty big">Nessuna proposta. Butta lì un pezzo da provare.</p>`) +
+    addSongBlock("proposte", state.fan ? "Proponi una canzone" : "Proponi un pezzo", "Proponi");
 }
 
 // ---------- registrazioni ----------
@@ -1549,6 +1617,11 @@ function recRow(r, mode) {
   const nome = state.fan
     ? `<span class="rec-name">${esc(titolo)}</span>`
     : `<span class="rec-name" data-action="rec-info" data-id="${r.id}" data-modo="${mode}" role="button" tabindex="0" aria-expanded="${aperta}">${esc(titolo)}</span>`;
+  // commenti: «N commenti» sulla riga; toccandolo si aprono sotto (anche per i fan)
+  const nCom = commentiReg(r.id).length;
+  const comAperti = state.commentiReg === `${r.id}:${mode}`;
+  const ncom = nCom ? `<button class="rec-ncmt" data-action="rec-commenti" data-id="${r.id}" data-modo="${mode}" aria-expanded="${comAperti}">${nCom} ${nCom === 1 ? "commento" : "commenti"}</button>` : "";
+  const blocCom = comAperti ? `<div class="rec-cmts">${commentiRegHtml(r, mode)}</div>` : "";
   const dettagli = !aperta ? "" : `
       <div class="rec-det">
         <span class="rec-det-t"><span class="rec-file">${esc(r.nomeFile || "nome del file non salvato")}</span>${[r.caricatoDa ? `caricata da ${esc(r.caricatoDa)}` : "", esc(fmtMB(r.size))].filter(Boolean).join(" · ")}</span>
@@ -1557,12 +1630,12 @@ function recRow(r, mode) {
   return `
     <div class="rec${r.preferita ? " pref" : ""}${aperta ? " aperta" : ""}" data-rec="${r.id}">
       ${nome}
-      <span class="rec-meta">${sotto.map(t => `<span>${t}</span>`).join("")}<span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span></span>
+      <span class="rec-meta">${sotto.map(t => `<span>${t}</span>`).join("")}<span class="time" data-time="${r.id}">${fmtTime(r.durata)}</span>${ncom ? `<span>${ncom}</span>` : ""}</span>
       ${stella}
       <div class="player">
         <button class="play" data-action="play" data-id="${r.id}" aria-label="Riproduci">${IC("play")}</button>
         <div class="line" data-action="seek" data-id="${r.id}"><span><i data-prog="${r.id}"></i></span></div>
-      </div>${dettagli}
+      </div>${dettagli}${blocCom}
     </div>`;
 }
 function renderAudio() {
@@ -2037,9 +2110,13 @@ function renderLettore() {
   const pos = posizioneInCoda();
   const dopo = codaDopo();
   const chiave = [r.id, info.titolo, info.sotto, pos, r.preferita ? 1 : 0, state.codaFonte, state.fan ? 1 : 0,
-    dopo.map(x => x.id + ":" + (x.durata || 0)).join(",")].join("|");
+    dopo.map(x => x.id + ":" + (x.durata || 0)).join(","), firmaCommenti(r.id)].join("|");
   if (lettoreEl.dataset.chiave === chiave) return;
   lettoreEl.dataset.chiave = chiave;
+  // il commento che si sta scrivendo sopravvive al ridisegno (arriva un commento di un altro, un mi piace)
+  const campo = lettoreEl.querySelector('[data-keep^="rcmt-lt-"]');
+  const scritto = campo ? { k: campo.dataset.keep, v: campo.value, fuoco: document.activeElement === campo } : null;
+  const nCom = commentiReg(r.id).length;
   const sotto = [song && r.etichetta ? r.etichetta : (song ? "" : "senza canzone"), fmtGiorno(r.data)].filter(Boolean).join(" · ");
   const stella = state.fan
     ? (r.preferita ? `<span class="stella on lt-stella" aria-label="Preferita">${IC("stella")}</span>` : "")
@@ -2076,6 +2153,10 @@ function renderLettore() {
         <button data-action="lt-audio" data-id="${r.id}">In Audio ${IC("freccia")}</button>
       </div>
     </div>
+    <section class="lt-commenti">
+      <h3 class="fascia">Commenti${nCom ? ` <small>${nCom}</small>` : ""}</h3>
+      ${commentiRegHtml(r, "lt")}
+    </section>
     ${dopo.length ? `<section class="lt-coda">
       <h3 class="fascia">Dopo <small>${dopo.length}</small></h3>
       ${dopo.map((x, k) => {
@@ -2087,6 +2168,10 @@ function renderLettore() {
         </button>`;
       }).join("")}
     </section>` : ""}`;
+  if (scritto) {
+    const nuovo = lettoreEl.querySelector(`[data-keep="${CSS.escape(scritto.k)}"]`);
+    if (nuovo) { nuovo.value = scritto.v; if (scritto.fuoco) nuovo.focus(); }
+  }
 }
 function apriLettore() {
   if (!lettoreEl || !state.playId || state.lettore) return;
@@ -2133,6 +2218,13 @@ function vaiARegistrazione(id) {
   }
 }
 if (lettoreEl) {
+  // commenti alla registrazione in ascolto
+  lettoreEl.addEventListener("submit", e => {
+    const form = e.target.closest('form[data-form="reg-commento"]');
+    if (!form) return;
+    e.preventDefault();
+    inviaCommentoReg(form);
+  });
   lettoreEl.addEventListener("click", e => {
     window.__lastX = e.clientX;
     const btn = e.target.closest("[data-action]");
@@ -2434,9 +2526,54 @@ function aggiornaPuntoBacheca() {
 function chiMsg(m) {
   return m.band ? `${iniTag(m.nome)}<b>${esc(m.nome)}</b><span class="msg-band">band</span>` : `<b>${esc(m.nome || "Fan")}</b>`;
 }
-function bottonePiace(m) {
+function bottonePiace(m, azione = "piace") {
   const n = quantiPiace(m), mio = !!(m.piace || {})[chiavePiace()];
-  return `<button class="piace${mio ? " on" : ""}" data-action="piace" data-id="${m.id}" aria-pressed="${mio}" aria-label="Mi piace${n ? ", " + n : ""}">${IC("cuore")}${n ? n : ""}</button>`;
+  return `<button class="piace${mio ? " on" : ""}" data-action="${azione}" data-id="${m.id}" aria-pressed="${mio}" aria-label="Mi piace${n ? ", " + n : ""}">${IC("cuore")}${n ? n : ""}</button>`;
+}
+
+// ---------- commenti alle registrazioni (v43) ----------
+// Collezione "commenti" { su: "registrazione", rifId, nome, band, fanId, testo, creato, piace }: generica,
+// per poterla usare in futuro anche su proposte o pezzi. La band scrive e toglie direttamente;
+// i fan scrivono passando dalla funzione "accesso"; i mi piace li scrivono tutti (per i fan le regole
+// permettono solo quel campo). Si leggono e scrivono nel lettore a schermo intero e, toccando
+// «N commenti» sulla riga, sotto la registrazione.
+const commentiReg = (id) => state.commenti.filter(m => m.su === "registrazione" && m.rifId === id).sort((a, b) => msMsg(a) - msMsg(b));
+function commentiRegHtml(r, dove) {
+  const cs = commentiReg(r.id);
+  const togli = (m) => state.fan ? "" : `<button class="del-mini" data-action="del-commento" data-id="${m.id}" aria-label="Togli il commento" title="Togli">${IC("x")}</button>`;
+  const lista = cs.map(m => `
+      <div class="cmt">
+        <div class="cmt-riga"><span class="cmt-chi">${chiMsg(m)}</span><span class="msg-quando">${esc(quandoMsg(m))}</span>${togli(m)}</div>
+        <div class="cmt-corpo"><span class="cmt-txt">${esc(m.testo)}</span>${bottonePiace(m, "piace-commento")}</div>
+      </div>`).join("");
+  const modulo = state.commentiNegati
+    ? `<p class="rcmt-nota">${state.fan ? "I commenti non sono ancora pronti." : "I commenti si attivano quando le regole del database includono «commenti» (file firestore.rules del progetto, da incollare in Console Firebase → Firestore Database → Regole)."}</p>`
+    : `<form class="cmt-form" data-form="reg-commento" data-rec="${r.id}">
+        <input class="field" name="testo" data-keep="rcmt-${dove}-${r.id}" maxlength="300" placeholder="Scrivi un commento…" autocomplete="off" required>
+        <button class="btn fill" type="submit">Invia</button>
+      </form>`;
+  return `<div class="rcmts${cs.length ? "" : " vuoti"}">${lista}${modulo}</div>`;
+}
+const firmaCommenti = (id) => commentiReg(id).map(m => `${m.id}:${quantiPiace(m)}:${(m.piace || {})[chiavePiace()] ? 1 : 0}`).join(",") + (state.commentiNegati ? "!" : "");
+async function inviaCommentoReg(form) {
+  const rid = form.dataset.rec;
+  const campo = form.testo;
+  const testo = String(campo.value || "").trim().slice(0, 300);
+  if (!testo || !rid) return;
+  const btn = form.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    if (state.fan) await chiamaAccesso("commento", { rifId: rid, testo, fanId: fanId() });
+    else {
+      if (!state.user) { toast("Scegli prima il tuo nome."); return; }
+      const ref = await addDoc(collection(db, "commenti"), { su: "registrazione", rifId: rid, nome: state.user, band: true, testo, piace: {}, creato: serverTimestamp() });
+      notifica("commento", { id: ref.id });
+    }
+    campo.value = "";
+    document.querySelectorAll(`[data-keep^="rcmt-"][data-keep$="-${CSS.escape(rid)}"]`).forEach(el => { el.value = ""; });
+  } catch (ex) {
+    toast(state.fan ? "Non pubblicato: " + ex.message : "Non pubblicato. Controlla la connessione e riprova.");
+  } finally { btn.disabled = false; }
 }
 function renderBacheca() {
   const view = $("#view-bacheca");
@@ -2548,7 +2685,8 @@ function nomiInUso() {
   const uso = new Map();
   const add = (n, k) => { if (!n) return; const o = uso.get(n) || { voti: 0, task: 0, altro: 0 }; o[k]++; uso.set(n, o); };
   state.tasks.forEach(t => { (t.assegnatari || []).forEach(n => add(n, "task")); add(t.fattoDa, "task"); (Array.isArray(t.fattiDa) ? t.fattiDa : []).forEach(n => add(n, "task")); });
-  state.canzoni.forEach(c => { Object.keys(c.reazioni || {}).forEach(n => add(n, "voti")); add(c.propostaDa, "altro"); });
+  // le proposte dei fan portano il nome del fan, non di una persona della band
+  state.canzoni.forEach(c => { Object.keys(c.reazioni || {}).forEach(n => add(n, "voti")); if (!c.daFan) add(c.propostaDa, "altro"); });
   state.registrazioni.forEach(r => add(r.caricatoDa, "altro"));
   state.movimenti.forEach(m => { add(m.chi, "altro"); add(m.registratoDa, "altro"); });
   return uso;
@@ -2583,7 +2721,7 @@ function sostituisciNome(vecchio, nuovo) {
       delete nr[vecchio];
       upd.reazioni = nr;
     }
-    if (c.propostaDa === vecchio) upd.propostaDa = nuovo;
+    if (c.propostaDa === vecchio && !c.daFan) upd.propostaDa = nuovo;
     if (Object.keys(upd).length) { batch.update(doc(db, "canzoni", c.id), upd); n++; }
   });
   state.registrazioni.forEach(r => { if (r.caricatoDa === vecchio) { batch.update(doc(db, "registrazioni", r.id), { caricatoDa: nuovo }); n++; } });
@@ -2705,7 +2843,7 @@ async function aggiungiParte(songId, key) {
 // azioni che scrivono nel database: ai fan non arrivano (e il database le rifiuterebbe comunque)
 const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
-  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "add-open",
+  "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "del-commento",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg"
 ]);
@@ -2841,6 +2979,28 @@ async function act(btn) {
       }
       break;
     }
+    case "fan-voto-up": case "fan-voto-down": {
+      // voto di un fan: lo scrive la funzione; intanto la riga mostra subito il voto nuovo
+      const c = state.canzoni.find(x => x.id === id);
+      if (!c || !state.fan) return;
+      const voto = action === "fan-voto-up" ? "up" : "down";
+      const nuovo = mioVoto(c) === voto ? null : voto;
+      const eraNuova = !mioVoto(c);
+      const dove = nuovo && eraNuova ? msgPosizione(id, nuovo) : "";
+      const prima = c.votiFan;
+      const k = fanId();
+      c.votiFan = { ...(c.votiFan || {}) };
+      if (nuovo) c.votiFan[k] = { voto: nuovo, nome: state.fanNome || "" }; else delete c.votiFan[k];
+      render();
+      try {
+        await chiamaAccesso("voto", { canzoneId: id, voto: nuovo, fanId: k });
+        if (nuovo) toast((nuovo === "up" ? "Voto 👍 salvato." : "Voto 👎 salvato.") + dove);
+      } catch (e) {
+        c.votiFan = prima; render();
+        toast("Voto non salvato: " + e.message);
+      }
+      break;
+    }
     case "commento-chiudi": {
       const cv = state.commentoVoto;
       state.commentoVoto = null;
@@ -2943,13 +3103,15 @@ async function act(btn) {
     case "mini-stop": fermaRiproduzione(); break;
     case "push-attiva": attivaNotifiche(); break;
     case "invito-chiudi": chiudiInvito(); break;
+    case "novita-chiudi": chiudiNovitaFan(); break;
+    case "novita-proposte": chiudiNovitaFan(); showTab("proposte"); break;
     case "invito-attiva": chiudiInvito(); attivaNotifiche(); break;
     case "push-disattiva": disattivaNotifiche(); break;
     case "push-evento": {
       const p = state.push;
       if (!p) return;
       const k = btn.dataset.key;
-      const attuali = (Number(p.eventiV) || 1) < EVENTI_PUSH_V ? [...new Set([...p.eventi, ...NUOVI_EVENTI_PUSH])] : p.eventi;
+      const attuali = [...new Set([...p.eventi, ...nuoviDopo(p.eventiV)])];
       const eventi = attuali.includes(k) ? attuali.filter(x => x !== k) : [...attuali, k];
       salvaPush({ ...p, eventi, eventiV: EVENTI_PUSH_V });
       render();
@@ -2976,6 +3138,26 @@ async function act(btn) {
       cs.forEach(c => batch.delete(doc(db, "bacheca", c.id)));
       batch.delete(doc(db, "bacheca", id));
       await batch.commit().catch(erroreScrittura);
+      break;
+    }
+    case "rec-commenti": {
+      const k = `${id}:${btn.dataset.modo}`;
+      state.commentiReg = state.commentiReg === k ? null : k;
+      render();
+      break;
+    }
+    case "piace-commento": {
+      const m = state.commenti.find(x => x.id === id);
+      if (!m) return;
+      const k = chiavePiace();
+      const gia = !!(m.piace || {})[k];
+      await updateDoc(doc(db, "commenti", id), new FieldPath("piace", k), gia ? deleteField() : true).catch(erroreScrittura);
+      break;
+    }
+    case "del-commento": {
+      const m = state.commenti.find(x => x.id === id);
+      if (!m || !confirm(`Togliere il commento di ${m.nome || "un fan"}?`)) return;
+      await deleteDoc(doc(db, "commenti", id)).catch(erroreScrittura);
       break;
     }
     case "piace": {
@@ -3042,11 +3224,16 @@ async function act(btn) {
       if (!r || !confirm(`Eliminare questa registrazione?${r.nomeFile ? "\n" + r.nomeFile : ""}`)) return;
       if (state.playId === id) fermaRiproduzione();
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
-      await deleteDoc(doc(db, "registrazioni", id)).catch(erroreScrittura);
+      // con la registrazione se ne vanno anche i suoi commenti
+      const batch = writeBatch(db);
+      commentiReg(id).forEach(m => batch.delete(doc(db, "commenti", m.id)));
+      batch.delete(doc(db, "registrazioni", id));
+      await batch.commit().catch(erroreScrittura);
       break;
     }
     case "add-open": {
       const w = btn.dataset.where;
+      if (state.fan && w !== "proposte") return;   // i fan aggiungono solo proposte
       state.addOpen[w] = true;
       render();
       document.querySelector(w === "personale" ? '[data-keep="add-membro"]' : w === "cassa" ? '[data-keep="mov-imp"]' : `[data-keep="add-${w}-titolo"]`)?.focus();
@@ -3197,8 +3384,11 @@ mainEl.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   const kind = form.dataset.form;
-  // i fan scrivono solo in Bacheca (passando dalla funzione, vedi functions/accesso.js)
-  if (state.fan && kind !== "bacheca" && kind !== "bacheca-commento") return;
+  // i fan scrivono solo in Bacheca, nelle proposte e nei commenti alle registrazioni
+  // (passando dalla funzione, vedi functions/accesso.js)
+  if (state.fan && !["bacheca", "bacheca-commento", "add-song", "reg-commento"].includes(kind)) return;
+
+  if (kind === "reg-commento") { await inviaCommentoReg(form); return; }
 
   if (kind === "bacheca" || kind === "bacheca-commento") {
     const campo = form.testo;
@@ -3241,6 +3431,30 @@ mainEl.addEventListener("submit", async e => {
     } finally {
       state.accessoOcc = false; render();
     }
+    return;
+  }
+
+  if (kind === "add-song" && state.fan) {
+    // proposta di un fan: la scrive la funzione (controlla i doppioni e le 3 a settimana)
+    const titolo = form.titolo.value.trim(), artista = form.artista.value.trim();
+    if (!titolo) return;
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      const j = await chiamaAccesso("proposta", { titolo, artista, fanId: fanId() });
+      if (j.gia) {
+        // c'è già: niente doppione, si mostra quella che c'è
+        state.addOpen.proposte = false;
+        if (j.gia.stato === "proposta") { state.votersOpen.add(j.gia.id); render(); toast(`«${j.gia.titolo}» è già fra le proposte: votala.`); setTimeout(() => document.querySelector(`[data-action="voters"][data-id="${CSS.escape(j.gia.id)}"]`)?.scrollIntoView({ block: "center" }), 50); }
+        else { render(); toast(`«${j.gia.titolo}» è già in scaletta.`); }
+        return;
+      }
+      state.addOpen.proposte = false;
+      render();
+      toast("Proposta aggiunta.");
+    } catch (ex) {
+      toast("Non proposta: " + ex.message);
+    } finally { btn.disabled = false; }
     return;
   }
 

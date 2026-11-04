@@ -7,7 +7,6 @@
 const crypto = require("crypto");
 
 const GENERALE_ID = "generale";
-const SOGLIA_SCALETTA = 5; // come nell'app: da 5 👍 una proposta è pronta per la scaletta
 const STRUMENTI = { chitarra1: "Chitarra 1", chitarra2: "Chitarra 2", acustica: "Acustica", basso: "Basso", batteria: "Batteria", tastiera: "Tastiera", fisarmonica: "Fisarmonica", voce: "Voce" };
 const APP_URL = "https://il-ritmo-della-sala-prove.web.app";
 const ORA = 3600 * 1000;
@@ -21,6 +20,10 @@ const ordine = (c) => (typeof c.ordine === "number" ? c.ordine : 0);
 const nelPeriodo = (t, da, a) => typeof t === "number" && t >= da && t <= a;
 const impronta = (s) => crypto.createHash("sha1").update(String(s)).digest("hex").slice(0, 12);
 const votanti = (c, v) => Object.keys(c.reazioni || {}).filter(n => c.reazioni[n] === v);
+// dalla v43 votano anche i fan (votiFan: id del telefono → { voto, nome }); ogni voto vale uno
+const votiFan = (c, v) => Object.values(c.votiFan || {}).filter(x => x && x.voto === v).length;
+const quanti = (c, v) => votanti(c, v).length + votiFan(c, v);
+const votata = (c) => quanti(c, "up") + quanti(c, "down") > 0;
 // commenti ai voti (dalla versione 21 dell'app): nome → testo, solo di chi ha votato
 const commenti = (c) => Object.entries(c.commenti || {})
   .filter(([n, t]) => (c.reazioni || {})[n] && String(t || "").trim())
@@ -57,7 +60,9 @@ function fotografa({ canzoni = [], membri = [] }) {
       const testo = String(v || "").trim();
       if (testo) su[k] = impronta(testo);
     }
-    foto.canzoni[c.id] = { t: c.titolo || "", s: c.stato || "", r: { ...(c.reazioni || {}) }, su, cm: Object.fromEntries(commenti(c)) };
+    // i voti dei fan entrano nel registro con chiave "f:<telefono>" (non può coincidere con un nome della band)
+    const vf = Object.fromEntries(Object.entries(c.votiFan || {}).filter(([, x]) => x && x.voto).map(([k, x]) => ["f:" + k, x.voto]));
+    foto.canzoni[c.id] = { t: c.titolo || "", s: c.stato || "", r: { ...(c.reazioni || {}), ...vf }, su, cm: Object.fromEntries(commenti(c)) };
   }
   for (const m of membri) foto.membri[m.id] = m.nome || "";
   return foto;
@@ -109,10 +114,10 @@ function sezione(titolo, righe, nome) {
   return righe.length ? `<b>${titolo}</b>\n${elenco(righe, nome).join("\n")}` : "";
 }
 // totali di una proposta, senza nomi: «👍 5 · 👎 1»
-const totaliVoti = (c) => `👍 ${votanti(c, "up").length} · 👎 ${votanti(c, "down").length}`;
+const totaliVoti = (c) => `👍 ${quanti(c, "up")} · 👎 ${quanti(c, "down")}`;
 // classifica come nell'app: più 👍, a parità meno 👎, poi l'ordine
 const perClassifica = (a, b) =>
-  votanti(b, "up").length - votanti(a, "up").length || votanti(a, "down").length - votanti(b, "down").length || ordine(a) - ordine(b);
+  quanti(b, "up") - quanti(a, "up") || quanti(a, "down") - quanti(b, "down") || ordine(a) - ordine(b);
 const MAX_COMMENTI = 3;   // commenti mostrati per canzone, poi "… e altri N"
 // commenti come citazione (riquadro di Telegram), senza nome e senza pollice
 function righeCommenti(testi) {
@@ -170,7 +175,7 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   // canzoni
   const nuove = canzoni.filter(c => !isGenerale(c) && nelPeriodo(c.creato, da, a)).sort((x, y) => x.creato - y.creato);
   const eraProposta = (c) => c.stato === "proposta" || !!c.propostaDa;
-  const nomeArt = (c) => `<b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}`;
+  const nomeArt = (c) => `<b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}${c.daFan ? " <i>(da un fan)</i>" : ""}`;
   const proposteNuove = nuove.filter(eraProposta);
   blocchi.push(sezione(`🆕 Proposte nuove (${proposteNuove.length})`, proposteNuove.map(nomeArt)));
   blocchi.push(sezione("🎼 Aggiunte in scaletta", nuove.filter(c => !eraProposta(c)).map(nomeArt)));
@@ -183,10 +188,7 @@ function novita(dati, { da, a = Date.now(), titolo, registroDa = null }) {
   for (const e of eventi.filter(e => e.tipo === "voto")) votate.set(e.canzoneId, (votate.get(e.canzoneId) || 0) + 1);
   const nVoti = [...votate.values()].reduce((s, x) => s + x, 0);
   const ancoraProposte = [...votate.keys()].map(id => perId.get(id)).filter(c => c && c.stato === "proposta").sort(perClassifica);
-  const righeVoti = ancoraProposte.map(c => {
-    const pronta = votanti(c, "up").length >= SOGLIA_SCALETTA ? " · <i>pronta</i>" : "";
-    return `<b>${esc(c.titolo)}</b> · ${totaliVoti(c)}${pronta}`;
-  });
+  const righeVoti = ancoraProposte.map(c => `<b>${esc(c.titolo)}</b> · ${totaliVoti(c)}`);
   const testaVoti = nVoti ? `🗳 Voti <i>· ${nVoti} ${nVoti === 1 ? "nuovo" : "nuovi"}</i>` : "🗳 Voti";
   blocchi.push(sezione(testaVoti, righeVoti));
   const eliminate = eventi.filter(e => e.tipo === "eliminata");
@@ -292,13 +294,10 @@ function proposte(dati) {
   const tutte = [...ctx.proposte].sort(perClassifica);
   if (!tutte.length) return "<b>🗳 Proposte</b>\n\nNessuna proposta aperta.";
   // quelle senza nessun voto vanno in fondo, in una riga sola
-  const votate = tutte.filter(c => Object.keys(c.reazioni || {}).length);
-  const senza = tutte.filter(c => !Object.keys(c.reazioni || {}).length);
-  const righe = votate.map((c, i) => {
-    const pronta = votanti(c, "up").length >= SOGLIA_SCALETTA ? " · <i>pronta per la scaletta</i>" : "";
-    return [`${i + 1}. <b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}`, `${totaliVoti(c)}${pronta}`,
-      ...righeCommenti(commenti(c).map(([, t]) => t))].join("\n");
-  });
+  const votate = tutte.filter(votata);
+  const senza = tutte.filter(c => !votata(c));
+  const righe = votate.map((c, i) => [`${i + 1}. <b>${esc(c.titolo)}</b>${c.artista ? ` · <i>${esc(c.artista)}</i>` : ""}${c.daFan ? " <i>(da un fan)</i>" : ""}`, totaliVoti(c),
+    ...righeCommenti(commenti(c).map(([, t]) => t))].join("\n"));
   const piede = [
     senza.length ? `<b>Ancora senza voti</b>: ${senza.map(c => esc(c.titolo)).join(" · ")}` : "",
     rigaDaVotare(ctx)

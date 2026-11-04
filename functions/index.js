@@ -280,8 +280,11 @@ async function cercaBrano(token, c) {
   return migliore ? migliore.external_urls.spotify : null;
 }
 
-const voti = (c) => Object.values(c.reazioni || {}).filter(v => v === "up").length;
-const contro = (c) => Object.values(c.reazioni || {}).filter(v => v === "down").length;
+// voti della band (reazioni: nome → voto) e dei fan (votiFan: id del telefono → { voto }): ognuno vale uno
+const contaVoti = (c, v) => Object.values(c.reazioni || {}).filter(x => x === v).length +
+  Object.values(c.votiFan || {}).filter(x => x && x.voto === v).length;
+const voti = (c) => contaVoti(c, "up");
+const contro = (c) => contaVoti(c, "down");
 const ord = (c) => (typeof c.ordine === "number" ? c.ordine : 0);
 
 // stesse regole dell'app: scaletta = tutto ciò che non è proposta né Generale, nell'ordine dell'app;
@@ -433,5 +436,6 @@ const notifiche = require("./notifiche");
 exports.notifiche = notifiche.crea({ cors, ruolo, REGIONE }).notifiche;
 // accesso dei fan e messaggi dei fan alla band (inoltrati nel gruppo Telegram e notificati ai telefoni): vedi accesso.js
 exports.accesso = require("./accesso").crea({
-  cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, notifica: notifiche.evento, segreti: [telegram.TELEGRAM_TOKEN]
+  cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, notifica: notifiche.evento,
+  aggiornaPlaylist: () => inCoda(() => sincronizza()), segreti: [telegram.TELEGRAM_TOKEN]
 }).accesso;

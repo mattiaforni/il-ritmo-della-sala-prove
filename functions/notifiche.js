@@ -11,14 +11,15 @@
 //                                 fan:   { sub, fan: true, membroId: null, fanId, generazione, eventi[], … }
 //
 // Anche i fan (accesso in sola lettura, vedi accesso.js) possono iscriversi:
-// ricevono proposte, registrazioni, diretta, passaggi in scaletta e Bacheca, mai le task.
+// ricevono proposte, registrazioni, diretta, passaggi in scaletta, Bacheca e commenti
+// alle registrazioni, mai le task.
 // Valgono solo le iscrizioni fatte con la password dei fan di adesso. "fanId" è l'id
 // del telefono del fan (lo stesso dei mi piace): serve a non mandargli i suoi post e a
 // trovarlo quando qualcuno commenta un suo post.
 //
 // "eventiV" dice con quale elenco di eventi è stata scritta l'iscrizione: le iscrizioni
-// senza (fatte prima della Bacheca, v41) ricevono anche la Bacheca finché l'app non le
-// aggiorna, così l'evento nuovo parte acceso per tutti.
+// più vecchie ricevono anche gli eventi arrivati dopo (Bacheca dalla v41, commenti alle
+// registrazioni dalla v43) finché l'app non le aggiorna, così gli eventi nuovi partono accesi.
 //
 // Le chiavi VAPID (che firmano le notifiche) si creano da sole alla prima
 // richiesta: nessun segreto da impostare a mano.
@@ -34,10 +35,10 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { generazioneFan } = require("./accesso");
 
-const EVENTI = ["proposta", "task", "registrazione", "diretta", "scaletta", "bacheca"];
-const EVENTI_FAN = ["proposta", "registrazione", "diretta", "scaletta", "bacheca"];
-const EVENTI_V = 2;                                   // 2 = elenco con "bacheca"
-const NUOVI_DA_V = { 2: ["bacheca"] };                // eventi che le iscrizioni più vecchie ricevono comunque
+const EVENTI = ["proposta", "task", "registrazione", "diretta", "scaletta", "bacheca", "commento"];
+const EVENTI_FAN = ["proposta", "registrazione", "diretta", "scaletta", "bacheca", "commento"];
+const EVENTI_V = 3;                                   // 2 = con "bacheca", 3 = con "commento"
+const NUOVI_DA_V = { 2: ["bacheca"], 3: ["commento"] };   // eventi che le iscrizioni più vecchie ricevono comunque
 const FINESTRA_POST_MS = 10 * 60 * 1000;              // i post ravvicinati si contano insieme nella stessa notifica
 const RIPETIZIONE_MS = { diretta: 15 * 60 * 1000 };   // la stessa diretta non si annuncia due volte
 const RIPETIZIONE_STANDARD_MS = 10 * 60 * 1000;      // stesso evento sulla stessa cosa: una volta ogni 10 minuti
@@ -105,10 +106,12 @@ async function preparaEvento(corpo, persone) {
     const c = await canzone(corpo.canzoneId);
     if (!c || c.stato !== "proposta") return null;
     const chi = c.propostaDa || da;
+    // dalla v43 propongono anche i fan (e votano): chi propone si riconosce dal telefono, non dal nome
+    const autore = c.daFan ? { idDa: null, fanDa: pulisciId(c.fanId) } : { idDa: (persone.find(p => p.nome === chi) || {}).id || idDa, fanDa: null };
     return {
-      chiave: `proposta:${c.id}`, idDa: (persone.find(p => p.nome === chi) || {}).id || idDa,
-      titolo: "Nuova proposta da votare", titoloFan: "Nuova proposta",
-      testo: `${chi ? chi + " ha proposto" : "Proposta"} ${conArtista(c)}`,
+      chiave: `proposta:${c.id}`, ...autore,
+      titolo: "Nuova proposta da votare",
+      testo: `${chi ? chi + (c.daFan ? " (fan)" : "") + " ha proposto" : "Proposta"} ${conArtista(c)}`,
       url: "./?vai=proposte", tag: `proposta-${c.id}`
     };
   }
@@ -213,6 +216,34 @@ async function preparaEvento(corpo, persone) {
       titolo: "Nuovo commento in Bacheca",
       testo: `${chi} ha commentato ${dove}: ${accorcia(m.testo)}`,
       url: "./?vai=bacheca", tag: `bacheca-${post.id}`
+    };
+  }
+  if (tipo === "commento") {
+    // commento a una registrazione: a chi l'ha caricata e a chi l'aveva già commentata, mai a chi scrive
+    if (!corpo.id || typeof corpo.id !== "string") return null;
+    const s = await db().collection("commenti").doc(corpo.id).get();
+    if (!s.exists) return null;
+    const m = { id: s.id, ...s.data() };
+    if (m.su !== "registrazione" || !m.rifId) return null;
+    const rs = await db().collection("registrazioni").doc(m.rifId).get();
+    if (!rs.exists) return null;
+    const r = { id: rs.id, ...rs.data() };
+    const idDi = (nome) => (persone.find(p => p.nome === nome) || {}).id || null;
+    const stessoAutore = (x) => !!x.band === !!m.band && (m.band ? x.nome === m.nome : pulisciId(x.fanId) === pulisciId(m.fanId));
+    const altri = (await db().collection("commenti").where("rifId", "==", r.id).get()).docs
+      .filter(d => d.id !== m.id).map(d => d.data()).filter(x => x.su === "registrazione" && !stessoAutore(x));
+    const caricata = r.caricatoDa && !(m.band && m.nome === r.caricatoDa) ? [idDi(r.caricatoDa)] : [];
+    const soloA = [...new Set([...caricata, ...altri.filter(x => x.band).map(x => idDi(x.nome))].filter(Boolean))];
+    const soloAFan = [...new Set(altri.filter(x => !x.band).map(x => pulisciId(x.fanId)).filter(Boolean))];
+    if (!soloA.length && !soloAFan.length) return null;
+    const c = r.canzoneId ? await canzone(r.canzoneId) : null;
+    const nomeReg = [c && c.stato !== "generale" ? c.titolo : (r.etichetta || "una registrazione"), giorno(r.data)].filter(Boolean).join(" · ");
+    const chi = m.nome || (m.band ? "Qualcuno della band" : "Un fan");
+    return {
+      chiave: `commento:${m.id}`, idDa: m.band ? idDi(m.nome) : null, fanDa: m.band ? null : pulisciId(m.fanId), soloA, soloAFan,
+      titolo: "Nuovo commento a una registrazione",
+      testo: `${chi} su ${virgolette(nomeReg)}: ${accorcia(m.testo)}`,
+      url: `./?vai=registrazione&id=${encodeURIComponent(r.id)}`, tag: `commento-${r.id}`
     };
   }
   return null;
