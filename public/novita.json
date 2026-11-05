@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "45",
+      "data": "2026-11-05",
+      "titolo": "Spartito: tracce, vista e testo correggibile",
+      "punti": [
+        "Spartito e Canta anche fra le proposte. Nello Spartito l'icona dei cursori apre le tracce: tocca una traccia per vederla, l'altoparlante la silenzia nella base; vista Tab, pentagramma o entrambi (ricordata).",
+        "Dallo Spartito si va a Canta (microfono) e alle impostazioni (ingranaggio); chiudendo lo Spartito si torna all'app. Cambiando traccia la base non riparte più da capo.",
+        "Se il testo della traccia voce non va a tempo, nelle impostazioni si corregge (spazi e trattini = note) e vale per tutta la band."
+      ]
+    },
+    {
       "versione": "44",
       "data": "2026-11-05",
       "titolo": "Spartito e Canta",
