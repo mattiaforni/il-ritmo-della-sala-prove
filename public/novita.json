@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "46",
+      "data": "2026-11-06",
+      "titolo": "Tonalità vera, testo a versi",
+      "punti": [
+        "La tonalità ora sposta davvero le note: cambiano tab, pentagramma e base insieme, e la batteria resta com'è.",
+        "In Canta il testo della tab scorre un verso alla volta; un tocco sul testo passa al verso dopo e corregge il punto.",
+        "Nello Spartito: vista Tab e Pentagramma come due interruttori, ingranaggio più chiaro per le impostazioni, «Ripeti» con la parola; lo strumento della voce guida non resta più sulla chitarra tornando allo spartito."
+      ]
+    },
+    {
       "versione": "45",
       "data": "2026-11-05",
       "titolo": "Spartito: tracce, vista e testo correggibile",
