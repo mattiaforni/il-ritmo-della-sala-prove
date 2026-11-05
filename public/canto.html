@@ -58,7 +58,7 @@ input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; height
 .stepper { display: flex; align-items: center; gap: 2px; }
 .stepper button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-2); }
 .stepper button:active { background: var(--accento-tinta); }
-select { font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--linea-forte); padding: 6px 0; max-width: 60%; }
+select { font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--linea-forte); padding: 6px 0; max-width: 60%; direction: rtl; text-align: right; }
 input[type=range] { accent-color: var(--accento); width: 120px; }
 .seg { display: inline-flex; border: 1px solid var(--linea-forte); border-radius: var(--r); overflow: hidden; }
 .seg button { padding: 6px 12px; font-size: 13px; color: var(--inchiostro-2); border-right: 1px solid var(--linea-forte); }
@@ -264,15 +264,35 @@ async function aggiungiFile(files) {
 
 // ------------------------------------------------------------ modello del brano
 // Dalla traccia scelta ricava note (tick, durata, altezza, testo) e frasi/sezioni.
+const GM = ['Piano', 'Piano', 'Piano el.', 'Honky-tonk', 'Piano el.', 'Piano el.', 'Clavicembalo', 'Clavinet', 'Celesta', 'Glockenspiel', 'Carillon', 'Vibrafono', 'Marimba', 'Xilofono', 'Campane', 'Dulcimer', 'Organo', 'Organo', 'Organo', 'Organo', 'Organo', 'Fisarmonica', 'Armonica', 'Fisarmonica', 'Chitarra nylon', 'Chitarra acustica', 'Chitarra jazz', 'Chitarra pulita', 'Chitarra muted', 'Chitarra overdrive', 'Chitarra distorta', 'Chitarra armonici', 'Basso acustico', 'Basso', 'Basso pick', 'Basso fretless', 'Basso slap', 'Basso slap', 'Basso synth', 'Basso synth', 'Violino', 'Viola', 'Violoncello', 'Contrabbasso', 'Archi tremolo', 'Archi pizzicato', 'Arpa', 'Timpani', 'Archi', 'Archi', 'Archi synth', 'Archi synth', 'Coro', 'Voce ooh', 'Voce synth', 'Orchestra hit', 'Tromba', 'Trombone', 'Tuba', 'Tromba sordina', 'Corno', 'Ottoni', 'Ottoni synth', 'Ottoni synth', 'Sax soprano', 'Sax contralto', 'Sax tenore', 'Sax baritono', 'Oboe', 'Corno inglese', 'Fagotto', 'Clarinetto', 'Ottavino', 'Flauto', 'Flauto dolce', 'Flauto di Pan', 'Bottiglia', 'Shakuhachi', 'Fischio', 'Ocarina', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead voce', 'Lead', 'Lead', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'Sitar', 'Banjo', 'Shamisen', 'Koto', 'Kalimba', 'Cornamusa', 'Fiddle', 'Shanai', 'Campanelli', 'Agogo', 'Steel drum', 'Woodblock', 'Taiko', 'Tom', 'Tom synth', 'Piatto', 'Chitarra fret noise', 'Respiro', 'Mare', 'Uccelli', 'Telefono', 'Elicottero', 'Applausi', 'Sparo'];
+function strumentoDi(tr) { return tr.playbackInfo.isPercussion ? 'Batteria' : (GM[tr.playbackInfo.program] || 'Strumento ' + tr.playbackInfo.program); }
+// I file fatti con Guitar Pro in russo hanno i nomi in cp1251 letti come Latin-1 («Дорожка» = traccia)
+function nomeTraccia(tr, i) {
+  let n = tr.name || '';
+  if (/[\u00C0-\u00FF]{3,}/.test(n)) { try { n = new TextDecoder('windows-1251').decode(Uint8Array.from(n, c => c.charCodeAt(0) & 255)); } catch (e) {} }
+  if (/^(Дорожка|Track|Traccia|Piste|Spur|Pista)\s*\d*$/i.test(n.trim()) || !n.trim()) n = '';
+  return n || `Traccia ${i + 1}`;
+}
+function profiloTraccia(tr) {
+  let note = 0, mono = 0, somma = 0;
+  for (const b of beatsDi(tr)) { if (b.isRest || !b.notes.length) continue; note++; if (b.notes.length === 1) mono++; somma += b.notes[0].realValue; }
+  return { note, mono, media: note ? somma / note : 0 };
+}
 function indovinaTraccia(score) {
-  const t = score.tracks;
-  const conTesto = t.map((tr, i) => [i, contaTesto(tr)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-  const perNome = t.findIndex(tr => /voc|voice|voce|cant|sing|lead|lyric|melod/i.test(tr.name));
-  if (perNome >= 0) return perNome;
-  const perProg = t.findIndex(tr => [52, 53, 54, 85].includes(tr.playbackInfo.program));
-  if (perProg >= 0) return perProg;
-  if (conTesto.length) return conTesto[0][0];
-  return 0;
+  const t = score.tracks; let best = 0, bestP = -Infinity;
+  t.forEach((tr, i) => {
+    if (tr.playbackInfo.isPercussion) return;
+    const p = profiloTraccia(tr); if (!p.note) return;
+    let punti = 0;
+    if (/voc|voice|voce|cant|sing|lead|lyric|melod|вокал|голос/i.test(tr.name)) punti += 1000;
+    if ([52, 53, 54, 85].includes(tr.playbackInfo.program)) punti += 800;
+    punti += Math.min(500, contaTesto(tr) * 10);
+    // traccia monofonica in estensione vocale (Sol2–Do5), con abbastanza note
+    if (p.mono / p.note > 0.9 && p.media >= 43 && p.media <= 72 && p.note >= 20) punti += 100;
+    if ([32, 33, 34, 35, 36, 37, 38, 39].includes(tr.playbackInfo.program)) punti -= 300; // basso
+    if (punti > bestP) { bestP = punti; best = i; }
+  });
+  return best;
 }
 function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) if (b.lyrics && b.lyrics.some(x => x)) n++; return n; }
 function* beatsDi(tr) { for (const bar of tr.staves[0].bars) for (const v of bar.voices) for (const b of v.beats) if (!b.isEmpty) yield b; }
@@ -306,7 +326,7 @@ function costruisciModello(score, idx) {
   const fine = mb.length ? mb[mb.length - 1].start + mb[mb.length - 1].calculateDuration() : (note.length ? note[note.length - 1].tick + note[note.length - 1].dur : 0);
   const haTesto = note.some(n => n.syl);
   const minMidi = Math.min(...note.map(n => n.midi)), maxMidi = Math.max(...note.map(n => n.midi));
-  return { note, frasi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120, nomeTraccia: tr.name };
+  return { note, frasi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120 };
 }
 function testoDi(note) {
   let s = '';
@@ -335,8 +355,10 @@ function caricaScore(brano) {
   return new Promise((ok, no) => {
     creaApi();
     if (scoreCaricato === brano.id) return ok(api.score);
-    const h = api.scoreLoaded.on(s => { api.scoreLoaded.off(h); scoreCaricato = brano.id; ok(s); });
+    let h = null, fatto = false;
+    h = api.scoreLoaded.on(s => { fatto = true; if (h) api.scoreLoaded.off(h); scoreCaricato = brano.id; ok(s); });
     try { api.load(brano.bytes.buffer.slice(brano.bytes.byteOffset, brano.bytes.byteOffset + brano.bytes.byteLength)); } catch (e) { no(e); }
+    if (fatto && h) api.scoreLoaded.off(h);
   });
 }
 function applicaMix() {
@@ -359,7 +381,7 @@ async function apriBrano(id) {
   try { state.score = await caricaScore(b); } catch (e) { toast('Non riesco a leggere il file: ' + (e.message || e), 5000); mostra('brani'); return; }
   state.traccia = b.traccia != null && b.traccia < state.score.tracks.length ? b.traccia : indovinaTraccia(state.score);
   const sel = $('#st-traccia'); sel.innerHTML = '';
-  state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${t.name || 'Traccia'}${contaTesto(t) ? ' · testo' : ''}`; sel.appendChild(o); });
+  state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; const p = profiloTraccia(t); o.textContent = `${nomeTraccia(t, i)} · ${strumentoDi(t)} · ${p.note} note${contaTesto(t) ? ' · testo' : ''}`; sel.appendChild(o); });
   sel.value = state.traccia;
   aggiornaSetup();
 }
