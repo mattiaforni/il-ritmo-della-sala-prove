@@ -160,7 +160,11 @@ input[type=range] { accent-color: var(--accento); width: 120px; }
     <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Voce guida<small>La melodia suonata dalla base</small></label><div class="seg" id="st-guida"><button data-v="0">Spenta</button><button data-v="0.4">Bassa</button><button data-v="1" class="on">Piena</button></div></div>
+    <div class="campo"><label>Strumento della voce guida<small>Con un suono netto la melodia si segue meglio</small></label><select id="st-guida-strum"></select></div>
     <div class="campo"><label>Metronomo</label><div class="seg" id="st-metro"><button data-v="0" class="on">No</button><button data-v="1">Sì</button></div></div>
+    <div class="fascia">Suoni</div>
+    <div class="campo"><label>Qualità della base<small id="st-suoni-msg">Migliori: 14 MB scaricati una volta</small></label><div class="seg" id="st-suoni"><button data-v="base">Base</button><button data-v="migliori" class="on">Migliori</button><button data-v="file">File tuo</button></div></div>
+    <div class="campo hidden" id="st-sf-riga"><label>File dei suoni<small id="st-sf-nome">Un file .sf2 o .sf3 (es. GeneralUser GS)</small></label><button class="ico" style="position:relative"><svg class="i"><use href="#i-file"/></svg><input type="file" id="st-sf" accept=".sf2,.sf3"></button></div>
     <div class="fascia">Microfono</div>
     <div class="campo"><label>Ritardo del microfono<small>Se il tracciato della voce arriva sempre in ritardo, aumenta</small></label><input type="range" id="st-lat" min="0" max="300" step="10" value="120"><div class="val" id="st-lat-v" style="min-width:70px">120 ms</div></div>
     <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
@@ -215,15 +219,17 @@ const TPQ = 960; // tick per quarto in alphaTab
 // ------------------------------------------------------------ stato
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
-  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50,
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1,
   esec: null, // esecuzione in corso
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
-const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol }); } catch (e) {} };
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum }); } catch (e) {} };
 
 // ------------------------------------------------------------ archivio (IndexedDB)
 const db = {
-  open() { return new Promise((ok, no) => { const r = indexedDB.open('canto', 1); r.onupgradeneeded = () => r.result.createObjectStore('brani', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); },
+  open() { return new Promise((ok, no) => { const r = indexedDB.open('canto', 2); r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('brani')) d.createObjectStore('brani', { keyPath: 'id' }); if (!d.objectStoreNames.contains('suoni')) d.createObjectStore('suoni'); }; r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); },
+  async suono(k) { const d = await this.open(); return new Promise((ok, no) => { const r = d.transaction('suoni').objectStore('suoni').get(k); r.onsuccess = () => ok(r.result || null); r.onerror = () => no(r.error); }); },
+  async mettiSuono(k, v) { const d = await this.open(); return new Promise((ok, no) => { const t = d.transaction('suoni', 'readwrite'); t.objectStore('suoni').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); },
   async tutti() { const d = await this.open(); return new Promise((ok, no) => { const r = d.transaction('brani').objectStore('brani').getAll(); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); },
   async metti(b) { const d = await this.open(); return new Promise((ok, no) => { const t = d.transaction('brani', 'readwrite'); t.objectStore('brani').put(b); t.oncomplete = ok; t.onerror = () => no(t.error); }); },
   async togli(id) { const d = await this.open(); return new Promise((ok, no) => { const t = d.transaction('brani', 'readwrite'); t.objectStore('brani').delete(id); t.oncomplete = ok; t.onerror = () => no(t.error); }); },
@@ -341,16 +347,45 @@ function creaApi() {
   const s = {
     core: { fontDirectory: CDN + 'font/', scriptFile: CDN + 'alphaTab.min.js', logLevel: 'warning' },
     display: { scale: 0.5, layoutMode: 'horizontal' },
-    player: { playerMode: 'EnabledSynthesizer', soundFont: CDN + 'soundfont/sonivox.sf3', scrollMode: 'off', enableCursor: false, enableUserInteraction: false, enableElementHighlighting: false, enableAnimatedBeatCursor: false },
+    player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollMode: 'off', enableCursor: false, enableUserInteraction: false, enableElementHighlighting: false, enableAnimatedBeatCursor: false },
   };
   api = new alphaTab.AlphaTabApi($('#alphaTab'), s);
-  apiPronto = new Promise(ok => { if (api.isReadyForPlayback) ok(); else api.playerReady.on(() => ok()); });
+  caricaSuoni();
   api.error.on(e => { console.error('alphaTab', e); toast('Errore della base musicale: ' + (e.message || e), 5000); });
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
   api.playerStateChanged.on(e => { if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
   api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
   return api;
 }
+// ---- suoni (soundfont): base = sonivox 1 MB; migliori = FluidR3 GM 14 MB (MIT), scaricato una volta e tenuto sul dispositivo; file = .sf2/.sf3 scelto
+const SUONI = { base: CDN + 'soundfont/sonivox.sf3', migliori: 'https://cdn.jsdelivr.net/npm/@librescore/sf3@0.8.0/FluidR3Mono_GM.sf3.wasm' };
+let suoniCaricati = null, suoniRichiesta = 0;
+function caricaSuoni() {
+  const scelta = state.suoni; if (suoniCaricati === scelta) return apiPronto;
+  const mia = ++suoniRichiesta;
+  apiPronto = (async () => {
+    let bytes = null;
+    try {
+      if (scelta === 'file') bytes = await db.suono('file');
+      else { bytes = await db.suono(scelta).catch(() => null); if (!bytes) { bytes = await scarica(SUONI[scelta]); db.mettiSuono(scelta, bytes).catch(() => {}); } }
+    } catch (e) { console.error(e); toast('Suoni non scaricati: ' + (e.message || e) + '. Uso quelli base.', 5000); }
+    if (mia !== suoniRichiesta) return;
+    if (!bytes) { if (scelta !== 'base') { state.suoni = 'base'; aggiornaSetup(); suoniCaricati = null; return caricaSuoni(); } throw new Error('suoni non disponibili'); }
+    await new Promise((ok, no) => { let h = null; h = api.soundFontLoaded.on(() => { if (h) api.soundFontLoaded.off(h); ok(); }); const t = setTimeout(() => no(new Error('i suoni non si caricano')), 60000); if (!api.loadSoundFont(bytes, false)) { clearTimeout(t); no(new Error('file dei suoni non valido')); } });
+    suoniCaricati = scelta;
+    while (!api.isReadyForPlayback) await new Promise(r => setTimeout(r, 100));
+  })();
+  return apiPronto;
+}
+async function scarica(url) {
+  const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status);
+  const tot = +r.headers.get('content-length') || 0; const parti = []; let n = 0; const reader = r.body.getReader();
+  while (true) { const { done, value } = await reader.read(); if (done) break; parti.push(value); n += value.length; avvisaSuoni(tot ? `Scaricamento dei suoni… ${Math.round(100 * n / tot)}%` : `Scaricamento dei suoni… ${(n / 1048576).toFixed(1)} MB`); }
+  avvisaSuoni('');
+  const out = new Uint8Array(n); let p = 0; for (const x of parti) { out.set(x, p); p += x.length; } return out;
+}
+function avvisaSuoni(msg) { const el = $('#tx-msg'); if (el && state.esec) el.textContent = msg; const st = $('#st-suoni-msg'); if (st) st.textContent = msg; }
+const GUIDA_STRUM = [[-1, 'Originale'], [0, 'Piano'], [73, 'Flauto'], [68, 'Oboe'], [65, 'Sax'], [56, 'Tromba']];
 function caricaScore(brano) {
   return new Promise((ok, no) => {
     creaApi();
@@ -364,6 +399,21 @@ function caricaScore(brano) {
 function applicaMix() {
   if (!api || !state.score) return;
   const tracce = state.score.tracks;
+  let rigenera = false;
+  for (const t of tracce) {
+    if (t.playbackInfo.isPercussion) continue;
+    if (t._prog == null) t._prog = t.playbackInfo.program;
+    const voluto = t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : t._prog;
+    if (t.playbackInfo.program !== voluto) { t.playbackInfo.program = voluto; rigenera = true; }
+    // i file Guitar Pro ripetono lo strumento come automazione sul primo beat: va cambiata anche quella
+    for (const st of t.staves) for (const bar of st.bars) for (const v of bar.voices) for (const bt of v.beats) for (const au of bt.automations) {
+      if (au.type !== alphaTab.model.AutomationType.Instrument) continue;
+      if (au._orig == null) au._orig = au.value;
+      const vv = t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : au._orig;
+      if (au.value !== vv) { au.value = vv; rigenera = true; }
+    }
+  }
+  if (rigenera) api.loadMidiForScore();
   for (const t of tracce) { api.changeTrackMute([t], false); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
   api.changeTrackTranspositionPitch(tracce, state.trasp);
   api.playbackSpeed = state.tempo / 100;
@@ -390,7 +440,11 @@ function aggiornaSetup() {
   $('#st-tempo').textContent = state.tempo + '%';
   $('#st-trasp').textContent = (state.trasp > 0 ? '+' : '') + state.trasp;
   $('#st-lat').value = state.lat; $('#st-lat-v').textContent = state.lat + ' ms';
+  const gs = $('#st-guida-strum'); if (!gs.options.length) for (const [v, n] of GUIDA_STRUM) { const o = document.createElement('option'); o.value = v; o.textContent = n; gs.appendChild(o); }
+  gs.value = state.guidaStrum;
+  $('#st-sf-riga').classList.toggle('hidden', state.suoni !== 'file');
   for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
+  for (const b of document.querySelectorAll('#st-suoni button')) b.classList.toggle('on', b.dataset.v === state.suoni);
   if (state.score) {
     const m = costruisciModello(state.score, state.traccia);
     const nome = (x) => ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'][(x % 12 + 12) % 12] + (Math.floor(x / 12) - 1);
@@ -473,7 +527,7 @@ async function avviaEsecuzione() {
   for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
   ridimensiona();
   $('#tx-msg').textContent = 'Caricamento della base…';
-  try { await Promise.race([apiPronto, new Promise((_, no) => setTimeout(() => no(new Error('tempo scaduto')), 40000))]); } catch (e) { toast('La base non si carica (' + e.message + '). Controlla la connessione.', 6000); }
+  try { await Promise.race([caricaSuoni(), new Promise((_, no) => setTimeout(() => no(new Error('tempo scaduto')), 120000))]); } catch (e) { toast('La base non si carica (' + e.message + '). Controlla la connessione.', 6000); }
   if (!state.esec) return;
   applicaMix();
   $('#tx-msg').textContent = '';
@@ -649,6 +703,9 @@ document.addEventListener('click', async (e) => {
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); api.playPause(); }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
+$('#st-suoni').addEventListener('click', async (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return; } state.suoni = b.dataset.v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); });
+$('#st-sf').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; const bytes = new Uint8Array(await f.arrayBuffer()); await db.mettiSuono('file', bytes); $('#st-sf-nome').textContent = `${f.name} · ${(bytes.length / 1048576).toFixed(0)} MB`; state.suoni = 'file'; suoniCaricati = null; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); e.target.value = ''; });
+$('#st-guida-strum').addEventListener('change', (e) => { state.guidaStrum = +e.target.value; salvaPref(); });
 $('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
 $('#st-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; aggiornaSetup(); });
 $('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
