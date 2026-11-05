@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Canto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --carta: #F4F1EC; --testata: #ECE7DF; --foglio: #FFFFFF; --foglio-2: #F8F6F2;
+  --inchiostro: #231B15; --inchiostro-2: #645A50; --inchiostro-3: #978C80;
+  --linea: #D3CABD; --linea-forte: #BCB1A2;
+  --accento: #B4552D; --accento-tinta: #F4E3D9; --su-accento: #FFFFFF;
+  --ambra: #A8740F; --ambra-pieno: #D99A2B; --ambra-tinta: #F6EBD3;
+  --verde: #4C7A52; --verde-pieno: #6FA376; --verde-tinta: #E3EDE2;
+  --rosso: #A33A2E; --rosso-pieno: #C9655A; --rosso-tinta: #F5E0DC;
+  --r: 3px; --r-g: 6px;
+  --ui: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --display: 'Instrument Serif', Georgia, serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; height: 100%; }
+body { margin: 0; height: 100%; font-family: var(--ui); font-size: 15px; line-height: 1.5; background: var(--carta); color: var(--inchiostro); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+.hidden { display: none !important; }
+.i { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.schermo { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { background: var(--testata); border-bottom: 1px solid var(--linea); padding: calc(10px + env(safe-area-inset-top)) 16px 8px; display: flex; align-items: flex-end; gap: 12px; flex: none; }
+.topbar h1 { font: 400 28px/1.1 var(--display); margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .sub { font-size: 13px; color: var(--inchiostro-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .tit { flex: 1; min-width: 0; }
+.ico { width: 40px; height: 40px; display: grid; place-items: center; color: var(--inchiostro-2); border-radius: var(--r); flex: none; }
+.ico:active { background: var(--accento-tinta); }
+.corpo { flex: 1; overflow: auto; padding: 0 16px calc(96px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
+.fascia { display: flex; align-items: center; gap: 10px; margin: 22px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-2); }
+.fascia::after { content: ""; flex: 1; height: 1px; background: var(--linea); }
+.riga { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); min-height: 56px; width: 100%; text-align: left; }
+.riga .txt { flex: 1; min-width: 0; }
+.riga .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.riga .s { font-size: 13px; color: var(--inchiostro-2); }
+.riga .num { font: 400 24px/1 var(--display); color: var(--inchiostro-3); min-width: 28px; }
+.riga .pct { font: 400 22px/1 var(--display); color: var(--verde); min-width: 48px; text-align: right; }
+.riga .pct.male { color: var(--rosso); }
+.riga .pct.medio { color: var(--ambra); }
+.vuoto { padding: 40px 0; color: var(--inchiostro-2); text-align: center; }
+.vuoto .big { font: 400 26px/1.2 var(--display); color: var(--inchiostro); margin-bottom: 8px; }
+.fab { position: absolute; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); width: 56px; height: 56px; background: var(--accento); color: var(--su-accento); border-radius: var(--r-g); display: grid; place-items: center; box-shadow: 0 1px 2px rgba(35,27,21,.06), 0 12px 32px -18px rgba(35,27,21,.45); z-index: 5; }
+.fab .i { width: 26px; height: 26px; }
+.fab.largo { width: auto; padding: 0 22px 0 18px; display: flex; gap: 10px; align-items: center; font-weight: 500; font-size: 16px; }
+.fab[disabled] { background: var(--inchiostro-3); }
+input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.campo { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--linea); }
+.campo label { flex: 1; }
+.campo label small { display: block; font-size: 12px; color: var(--inchiostro-2); }
+.campo .val { font: 400 22px/1 var(--display); min-width: 64px; text-align: right; }
+.stepper { display: flex; align-items: center; gap: 2px; }
+.stepper button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-2); }
+.stepper button:active { background: var(--accento-tinta); }
+select { font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--linea-forte); padding: 6px 0; max-width: 60%; }
+input[type=range] { accent-color: var(--accento); width: 120px; }
+.seg { display: inline-flex; border: 1px solid var(--linea-forte); border-radius: var(--r); overflow: hidden; }
+.seg button { padding: 6px 12px; font-size: 13px; color: var(--inchiostro-2); border-right: 1px solid var(--linea-forte); }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--accento); color: var(--su-accento); }
+.nota { font-size: 13px; color: var(--inchiostro-2); margin: 10px 0 0; }
+.link { color: var(--accento); text-decoration: underline; }
+
+/* ---- esecuzione ---- */
+#esec .topbar { padding-bottom: 8px; }
+#esec .topbar .tempo { font-size: 13px; color: var(--inchiostro-2); align-self: center; }
+.rullo { position: relative; flex: none; height: 44vh; min-height: 220px; background: var(--foglio); border-bottom: 1px solid var(--linea); }
+.rullo canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.avanz { height: 3px; background: var(--linea); flex: none; }
+.avanz > div { height: 100%; width: 0; background: var(--accento); }
+.testo { flex: 1; padding: 18px 20px 0; text-align: center; overflow: hidden; }
+.testo .ora { font: 400 30px/1.2 var(--display); min-height: 1.2em; }
+.testo .ora span { color: var(--inchiostro-3); transition: color .1s; }
+.testo .ora span.fatto { color: var(--inchiostro); }
+.testo .ora span.bene { color: var(--verde); }
+.testo .ora span.male { color: var(--rosso); }
+.testo .dopo { font: italic 400 20px/1.3 var(--display); color: var(--inchiostro-3); margin-top: 10px; }
+.testo .msg { font-size: 13px; color: var(--inchiostro-2); margin-top: 14px; min-height: 1.5em; }
+.comandi { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+.comandi .sp { flex: 1; }
+.comandi .mic { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--inchiostro-2); }
+.comandi .liv { width: 46px; height: 6px; background: var(--linea); border-radius: 1px; overflow: hidden; }
+.comandi .liv > div { height: 100%; width: 0; background: var(--verde); }
+.comandi .liv > div.rosso { background: var(--rosso); }
+.btn { width: 48px; height: 48px; border: 1px solid var(--linea-forte); border-radius: var(--r); display: grid; place-items: center; color: var(--inchiostro-2); }
+.btn:active { background: var(--accento-tinta); }
+.btn.play { width: 64px; height: 64px; background: var(--accento); color: var(--su-accento); border: 0; border-radius: var(--r-g); }
+.btn.play .i { width: 30px; height: 30px; }
+.conto { position: absolute; inset: 0; display: grid; place-items: center; font: 400 120px/1 var(--display); color: var(--accento); pointer-events: none; background: rgba(255,255,255,.55); }
+.velo { position: absolute; inset: 0; background: rgba(35,27,21,.38); display: grid; place-items: center; z-index: 60; padding: 24px; }
+.foglio { background: var(--foglio); border-radius: var(--r-g); padding: 20px 20px 16px; width: min(420px, 100%); }
+.foglio h2 { font: 400 26px/1.1 var(--display); margin: 0 0 10px; }
+.foglio p { margin: 0 0 10px; color: var(--inchiostro-2); font-size: 14px; }
+.foglio .azioni { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.foglio .azioni button { padding: 10px 16px; border-radius: var(--r); font-weight: 500; }
+.foglio .azioni .prim { background: var(--accento); color: var(--su-accento); }
+.foglio .azioni .sec { color: var(--inchiostro-2); }
+
+/* ---- risultato ---- */
+.punteggio { display: flex; align-items: baseline; gap: 14px; padding: 20px 0 6px; }
+.punteggio .big { font: 400 72px/1 var(--display); }
+.punteggio .big small { font-size: 32px; color: var(--inchiostro-3); }
+.punteggio .desc { color: var(--inchiostro-2); }
+.barra { height: 3px; background: var(--linea); margin-top: 6px; }
+.barra > div { height: 100%; background: var(--verde); }
+.barra > div.male { background: var(--rosso); }
+.barra > div.medio { background: var(--ambra-pieno); }
+#alphaTab { position: fixed; left: -9999px; top: 0; width: 600px; height: 10px; overflow: hidden; opacity: 0; pointer-events: none; }
+.toast { position: absolute; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); background: var(--inchiostro); color: var(--carta); padding: 10px 14px; border-radius: var(--r); font-size: 14px; z-index: 80; }
+@media (min-width: 700px) { .schermo { max-width: 760px; margin: 0 auto; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-indietro" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-piu" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-meno" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+  <symbol id="i-pausa" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-ripeti" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></symbol>
+  <symbol id="i-cestino" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+</svg>
+
+<div id="alphaTab"></div>
+
+<!-- Brani -->
+<section class="schermo" id="brani">
+  <div class="topbar"><div class="tit"><h1>Canto</h1><div class="sub" id="brani-sub">Canta sopra la base di una tablatura</div></div></div>
+  <div class="corpo">
+    <div id="lista"></div>
+    <div class="vuoto hidden" id="vuoto">
+      <div class="big">Nessun brano</div>
+      Tocca <b>+</b> e scegli un file Guitar Pro (<b>.gp</b>, .gp5, .gpx) esportato da Songsterr o da Ultimate Guitar.<br>Serve una traccia con la melodia della voce.
+    </div>
+    <p class="nota">I brani restano su questo dispositivo. Cuffie consigliate: senza, il microfono sente anche la base.</p>
+  </div>
+  <label class="fab" title="Aggiungi un brano"><svg class="i"><use href="#i-piu"/></svg><input type="file" id="file" accept=".gp,.gp3,.gp4,.gp5,.gpx,.gp7,application/octet-stream" multiple></label>
+</section>
+
+<!-- Impostazioni del brano -->
+<section class="schermo hidden" id="setup">
+  <div class="topbar">
+    <button class="ico" data-az="torna-brani"><svg class="i"><use href="#i-indietro"/></svg></button>
+    <div class="tit"><h1 id="st-titolo">—</h1><div class="sub" id="st-sub"></div></div>
+  </div>
+  <div class="corpo">
+    <div class="fascia">Traccia della voce</div>
+    <div class="campo"><label>Melodia da cantare<small id="st-info"></small></label><select id="st-traccia"></select></div>
+    <div class="fascia">Esecuzione</div>
+    <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
+    <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
+    <div class="campo"><label>Voce guida<small>La melodia suonata dalla base</small></label><div class="seg" id="st-guida"><button data-v="0">Spenta</button><button data-v="0.4">Bassa</button><button data-v="1" class="on">Piena</button></div></div>
+    <div class="campo"><label>Metronomo</label><div class="seg" id="st-metro"><button data-v="0" class="on">No</button><button data-v="1">Sì</button></div></div>
+    <div class="fascia">Microfono</div>
+    <div class="campo"><label>Ritardo del microfono<small>Se il tracciato della voce arriva sempre in ritardo, aumenta</small></label><input type="range" id="st-lat" min="0" max="300" step="10" value="120"><div class="val" id="st-lat-v" style="min-width:70px">120 ms</div></div>
+    <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
+    <div class="fascia">Brano</div>
+    <div class="campo"><label>Ultimo risultato<small id="st-ultimo">Mai cantato</small></label><button class="ico" data-az="elimina" title="Togli il brano"><svg class="i"><use href="#i-cestino"/></svg></button></div>
+  </div>
+  <button class="fab largo" data-az="canta"><svg class="i"><use href="#i-mic"/></svg>Canta</button>
+</section>
+
+<!-- Esecuzione -->
+<section class="schermo hidden" id="esec">
+  <div class="topbar">
+    <button class="ico" data-az="chiudi-esec"><svg class="i"><use href="#i-x"/></svg></button>
+    <div class="tit"><h1 id="es-titolo">—</h1><div class="sub" id="es-sub"></div></div>
+    <div class="tempo" id="es-tempo">100%</div>
+  </div>
+  <div class="rullo"><canvas id="rullo"></canvas><div class="conto hidden" id="conto"></div></div>
+  <div class="avanz"><div id="es-avanz"></div></div>
+  <div class="testo"><div class="ora" id="tx-ora"></div><div class="dopo" id="tx-dopo"></div><div class="msg" id="tx-msg"></div></div>
+  <div class="comandi">
+    <div class="mic"><svg class="i"><use href="#i-mic"/></svg><div class="liv"><div id="liv"></div></div><span id="es-nota">—</span></div>
+    <div class="sp"></div>
+    <button class="btn" data-az="ricomincia" title="Ricomincia"><svg class="i"><use href="#i-ripeti"/></svg></button>
+    <button class="btn play" data-az="play" title="Play / pausa"><svg class="i"><use id="play-ico" href="#i-play"/></svg></button>
+  </div>
+</section>
+
+<!-- Risultato -->
+<section class="schermo hidden" id="fine">
+  <div class="topbar">
+    <button class="ico" data-az="chiudi-esec"><svg class="i"><use href="#i-x"/></svg></button>
+    <div class="tit"><h1 id="fi-titolo">—</h1><div class="sub" id="fi-sub"></div></div>
+  </div>
+  <div class="corpo">
+    <div class="punteggio"><div class="big"><span id="fi-pct">0</span><small>%</small></div><div class="desc" id="fi-desc"></div></div>
+    <div class="fascia" id="fi-fascia">Per sezione</div>
+    <div id="fi-lista"></div>
+  </div>
+  <button class="fab largo" data-az="riprova"><svg class="i"><use href="#i-ripeti"/></svg>Di nuovo</button>
+</section>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.9.0/dist/alphaTab.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const CDN = 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.9.0/dist/';
+const TPQ = 960; // tick per quarto in alphaTab
+
+// ------------------------------------------------------------ stato
+const state = {
+  brani: [], brano: null, score: null, traccia: 0,
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50,
+  esec: null, // esecuzione in corso
+};
+try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol }); } catch (e) {} };
+
+// ------------------------------------------------------------ archivio (IndexedDB)
+const db = {
+  open() { return new Promise((ok, no) => { const r = indexedDB.open('canto', 1); r.onupgradeneeded = () => r.result.createObjectStore('brani', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); },
+  async tutti() { const d = await this.open(); return new Promise((ok, no) => { const r = d.transaction('brani').objectStore('brani').getAll(); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); },
+  async metti(b) { const d = await this.open(); return new Promise((ok, no) => { const t = d.transaction('brani', 'readwrite'); t.objectStore('brani').put(b); t.oncomplete = ok; t.onerror = () => no(t.error); }); },
+  async togli(id) { const d = await this.open(); return new Promise((ok, no) => { const t = d.transaction('brani', 'readwrite'); t.objectStore('brani').delete(id); t.oncomplete = ok; t.onerror = () => no(t.error); }); },
+};
+
+// ------------------------------------------------------------ schermi
+function mostra(id) { for (const s of document.querySelectorAll('.schermo')) s.classList.toggle('hidden', s.id !== id); }
+let toastT;
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), ms); }
+
+// ------------------------------------------------------------ brani
+async function caricaLista() {
+  try { state.brani = (await db.tutti()).sort((a, b) => (b.aggiunto || 0) - (a.aggiunto || 0)); } catch (e) { state.brani = []; }
+  const l = $('#lista'); l.innerHTML = '';
+  $('#vuoto').classList.toggle('hidden', state.brani.length > 0);
+  $('#brani-sub').textContent = state.brani.length ? `${state.brani.length} ${state.brani.length === 1 ? 'brano' : 'brani'}` : 'Canta sopra la base di una tablatura';
+  for (const b of state.brani) {
+    const r = document.createElement('button'); r.className = 'riga'; r.dataset.az = 'apri'; r.dataset.id = b.id;
+    r.innerHTML = `<svg class="i" style="color:var(--inchiostro-3)"><use href="#i-nota"/></svg><div class="txt"><div class="t"></div><div class="s"></div></div>${b.miglior != null ? `<div class="pct ${classe(b.miglior)}">${b.miglior}%</div>` : ''}`;
+    $('.t', r).textContent = b.titolo || b.nome; $('.s', r).textContent = b.artista || b.nome;
+    l.appendChild(r);
+  }
+}
+function classe(p) { return p >= 75 ? '' : p >= 50 ? 'medio' : 'male'; }
+
+async function aggiungiFile(files) {
+  for (const f of files) {
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, new alphaTab.Settings());
+      const b = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, nome: f.name, titolo: score.title || f.name.replace(/\.[^.]+$/, ''), artista: score.artist || '', bytes, aggiunto: Date.now(), traccia: null, miglior: null };
+      await db.metti(b);
+      toast(`Aggiunto «${b.titolo}»`);
+    } catch (e) { console.error(e); toast(`Non riesco a leggere ${f.name}: ${e.message || e}`, 5000); }
+  }
+  await caricaLista();
+}
+
+// ------------------------------------------------------------ modello del brano
+// Dalla traccia scelta ricava note (tick, durata, altezza, testo) e frasi/sezioni.
+function indovinaTraccia(score) {
+  const t = score.tracks;
+  const conTesto = t.map((tr, i) => [i, contaTesto(tr)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const perNome = t.findIndex(tr => /voc|voice|voce|cant|sing|lead|lyric|melod/i.test(tr.name));
+  if (perNome >= 0) return perNome;
+  const perProg = t.findIndex(tr => [52, 53, 54, 85].includes(tr.playbackInfo.program));
+  if (perProg >= 0) return perProg;
+  if (conTesto.length) return conTesto[0][0];
+  return 0;
+}
+function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) if (b.lyrics && b.lyrics.some(x => x)) n++; return n; }
+function* beatsDi(tr) { for (const bar of tr.staves[0].bars) for (const v of bar.voices) for (const b of v.beats) if (!b.isEmpty) yield b; }
+
+function costruisciModello(score, idx) {
+  const tr = score.tracks[idx];
+  const note = [];
+  for (const b of beatsDi(tr)) {
+    if (b.isRest || !b.notes.length) continue;
+    // melodia: nota più alta dell'accordo
+    const n = b.notes.reduce((a, x) => (x.realValue > a.realValue ? x : a), b.notes[0]);
+    if (n.isTieDestination && note.length) { note[note.length - 1].dur += b.playbackDuration; continue; }
+    const syl = (b.lyrics && b.lyrics.find(x => x)) || '';
+    note.push({ tick: b.absolutePlaybackStart, dur: b.playbackDuration, midi: n.realValue, syl, bar: b.voice.bar.index });
+  }
+  // frasi: nuova frase a una pausa >= 2 quarti, o quando il testo sillabato lo suggerisce
+  const frasi = []; let f = null;
+  for (let i = 0; i < note.length; i++) {
+    const n = note[i], prev = note[i - 1];
+    const gap = prev ? n.tick - (prev.tick + prev.dur) : Infinity;
+    if (!f || gap >= 2 * TPQ || (f.note.length >= 14 && gap >= TPQ / 2)) { f = { note: [], sezione: null }; frasi.push(f); }
+    f.note.push(n); n.frase = frasi.length - 1;
+  }
+  for (const fr of frasi) fr.testo = testoDi(fr.note);
+  // sezioni dai marker (Verse, Chorus…)
+  const mb = score.masterBars; const sezioni = [];
+  for (const m of mb) if (m.section && (m.section.text || m.section.marker)) sezioni.push({ da: m.index, nome: m.section.text || m.section.marker, note: [] });
+  for (let i = 0; i < sezioni.length; i++) sezioni[i].a = i + 1 < sezioni.length ? sezioni[i + 1].da : Infinity;
+  for (const n of note) { const s = sezioni.find(s => n.bar >= s.da && n.bar < s.a); if (s) s.note.push(n); }
+  const sez = sezioni.filter(s => s.note.length);
+  const fine = mb.length ? mb[mb.length - 1].start + mb[mb.length - 1].calculateDuration() : (note.length ? note[note.length - 1].tick + note[note.length - 1].dur : 0);
+  const haTesto = note.some(n => n.syl);
+  const minMidi = Math.min(...note.map(n => n.midi)), maxMidi = Math.max(...note.map(n => n.midi));
+  return { note, frasi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120, nomeTraccia: tr.name };
+}
+function testoDi(note) {
+  let s = '';
+  for (const n of note) { const syl = n.syl; if (!syl) continue; if (s && !s.endsWith('-') && !s.endsWith(' ')) s += ' '; if (s.endsWith('-')) s = s.slice(0, -1); s += syl; }
+  return s.replace(/-$/, '').replace(/\s+/g, ' ').trim();
+}
+
+// ------------------------------------------------------------ alphaTab (base musicale)
+let api = null, apiPronto = null, scoreCaricato = null;
+function creaApi() {
+  if (api) return api;
+  const s = {
+    core: { fontDirectory: CDN + 'font/', scriptFile: CDN + 'alphaTab.min.js', logLevel: 'warning' },
+    display: { scale: 0.5, layoutMode: 'horizontal' },
+    player: { playerMode: 'EnabledSynthesizer', soundFont: CDN + 'soundfont/sonivox.sf3', scrollMode: 'off', enableCursor: false, enableUserInteraction: false, enableElementHighlighting: false, enableAnimatedBeatCursor: false },
+  };
+  api = new alphaTab.AlphaTabApi($('#alphaTab'), s);
+  apiPronto = new Promise(ok => { if (api.isReadyForPlayback) ok(); else api.playerReady.on(() => ok()); });
+  api.error.on(e => { console.error('alphaTab', e); toast('Errore della base musicale: ' + (e.message || e), 5000); });
+  api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
+  api.playerStateChanged.on(e => { if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
+  api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
+  return api;
+}
+function caricaScore(brano) {
+  return new Promise((ok, no) => {
+    creaApi();
+    if (scoreCaricato === brano.id) return ok(api.score);
+    const h = api.scoreLoaded.on(s => { api.scoreLoaded.off(h); scoreCaricato = brano.id; ok(s); });
+    try { api.load(brano.bytes.buffer.slice(brano.bytes.byteOffset, brano.bytes.byteOffset + brano.bytes.byteLength)); } catch (e) { no(e); }
+  });
+}
+function applicaMix() {
+  if (!api || !state.score) return;
+  const tracce = state.score.tracks;
+  for (const t of tracce) { api.changeTrackMute([t], false); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
+  api.changeTrackTranspositionPitch(tracce, state.trasp);
+  api.playbackSpeed = state.tempo / 100;
+  api.metronomeVolume = state.metro ? 1 : 0;
+  api.countInVolume = 1;
+}
+
+// ------------------------------------------------------------ setup
+async function apriBrano(id) {
+  const b = state.brani.find(x => x.id === id); if (!b) return;
+  state.brano = b; mostra('setup');
+  $('#st-titolo').textContent = b.titolo; $('#st-sub').textContent = b.artista || b.nome;
+  $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
+  $('#st-traccia').innerHTML = '<option>Lettura…</option>';
+  try { state.score = await caricaScore(b); } catch (e) { toast('Non riesco a leggere il file: ' + (e.message || e), 5000); mostra('brani'); return; }
+  state.traccia = b.traccia != null && b.traccia < state.score.tracks.length ? b.traccia : indovinaTraccia(state.score);
+  const sel = $('#st-traccia'); sel.innerHTML = '';
+  state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${t.name || 'Traccia'}${contaTesto(t) ? ' · testo' : ''}`; sel.appendChild(o); });
+  sel.value = state.traccia;
+  aggiornaSetup();
+}
+function aggiornaSetup() {
+  const b = state.brano; if (b) $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
+  $('#st-tempo').textContent = state.tempo + '%';
+  $('#st-trasp').textContent = (state.trasp > 0 ? '+' : '') + state.trasp;
+  $('#st-lat').value = state.lat; $('#st-lat-v').textContent = state.lat + ' ms';
+  for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
+  if (state.score) {
+    const m = costruisciModello(state.score, state.traccia);
+    const nome = (x) => ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'][(x % 12 + 12) % 12] + (Math.floor(x / 12) - 1);
+    $('#st-info').textContent = m.note.length ? `${m.note.length} note, da ${nome(m.minMidi + state.trasp)} a ${nome(m.maxMidi + state.trasp)}${m.haTesto ? ', con il testo' : ', senza testo'}` : 'Questa traccia non ha note';
+  }
+}
+
+// ------------------------------------------------------------ microfono e intonazione
+const mic = { ctx: null, an: null, buf: null, stream: null, src: null, attivo: false };
+async function apriMic() {
+  if (mic.attivo) { if (mic.ctx.state !== 'running') await mic.ctx.resume(); return true; }
+  mic.ctx = mic.ctx || new (window.AudioContext || window.webkitAudioContext)(); // creato dentro il tocco, per iPhone
+  try {
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+  } catch (e) { toast('Microfono non disponibile: ' + (e.message || e), 5000); return false; }
+  if (mic.ctx.state !== 'running') await mic.ctx.resume();
+  mic.src = mic.ctx.createMediaStreamSource(mic.stream);
+  mic.an = mic.ctx.createAnalyser(); mic.an.fftSize = 2048; mic.an.smoothingTimeConstant = 0;
+  mic.src.connect(mic.an);
+  mic.buf = new Float32Array(mic.an.fftSize);
+  mic.attivo = true;
+  return true;
+}
+// McLeod Pitch Method (NSDF + parabolic interpolation). Restituisce [hz, chiarezza, rms].
+function rilevaAltezza(buf, sr) {
+  const n = buf.length; let rms = 0; for (let i = 0; i < n; i++) rms += buf[i] * buf[i]; rms = Math.sqrt(rms / n);
+  if (rms < 0.008) return [0, 0, rms];
+  const minLag = Math.floor(sr / 1100), maxLag = Math.min(Math.floor(sr / 60), n - 2);
+  const nsdf = new Float32Array(maxLag + 1);
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let acf = 0, m = 0; const len = n - lag;
+    for (let i = 0; i < len; i++) { const a = buf[i], b = buf[i + lag]; acf += a * b; m += a * a + b * b; }
+    nsdf[lag] = m > 0 ? 2 * acf / m : 0;
+  }
+  // picchi positivi
+  const picchi = []; let i = minLag;
+  while (i < maxLag && nsdf[i] > 0) i++;
+  while (i < maxLag) {
+    while (i < maxLag && nsdf[i] <= 0) i++;
+    let best = -1, bv = 0;
+    while (i < maxLag && nsdf[i] > 0) { if (nsdf[i] > bv) { bv = nsdf[i]; best = i; } i++; }
+    if (best > 0) picchi.push(best);
+  }
+  if (!picchi.length) return [0, 0, rms];
+  let max = 0; for (const p of picchi) if (nsdf[p] > max) max = nsdf[p];
+  const soglia = 0.86 * max;
+  let scelto = picchi.find(p => nsdf[p] >= soglia);
+  // interpolazione parabolica
+  const a = nsdf[scelto - 1], b = nsdf[scelto], c = nsdf[scelto + 1];
+  const d = a - 2 * b + c; const sh = d !== 0 ? 0.5 * (a - c) / d : 0;
+  const lag = scelto + sh; const hz = sr / lag;
+  return [hz, b, rms];
+}
+const midiDi = (hz) => 69 + 12 * Math.log2(hz / 440);
+
+// ------------------------------------------------------------ esecuzione
+const cv = $('#rullo'); const ctx2d = cv.getContext('2d');
+const PLAYHEAD = 0.3; // posizione della linea del "adesso" (frazione della larghezza)
+
+async function avviaEsecuzione() {
+  if (!state.score) return;
+  const m = costruisciModello(state.score, state.traccia);
+  if (!m.note.length) { toast('La traccia scelta non ha note da cantare'); return; }
+  state.brano.traccia = state.traccia; db.metti(state.brano).catch(() => {});
+  salvaPref();
+  if (!(await apriMic())) return;
+  creaApi();
+  mostra('esec');
+  $('#es-titolo').textContent = state.brano.titolo; $('#es-sub').textContent = state.brano.artista || '';
+  $('#es-tempo').textContent = state.tempo + '%' + (state.trasp ? ` · ${state.trasp > 0 ? '+' : ''}${state.trasp}` : '');
+  const pxPerSec = 160; // velocità del rullo a tempo 100%
+  state.esec = {
+    m, tick: 0, tickAt: performance.now(), endTick: m.fine, suona: false, finita: false,
+    tickPerMs: m.tempo * TPQ / 60000, tempoCorr: null,
+    pxPerTick: pxPerSec / 1000 / (m.tempo * TPQ / 60000),
+    traccia: [], // [tick, midiCantato] degli ultimi secondi
+    ultimoFrame: 0, raf: 0,
+    minMidi: m.minMidi + state.trasp - 3, maxMidi: m.maxMidi + state.trasp + 3,
+  };
+  for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
+  ridimensiona();
+  $('#tx-msg').textContent = 'Caricamento della base…';
+  try { await Promise.race([apiPronto, new Promise((_, no) => setTimeout(() => no(new Error('tempo scaduto')), 40000))]); } catch (e) { toast('La base non si carica (' + e.message + '). Controlla la connessione.', 6000); }
+  if (!state.esec) return;
+  applicaMix();
+  $('#tx-msg').textContent = '';
+  api.tickPosition = 0;
+  disegnaTesto();
+  loop();
+  partenza();
+}
+function partenza() {
+  // conto alla rovescia con il count-in di alphaTab (una battuta)
+  const x = state.esec; if (!x) return;
+  const beatMs = 60000 / x.m.tempo * (100 / state.tempo);
+  const num = (state.score.masterBars[0] && state.score.masterBars[0].timeSignatureNumerator) || 4;
+  x.beatMs = beatMs; x.contoFine = performance.now() + beatMs * num;
+  api.play();
+}
+function aggiornaPlay() { $('#play-ico').setAttribute('href', state.esec && state.esec.suona ? '#i-pausa' : '#i-play'); }
+function tickOra() {
+  const x = state.esec; if (!x) return 0;
+  if (!x.suona) return x.tick;
+  if (x.tick < 5 && performance.now() < x.contoFine) return x.tick; // conto alla rovescia: la base non è ancora partita
+  const tpm = (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
+  return x.tick + (performance.now() - x.tickAt) * tpm;
+}
+function ridimensiona() {
+  const r = cv.parentElement.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => { if (state.esec) ridimensiona(); });
+
+function loop() {
+  const x = state.esec; if (!x) return;
+  x.raf = requestAnimationFrame(loop);
+  const ora = performance.now();
+  // microfono
+  if (mic.attivo) {
+    mic.an.getFloatTimeDomainData(mic.buf);
+    const [hz, chi, rms] = rilevaAltezza(mic.buf, mic.ctx.sampleRate);
+    const liv = $('#liv'); liv.style.width = Math.min(100, rms * 600) + '%';
+    const tick = tickOra() - state.lat * (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
+    if (hz > 0 && chi > 0.85) {
+      const md = midiDi(hz);
+      x.traccia.push([tick, md, ora]);
+      $('#es-nota').textContent = nomeNota(md);
+      if (x.suona) valuta(tick, md, ora);
+    } else { $('#es-nota').textContent = '—'; x.traccia.push([tick, null, ora]); }
+    while (x.traccia.length && ora - x.traccia[0][2] > 6000) x.traccia.shift();
+  }
+  // conto alla rovescia (count-in: prima del tick 0)
+  const t = tickOra();
+  const c = $('#conto');
+  if (x.suona && x.tick < 5 && ora < x.contoFine) { const n = Math.ceil((x.contoFine - ora) / x.beatMs); if (c.textContent !== String(n)) c.textContent = String(n); c.classList.remove('hidden'); }
+  else if (!c.classList.contains('hidden')) c.classList.add('hidden');
+  $('#es-avanz').style.width = Math.max(0, Math.min(100, 100 * t / x.endTick)) + '%';
+  disegna(t);
+  if (ora - x.ultimoFrame > 80) { x.ultimoFrame = ora; disegnaTesto(t); }
+}
+const NOMI = ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
+function nomeNota(md) { const r = Math.round(md); return NOMI[(r % 12 + 12) % 12] + (Math.floor(r / 12) - 1); }
+
+// confronto con la nota attesa: ignora l'ottava (chi canta un'ottava sotto va bene)
+function scarto(cantato, atteso) { let d = ((cantato - atteso) % 12 + 12) % 12; if (d > 6) d -= 12; return d * 100; } // in cent
+function valuta(tick, md, ora) {
+  const x = state.esec; const m = x.m;
+  const n = notaA(tick); if (!n) return;
+  if (!x.ultimaVal) x.ultimaVal = ora;
+  const peso = Math.min(100, ora - x.ultimaVal); x.ultimaVal = ora;
+  if (tick - n.tick < 70) return; // attacco: non conta
+  n.tot += peso;
+  if (Math.abs(scarto(md, n.midi + state.trasp)) <= state.tol) n.ok += peso;
+}
+function notaA(tick) { const m = state.esec.m; for (const n of m.note) { if (n.tick > tick) break; if (tick < n.tick + n.dur) return n; } return null; }
+
+function disegna(t) {
+  const x = state.esec; const m = x.m;
+  const W = cv.clientWidth, H = cv.clientHeight; const c = ctx2d;
+  c.clearRect(0, 0, W, H);
+  const x0 = W * PLAYHEAD; const ppt = x.pxPerTick;
+  const toX = (tick) => x0 + (tick - t) * ppt;
+  const rangeN = x.maxMidi - x.minMidi; const rowH = (H - 24) / rangeN;
+  const toY = (midi) => H - 12 - (midi - x.minMidi) * rowH;
+  // battute
+  c.strokeStyle = '#EEE9E1'; c.lineWidth = 1;
+  for (const mb of state.score.masterBars) { const xx = toX(mb.start); if (xx < -2 || xx > W + 2) continue; c.beginPath(); c.moveTo(Math.round(xx) + .5, 0); c.lineTo(Math.round(xx) + .5, H); c.stroke(); }
+  // note attese
+  const h = Math.max(8, Math.min(16, rowH * 0.9));
+  for (const n of m.note) {
+    const xa = toX(n.tick), xb = toX(n.tick + n.dur); if (xb < -4 || xa > W + 4) continue;
+    const y = toY(n.midi + state.trasp) - h / 2; const w = Math.max(3, xb - xa - 2);
+    c.fillStyle = '#D3CABD'; c.fillRect(xa, y, w, h);
+    // parte già cantata: verde/rosso in proporzione a quanto ok
+    if (n.tot > 0) {
+      const cantata = Math.min(1, Math.max(0, (t - n.tick) / n.dur));
+      const q = n.ok / n.tot;
+      c.fillStyle = q >= 0.5 ? '#6FA376' : '#C9655A';
+      c.fillRect(xa, y, w * cantata, h);
+    } else if (t > n.tick + n.dur && n.tot === 0) { c.fillStyle = '#F5E0DC'; c.fillRect(xa, y, w, h); }
+    if (w > 28 && rowH >= 7) { c.fillStyle = t > n.tick ? '#FFFFFF' : '#645A50'; c.font = '11px Instrument Sans, sans-serif'; c.textBaseline = 'middle'; c.fillText(NOMI[(Math.round(n.midi + state.trasp) % 12 + 12) % 12], xa + 4, y + h / 2 + .5); }
+  }
+  // traccia della voce: spostata nell'ottava della nota attesa
+  c.strokeStyle = '#231B15'; c.lineWidth = 2; c.beginPath(); let aperto = false;
+  for (const [tk, md] of x.traccia) {
+    if (md == null) { aperto = false; continue; }
+    const n = notaA(tk); let y;
+    if (n) { const att = n.midi + state.trasp; y = toY(att + scarto(md, att) / 100); } else y = toY(md);
+    if (y < -20 || y > H + 20) { aperto = false; continue; }
+    const xx = toX(tk);
+    if (!aperto) { c.moveTo(xx, y); aperto = true; } else c.lineTo(xx, y);
+  }
+  c.stroke();
+  // linea dell'adesso
+  c.strokeStyle = '#B4552D'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, 0); c.lineTo(x0, H); c.stroke();
+  // pallino della voce
+  const ult = x.traccia[x.traccia.length - 1];
+  if (ult && ult[1] != null) { const n = notaA(ult[0]); const att = n ? n.midi + state.trasp : null; const y = n ? toY(att + scarto(ult[1], att) / 100) : toY(ult[1]); c.fillStyle = '#231B15'; c.beginPath(); c.arc(toX(ult[0]), y, 4, 0, 7); c.fill(); }
+}
+function disegnaTesto(t = 0) {
+  const x = state.esec; const m = x.m; const el = $('#tx-ora'), dopo = $('#tx-dopo');
+  let fi = m.frasi.findIndex(f => t < f.note[f.note.length - 1].tick + f.note[f.note.length - 1].dur);
+  if (fi < 0) fi = m.frasi.length - 1;
+  const f = m.frasi[fi];
+  if (x.fraseDis !== fi) {
+    x.fraseDis = fi; el.innerHTML = '';
+    if (!m.haTesto) { el.innerHTML = `<span style="font-size:18px;color:var(--inchiostro-3)">Senza testo: segui le barre</span>`; dopo.textContent = ''; return; }
+    for (const n of f.note) { if (!n.syl) continue; const s = document.createElement('span'); s.textContent = n.syl.replace(/-$/, ''); n.el = s; el.appendChild(s); if (!n.syl.endsWith('-')) el.appendChild(document.createTextNode(' ')); }
+    const g = m.frasi[fi + 1]; dopo.textContent = g ? g.testo : '';
+  }
+  if (!m.haTesto) return;
+  for (const n of f.note) { if (!n.el) continue; const cl = t >= n.tick ? (n.tot > 0 ? (n.ok / n.tot >= 0.5 ? 'bene' : 'male') : 'fatto') : ''; if (n.el.className !== cl) n.el.className = cl; }
+}
+
+function fermaEsecuzione() {
+  const x = state.esec; if (!x) return;
+  cancelAnimationFrame(x.raf);
+  try { api.stop(); } catch (e) {}
+  state.esec = null;
+}
+function fineEsecuzione() {
+  const x = state.esec; if (!x || x.finita) return; x.finita = true;
+  const m = x.m;
+  const perc = (note) => { let ok = 0, tot = 0; for (const n of note) { if (n.tot === 0) { tot += n.dur; continue; } ok += n.dur * (n.ok / n.tot); tot += n.dur; } return tot ? Math.round(100 * ok / tot) : 0; };
+  const tot = perc(m.note);
+  const gruppi = (m.sezioni.length >= 2 ? m.sezioni.map(s => ({ nome: s.nome, testo: testoDi(s.note), p: perc(s.note) })) : m.frasi.map((f, i) => ({ nome: `Frase ${i + 1}`, testo: f.testo, p: perc(f.note) })));
+  cancelAnimationFrame(x.raf); state.esec = null;
+  const b = state.brano; b.ultimo = tot; b.miglior = b.miglior == null ? tot : Math.max(b.miglior, tot); db.metti(b).catch(() => {});
+  mostra('fine');
+  $('#fi-titolo').textContent = b.titolo; $('#fi-sub').textContent = `${state.tempo}%${state.trasp ? ` · ${state.trasp > 0 ? '+' : ''}${state.trasp}` : ''}`;
+  $('#fi-pct').textContent = tot;
+  $('#fi-desc').textContent = tot >= 85 ? 'Intonazione sicura.' : tot >= 65 ? 'Bene; le frasi in rosso meritano un giro in più.' : tot >= 40 ? 'Prova a rallentare il tempo e a lavorare sulle frasi peggiori.' : 'Molte note mancate: controlla cuffie, microfono e tonalità.';
+  $('#fi-fascia').textContent = m.sezioni.length >= 2 ? 'Per sezione' : 'Per frase';
+  const l = $('#fi-lista'); l.innerHTML = '';
+  gruppi.forEach((g, i) => {
+    const r = document.createElement('div'); r.className = 'riga';
+    r.innerHTML = `<div class="num">${i + 1}</div><div class="txt"><div class="t"></div><div class="s"></div><div class="barra"><div class="${classe(g.p)}" style="width:${g.p}%"></div></div></div><div class="pct ${classe(g.p)}">${g.p}%</div>`;
+    $('.t', r).textContent = g.nome; $('.s', r).textContent = g.testo || '—';
+    l.appendChild(r);
+  });
+}
+
+// ------------------------------------------------------------ azioni
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-az]'); if (!b) return;
+  const az = b.dataset.az;
+  if (az === 'apri') apriBrano(b.dataset.id);
+  else if (az === 'torna-brani') { mostra('brani'); caricaLista(); }
+  else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); }
+  else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); aggiornaSetup(); }
+  else if (az === 'elimina') { if (confirm(`Togliere «${state.brano.titolo}» da questo dispositivo?`)) { await db.togli(state.brano.id); mostra('brani'); caricaLista(); } }
+  else if (az === 'canta') avviaEsecuzione();
+  else if (az === 'chiudi-esec') { fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
+  else if (az === 'riprova') { mostra('setup'); avviaEsecuzione(); }
+  else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.fraseDis = -1; api.stop(); api.tickPosition = 0; partenza(); }
+  else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); api.playPause(); }
+});
+for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
+$('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
+$('#st-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; aggiornaSetup(); });
+$('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state.esec && state.esec.suona) api.pause(); });
+
+caricaLista();
+window.__canto = { state, costruisciModello, rilevaAltezza, mic, get api() { return api; } };
+})();
+</script>
+</body>
+</html>
