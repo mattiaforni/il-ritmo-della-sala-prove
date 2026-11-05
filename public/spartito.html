@@ -120,6 +120,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .barra > div.male { background: var(--rosso); }
 .barra > div.medio { background: var(--ambra-pieno); }
 #spartito.hidden { display: flex !important; visibility: hidden; pointer-events: none; }
+#spartito .topbar .tit { cursor: pointer; }
 .at-scroll { flex: 1; overflow: auto; background: var(--foglio); -webkit-overflow-scrolling: touch; position: relative; }
 #at { padding: 8px 4px 120px; }
 .at-cursor-bar { background: rgba(180, 85, 45, .12); }
@@ -138,6 +139,32 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .attesa { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--inchiostro-2); }
 .attesa .big { font: 400 28px/1.2 var(--display); color: var(--inchiostro); margin-bottom: 8px; }
 .attesa a, .attesa button.link { color: var(--accento); text-decoration: underline; font: inherit; }
+.sel-traccia { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 10px 0; }
+.sel-traccia .txt { flex: 1; min-width: 0; }
+.sel-traccia .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sel-traccia .s { font-size: 13px; color: var(--inchiostro-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sel-traccia .i { color: var(--inchiostro-3); flex: none; }
+.topbar .sel-traccia { padding: 2px 0 0; }
+.topbar .sel-traccia .t { font-weight: 400; font-size: 14px; color: var(--inchiostro-2); }
+.topbar .sel-traccia .s { display: none; }
+.foglio-lista { background: var(--foglio); border-radius: var(--r-g) var(--r-g) 0 0; width: 100%; max-height: 80vh; display: flex; flex-direction: column; align-self: end; }
+.velo.basso { align-items: end; padding: 0; grid-template-columns: minmax(0, 1fr); }
+.foglio-lista { min-width: 0; max-width: 100%; }
+.foglio-lista .campo { flex-wrap: wrap; }
+.campo label { min-width: 0; }
+.foglio-lista .testa { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+.foglio-lista .testa h2 { font: 400 24px/1.1 var(--display); margin: 0; flex: 1; }
+.foglio-lista .corpo-l { overflow: auto; padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+.riga-tr { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--linea); }
+.riga-tr .scegli { flex: 1; min-width: 0; text-align: left; padding: 2px 0; }
+.riga-tr .scegli .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.riga-tr .scegli .s { font-size: 12.5px; color: var(--inchiostro-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.riga-tr.on .scegli .t { color: var(--accento); }
+.riga-tr .muta { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-3); flex: none; }
+.riga-tr .muta.on { background: var(--rosso-tinta); border-color: var(--rosso); color: var(--rosso); }
+.sp-barra .tog.icona { width: 44px; padding: 0; justify-content: center; }
+.sp-barra .tog.icona .i { width: 20px; height: 20px; }
+.topbar .ico.piccolo .i { width: 20px; height: 20px; }
 .fab-due { position: absolute; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); display: flex; gap: 10px; z-index: 5; }
 .fab-due .fab { position: static; }
 .fab-due .fab.sec { background: var(--foglio); color: var(--accento); border: 1px solid var(--accento); box-shadow: none; }
@@ -157,6 +184,12 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></symbol>
   <symbol id="i-cestino" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-mix" viewBox="0 0 24 24"><path d="M5 4v16M12 4v16M19 4v16"/><rect x="2.5" y="9" width="5" height="4" rx="1" fill="#fff"/><rect x="9.5" y="14" width="5" height="4" rx="1" fill="#fff"/><rect x="16.5" y="6" width="5" height="4" rx="1" fill="#fff"/></symbol>
+  <symbol id="i-metro" viewBox="0 0 24 24"><path d="M9 3h6l3 18H6zM12 16L17 6"/><path d="M8 13h8"/></symbol>
+  <symbol id="i-muto" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9l5 6M21 9l-5 6"/></symbol>
+  <symbol id="i-suono" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-giu-piccolo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
 
@@ -183,7 +216,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   </div>
   <div class="corpo">
     <div class="fascia">Traccia della voce</div>
-    <div class="campo"><label>Melodia da cantare<small id="st-info"></small></label><select id="st-traccia"></select></div>
+    <button class="sel-traccia" data-az="tracce"><div class="txt"><div class="t" id="st-tr-nome">—</div><div class="s" id="st-info"></div></div><svg class="i"><use href="#i-giu-piccolo"/></svg></button>
     <div class="fascia">Esecuzione</div>
     <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
@@ -198,6 +231,11 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
     <div class="fascia">Testo</div>
     <p class="nota" id="st-testo-nota" style="margin:8px 0"></p>
+    <div id="st-testo-tab" class="hidden">
+      <textarea id="st-testo-tr" spellcheck="false" style="min-height:200px;font-size:14px;line-height:1.5"></textarea>
+      <p class="nota" style="margin-top:6px">Ogni spazio o trattino manda alla nota dopo; <b>due spazi</b> lasciano una nota senza testo; <b>+</b> tiene due parole sulla stessa nota. Una riga «<b>[battuta 25]</b>» fa ripartire il testo da quella battuta.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="seg" style="padding:8px 14px;font-size:13px" data-az="testo-tr-orig">Com'era</button><button class="seg" style="padding:8px 14px;font-size:13px;background:var(--accento);color:var(--su-accento);border-color:var(--accento)" data-az="testo-tr-salva" id="st-testo-tr-salva">Applica</button></div>
+    </div>
     <textarea id="st-testo" placeholder="Incolla qui il testo, una riga per verso. Mentre canti, un tocco sul testo passa alla riga dopo e l'app ricorda il punto: dalla volta dopo le righe avanzano da sole."></textarea>
     <div class="campo hidden" id="st-tempi-riga"><label>Righe sincronizzate<small id="st-tempi-info"></small></label><button class="seg" style="padding:6px 12px;font-size:13px" data-az="azzera-tempi">Azzera</button></div>
     <div class="fascia">Brano</div>
@@ -210,17 +248,30 @@ textarea:focus { outline: none; border-color: var(--accento); }
 <section class="schermo hidden" id="spartito">
   <div class="topbar">
     <button class="ico" data-az="chiudi-spartito"><svg class="i"><use href="#i-x"/></svg></button>
-    <div class="tit"><h1 id="sp-titolo">—</h1><div class="sub"><select id="sp-traccia"></select></div></div>
+    <div class="tit" data-az="tracce"><h1 id="sp-titolo">—</h1><div class="sel-traccia"><div class="txt"><div class="t" id="sp-tr-nome">—</div></div><svg class="i"><use href="#i-giu-piccolo"/></svg></div></div>
+    <button class="ico piccolo" data-az="sp-canta" title="Canta"><svg class="i"><use href="#i-mic"/></svg></button>
+    <button class="ico piccolo" data-az="sp-impostazioni" title="Impostazioni"><svg class="i"><use href="#i-ingranaggio"/></svg></button>
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div></div>
   <div class="sp-barra">
-    <button class="tog" data-az="sp-loop" id="sp-loop" title="Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito"><svg class="i" style="width:16px;height:16px"><use href="#i-ripeti"/></svg>Ripeti</button>
-    <button class="tog" data-az="sp-metro" id="sp-metro">Metr.</button>
+    <button class="tog icona" data-az="tracce" title="Tracce: scegli, silenzia, vista"><svg class="i"><use href="#i-mix"/></svg></button>
+    <button class="tog icona" data-az="sp-loop" id="sp-loop" title="Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito"><svg class="i"><use href="#i-ripeti"/></svg></button>
+    <button class="tog icona" data-az="sp-metro" id="sp-metro" title="Metronomo"><svg class="i"><use href="#i-metro"/></svg></button>
     <div class="tempo"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div>
     <div class="sp"></div>
     <button class="btn play" data-az="sp-play" title="Play / pausa"><svg class="i"><use id="sp-play-ico" href="#i-play"/></svg></button>
   </div>
 </section>
+
+<!-- Tracce: scelta, silenzio, vista -->
+<div class="velo basso hidden" id="velo-tracce"><div class="foglio-lista">
+  <div class="testa"><h2>Tracce</h2><button class="ico" data-az="tracce-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l">
+    <div class="campo" id="riga-vista"><label>Vista<small>Vale per tutti i brani; la voce è sempre in pentagramma</small></label><div class="seg" id="st-vista"><button data-v="tab">Tab</button><button data-v="score">Pentagr.</button><button data-v="entrambi" class="on">Entrambi</button></div></div>
+    <p class="nota" style="margin:10px 0 4px">Tocca una traccia per vederla (e cantarla); l'altoparlante la silenzia nella base.</p>
+    <div id="lista-tracce"></div>
+  </div>
+</div></div>
 
 <!-- Attesa / messaggi (brano dall'app) -->
 <section class="schermo hidden" id="attesa"><div class="attesa"><div><div class="big" id="at-titolo">Un momento…</div><div id="at-testo"></div><div id="at-azioni" style="margin-top:16px"></div></div></div></section>
@@ -263,7 +314,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
 <script type="module">
 // collegamento a Firebase: lo stesso accesso dell'app (band o fan), condiviso sullo stesso sito
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 if (window.FIREBASE_CONFIG) {
   const app = initializeApp(window.FIREBASE_CONFIG);
@@ -271,7 +322,8 @@ if (window.FIREBASE_CONFIG) {
   window.__auth = auth;
   window.__fb = {
     utente: () => new Promise(ok => { const off = onAuthStateChanged(auth, u => { off(); ok(u); }); }),
-    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; }
+    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+    salvaTesti: (id, traccia, righe) => updateDoc(doc(db, 'canzoni', id), { ['testiTab.' + traccia]: righe })
   };
 }
 window.dispatchEvent(new Event('fb-pronto'));
@@ -290,11 +342,11 @@ const TPQ = 960; // tick per quarto in alphaTab
 // ------------------------------------------------------------ stato
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
-  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1,
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', daSpartito: false,
   esec: null, loop: false, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
-const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum }); } catch (e) {} };
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
 
 // ------------------------------------------------------------ archivio (IndexedDB)
 const db = {
@@ -342,7 +394,7 @@ async function aggiungiFile(files) {
 // ------------------------------------------------------------ modello del brano
 // Dalla traccia scelta ricava note (tick, durata, altezza, testo) e frasi/sezioni.
 const GM = ['Piano', 'Piano', 'Piano el.', 'Honky-tonk', 'Piano el.', 'Piano el.', 'Clavicembalo', 'Clavinet', 'Celesta', 'Glockenspiel', 'Carillon', 'Vibrafono', 'Marimba', 'Xilofono', 'Campane', 'Dulcimer', 'Organo', 'Organo', 'Organo', 'Organo', 'Organo', 'Fisarmonica', 'Armonica', 'Fisarmonica', 'Chitarra nylon', 'Chitarra acustica', 'Chitarra jazz', 'Chitarra pulita', 'Chitarra muted', 'Chitarra overdrive', 'Chitarra distorta', 'Chitarra armonici', 'Basso acustico', 'Basso', 'Basso pick', 'Basso fretless', 'Basso slap', 'Basso slap', 'Basso synth', 'Basso synth', 'Violino', 'Viola', 'Violoncello', 'Contrabbasso', 'Archi tremolo', 'Archi pizzicato', 'Arpa', 'Timpani', 'Archi', 'Archi', 'Archi synth', 'Archi synth', 'Coro', 'Voce ooh', 'Voce synth', 'Orchestra hit', 'Tromba', 'Trombone', 'Tuba', 'Tromba sordina', 'Corno', 'Ottoni', 'Ottoni synth', 'Ottoni synth', 'Sax soprano', 'Sax contralto', 'Sax tenore', 'Sax baritono', 'Oboe', 'Corno inglese', 'Fagotto', 'Clarinetto', 'Ottavino', 'Flauto', 'Flauto dolce', 'Flauto di Pan', 'Bottiglia', 'Shakuhachi', 'Fischio', 'Ocarina', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead voce', 'Lead', 'Lead', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'Sitar', 'Banjo', 'Shamisen', 'Koto', 'Kalimba', 'Cornamusa', 'Fiddle', 'Shanai', 'Campanelli', 'Agogo', 'Steel drum', 'Woodblock', 'Taiko', 'Tom', 'Tom synth', 'Piatto', 'Chitarra fret noise', 'Respiro', 'Mare', 'Uccelli', 'Telefono', 'Elicottero', 'Applausi', 'Sparo'];
-function strumentoDi(tr) { return tr.playbackInfo.isPercussion ? 'Batteria' : (GM[tr.playbackInfo.program] || 'Strumento ' + tr.playbackInfo.program); }
+function strumentoDi(tr) { const p = tr._prog != null ? tr._prog : tr.playbackInfo.program; return tr.playbackInfo.isPercussion ? 'Batteria' : (GM[p] || 'Strumento ' + tr.playbackInfo.program); }
 // I file fatti con Guitar Pro in russo hanno i nomi in cp1251 letti come Latin-1 («Дорожка» = traccia)
 function nomeTraccia(tr, i) {
   let n = tr.name || '';
@@ -350,6 +402,10 @@ function nomeTraccia(tr, i) {
   if (/^(Дорожка|Track|Traccia|Piste|Spur|Pista)\s*\d*$/i.test(n.trim()) || !n.trim()) n = '';
   return n || `Traccia ${i + 1}`;
 }
+// Songsterr chiama le tracce «Dan Auerbach | Gibson… | Lead Vocals»: come titolo si usa l'ultima parte
+function nomeBreve(tr, i) { const n = nomeTraccia(tr, i); const parti = n.split('|').map(x => x.trim()).filter(Boolean); return parti.length > 1 ? parti[parti.length - 1] : n; }
+function sottotitolo(tr, i) { const n = nomeTraccia(tr, i); const parti = n.split('|').map(x => x.trim()).filter(Boolean); const resto = parti.length > 1 ? parti.slice(0, -1).join(' · ') + ' · ' : ''; const p = profiloTraccia(tr); return `${resto}${strumentoDi(tr)} · ${p.note} note${contaTesto(tr) ? ' · testo' : ''}`; }
+const muti = () => (state.brano && Array.isArray(state.brano.muti)) ? state.brano.muti : [];
 function profiloTraccia(tr) {
   let note = 0, mono = 0, somma = 0;
   for (const b of beatsDi(tr)) { if (b.isRest || !b.notes.length) continue; note++; if (b.notes.length === 1) mono++; somma += b.notes[0].realValue; }
@@ -488,8 +544,14 @@ function applicaMix() {
       if (au.value !== vv) { au.value = vv; rigenera = true; }
     }
   }
-  if (rigenera) api.loadMidiForScore();
-  for (const t of tracce) { api.changeTrackMute([t], false); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
+  if (rigenera) {
+    // la base rigenerata riparte da zero: si torna al punto in cui era, e se suonava riparte
+    const pos = api.tickPosition, suonava = api.playerState === 1;
+    let h = null; h = api.midiLoaded.on(() => { if (h) api.midiLoaded.off(h); try { api.tickPosition = pos; if (suonava) api.play(); } catch (e) {} });
+    api.loadMidiForScore();
+  }
+  const m = muti();
+  for (const t of tracce) { api.changeTrackMute([t], m.includes(t.index)); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
   api.changeTrackTranspositionPitch(tracce, state.trasp);
   api.playbackSpeed = state.tempo / 100;
   api.metronomeVolume = state.metro ? 1 : 0;
@@ -502,12 +564,10 @@ async function apriBrano(id) {
   state.brano = b; mostra('setup');
   $('#st-titolo').textContent = b.titolo; $('#st-sub').textContent = b.artista || b.nome;
   $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
-  $('#st-traccia').innerHTML = '<option>Lettura…</option>';
+  $('#st-tr-nome').textContent = 'Lettura…'; $('#st-info').textContent = '';
   try { state.score = await caricaScore(b); } catch (e) { toast('Non riesco a leggere il file: ' + (e.message || e), 5000); mostra('brani'); return; }
   state.traccia = b.traccia != null && b.traccia < state.score.tracks.length ? b.traccia : indovinaTraccia(state.score);
-  const sel = $('#st-traccia'); sel.innerHTML = '';
-  state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; const p = profiloTraccia(t); o.textContent = `${nomeTraccia(t, i)} · ${strumentoDi(t)} · ${p.note} note${contaTesto(t) ? ' · testo' : ''}`; sel.appendChild(o); });
-  sel.value = state.traccia;
+  applicaTestiCorretti();
   aggiornaSetup();
 }
 function aggiornaSetup() {
@@ -518,7 +578,9 @@ function aggiornaSetup() {
   const bb = state.brano;
   if (bb && state.score) {
     const haT = contaTesto(state.score.tracks[state.traccia]) > 0;
-    $('#st-testo-nota').textContent = haT ? 'Il file ha già il testo sulla traccia scelta: quello incollato qui non serve.' : 'La traccia scelta non ha il testo. Incollalo qui per averlo mentre canti.';
+    const corr = testiCorretti(), orig = testiOriginali();
+    $('#st-testo-nota').textContent = haT ? (orig || corr ? `Il testo della traccia${corr ? ' (corretto)' : ''}: se qualche sillaba non va a tempo, sistemalo qui e tocca Applica.` : 'Il file ha già il testo sulla traccia scelta: quello incollato qui non serve.') : 'La traccia scelta non ha il testo. Incollalo qui per averlo mentre canti.';
+    $('#st-testo').classList.toggle('hidden', haT);
     if ($('#st-testo').value !== (bb.testo || '')) $('#st-testo').value = bb.testo || '';
     const nT = (bb.tempiTesto || []).filter(v => v != null).length; const righe = righeDi(bb.testo);
     $('#st-tempi-riga').classList.toggle('hidden', !nT);
@@ -530,6 +592,11 @@ function aggiornaSetup() {
   for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
   for (const b of document.querySelectorAll('#st-suoni button')) b.classList.toggle('on', b.dataset.v === state.suoni);
   if (state.score) {
+    const tr = state.score.tracks[state.traccia];
+    $('#st-tr-nome').textContent = nomeBreve(tr, state.traccia);
+    const orig = testiOriginali(), corr = testiCorretti();
+    $('#st-testo-tab').classList.toggle('hidden', !orig && !corr);
+    if (orig || corr) { const ta = $('#st-testo-tr'); if (ta.dataset.traccia !== String(state.traccia)) { ta.value = righeATesto(corr || orig); ta.dataset.traccia = String(state.traccia); } }
     const m = costruisciModello(state.score, state.traccia);
     const nome = (x) => ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'][(x % 12 + 12) % 12] + (Math.floor(x / 12) - 1);
     $('#st-info').textContent = m.note.length ? `${m.note.length} note, da ${nome(m.minMidi + state.trasp)} a ${nome(m.maxMidi + state.trasp)}${m.haTesto ? ', con il testo' : ', senza testo'}` : 'Questa traccia non ha note';
@@ -822,8 +889,6 @@ function apriSpartito() {
   creaApi(); salvaPref();
   mostra('spartito');
   $('#sp-titolo').textContent = state.brano.titolo;
-  const sel = $('#sp-traccia'); if (sel.options.length !== state.score.tracks.length) { sel.innerHTML = ''; state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${nomeTraccia(t, i)} · ${strumentoDi(t)}`; sel.appendChild(o); }); }
-  sel.value = state.traccia;
   disegnaSpartito();
   api.isLooping = !!state.loop; api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
   caricaSuoni().then(() => applicaMix()).catch(() => {});
@@ -833,18 +898,18 @@ function aggiornaSpartito() {
   $('#sp-tempo').textContent = state.tempo + '%';
   $('#sp-loop').classList.toggle('on', !!state.loop);
   $('#sp-metro').classList.toggle('on', !!state.metro);
-  $('#sp-loop').lastChild.textContent = state.loop ? (state.sel ? 'Ripeti le battute' : 'Ripeti tutto') : 'Ripeti';
+  $('#sp-loop').title = state.loop ? (state.sel ? 'Ripete le battute scelte' : 'Ripete tutto il brano') : 'Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito';
 }
 // la voce (su Songsterr è una traccia "a corde") si mostra solo in pentagramma; il resto in tab + pentagramma
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
   const voce = /voc|voice|voce|cant|sing/i.test(t.name) || [52, 53, 54, 85].includes(t.playbackInfo.program);
-  const prof = voce ? 'Score' : 'Default';
+  const prof = voce || t.playbackInfo.isPercussion ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
+  $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia);
   if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
   $('#sp-msg').textContent = 'Disegno lo spartito…';
   api.renderTracks([t]);
 }
-$('#sp-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; disegnaSpartito(); applicaMix(); aggiornaSetup(); });
 
 function fermaEsecuzione() {
   const x = state.esec; if (!x) return;
@@ -881,18 +946,23 @@ document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-az]'); if (!b) return;
   const az = b.dataset.az;
   if (az === 'apri') apriBrano(b.dataset.id);
-  else if (az === 'torna-brani') { if (ID_APP) { location.href = './'; return; } mostra('brani'); caricaLista(); }
+  else if (az === 'torna-brani') { if (state.daSpartito) { state.daSpartito = false; mostra('spartito'); if (api) applicaMix(); return; } if (ID_APP) { location.href = './'; return; } mostra('brani'); caricaLista(); }
+  else if (az === 'tracce') { if (state.score) apriTracce(); }
+  else if (az === 'sp-impostazioni') { state.daSpartito = true; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
+  else if (az === 'sp-canta') { try { api.stop(); } catch (e) {} state.daSpartito = true; avviaEsecuzione(); }
+  else if (az === 'testo-tr-salva') salvaTestiTraccia();
+  else if (az === 'testo-tr-orig') { const o = testiOriginali(); if (o) { $('#st-testo-tr').value = righeATesto(o); } }
   else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); aggiornaSpartito(); if (api) api.playbackSpeed = state.tempo / 100; salvaPref(); }
   else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); aggiornaSetup(); }
   else if (az === 'elimina') { if (confirm(`Togliere «${state.brano.titolo}» da questo dispositivo?`)) { await db.togli(state.brano.id); mostra('brani'); caricaLista(); } }
   else if (az === 'canta') avviaEsecuzione();
   else if (az === 'spartito') apriSpartito();
-  else if (az === 'chiudi-spartito') { try { api.stop(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
+  else if (az === 'chiudi-spartito') { try { api.stop(); } catch (e) {} state.daSpartito = false; if (ID_APP) { location.href = './'; return; } mostra('setup'); aggiornaSetup(); }
   else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
   else if (az === 'sp-loop') { state.loop = !state.loop; if (api) api.isLooping = state.loop; aggiornaSpartito(); }
   else if (az === 'sp-metro') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; aggiornaSpartito(); salvaPref(); }
   else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
-  else if (az === 'chiudi-esec') { fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
+  else if (az === 'chiudi-esec') { fermaEsecuzione(); if (state.daSpartito) { state.daSpartito = false; apriSpartito(); return; } mostra('setup'); aggiornaSetup(); }
   else if (az === 'riprova') { mostra('setup'); avviaEsecuzione(); }
   else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.fraseDis = -1; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); api.playPause(); }
@@ -904,7 +974,68 @@ let testoT = 0;
 $('#st-testo').addEventListener('input', (e) => { const b = state.brano; if (!b) return; const v = e.target.value; clearTimeout(testoT); testoT = setTimeout(() => { if (righeDi(v).join('\n') !== righeDi(b.testo).join('\n')) b.tempiTesto = null; b.testo = v; db.metti(b).catch(() => {}); aggiornaSetup(); }, 400); });
 $('#st-guida-strum').addEventListener('change', (e) => { state.guidaStrum = +e.target.value; salvaPref(); });
 $('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
-$('#st-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; aggiornaSetup(); });
+// ---- foglio delle tracce (scelta, silenzio, vista) ----
+function apriTracce() {
+  const l = $('#lista-tracce'); l.innerHTML = '';
+  const m = muti();
+  state.score.tracks.forEach((t, i) => {
+    const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.traccia ? ' on' : '');
+    r.innerHTML = `<button class="scegli" data-az="traccia-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button><button class="muta${m.includes(i) ? ' on' : ''}" data-az="traccia-muta" data-i="${i}" title="Silenzia nella base"><svg class="i"><use href="${m.includes(i) ? '#i-muto' : '#i-suono'}"/></svg></button>`;
+    $('.t', r).textContent = nomeBreve(t, i); $('.s', r).textContent = sottotitolo(t, i);
+    l.appendChild(r);
+  });
+  for (const b of document.querySelectorAll('#st-vista button')) b.classList.toggle('on', b.dataset.v === state.vista);
+  $('#riga-vista').classList.toggle('hidden', $('#spartito').classList.contains('hidden'));
+  $('#velo-tracce').classList.remove('hidden');
+}
+function scegliTraccia(i) {
+  state.traccia = i; state.brano.traccia = i; db.metti(state.brano).catch(() => {});
+  applicaTestiCorretti();
+  aggiornaSetup();
+  if (!$('#spartito').classList.contains('hidden')) {
+    const pos = api ? api.tickPosition : 0;
+    disegnaSpartito(); if (api) { applicaMix(); try { api.tickPosition = pos; } catch (e) {} }
+  }
+  apriTracce();
+}
+$('#velo-tracce').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if (!b) { if (e.target === e.currentTarget) $('#velo-tracce').classList.add('hidden'); return; }
+  if (b.dataset.az === 'tracce-chiudi') $('#velo-tracce').classList.add('hidden');
+  else if (b.dataset.az === 'traccia-scegli') scegliTraccia(+b.dataset.i);
+  else if (b.dataset.az === 'traccia-muta') { const i = +b.dataset.i; const m = muti().slice(); const k = m.indexOf(i); if (k >= 0) m.splice(k, 1); else m.push(i); state.brano.muti = m; db.metti(state.brano).catch(() => {}); if (api) applicaMix(); apriTracce(); }
+});
+$('#st-vista').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.vista = b.dataset.v; salvaPref(); for (const x of document.querySelectorAll('#st-vista button')) x.classList.toggle('on', x === b); if (!$('#spartito').classList.contains('hidden')) disegnaSpartito(); });
+
+// ---- testo della traccia: correzione (formato Guitar Pro: righe con battuta di partenza) ----
+function testiOriginali() { const c = state.canzone; return c && c.tab && c.tab.testi && c.tab.testi[state.traccia] ? c.tab.testi[state.traccia] : null; }
+function testiCorretti() { const c = state.canzone; const loc = state.brano && state.brano.testiTab && state.brano.testiTab[state.traccia]; if (loc) return loc; return c && c.testiTab && c.testiTab[state.traccia] ? c.testiTab[state.traccia] : null; }
+function righeATesto(righe) { return righe.map(r => `[battuta ${r.offset}]\n${r.text}`).join('\n\n'); }
+function testoARighe(testo) {
+  const righe = []; let cur = null;
+  for (const l of testo.split('\n')) { const m = l.match(/^\s*\[\s*battuta\s+(\d+)\s*\]\s*$/i); if (m) { cur = { offset: +m[1], text: '' }; righe.push(cur); continue; } if (!cur) { cur = { offset: 1, text: '' }; righe.push(cur); } cur.text += (cur.text ? '\n' : '') + l; }
+  return righe.map(r => ({ offset: r.offset, text: r.text.replace(/\n+$/, '') })).filter(r => r.text.trim());
+}
+function applicaTesti(track, righe) {
+  for (const st of track.staves) for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) b.lyrics = null;
+  track.applyLyrics(righe.map(r => { const x = new alphaTab.model.Lyrics(); x.startBar = Math.max(0, r.offset - 1); x.text = r.text; return x; }));
+}
+function applicaTestiCorretti() {
+  if (!state.score) return;
+  const t = state.score.tracks[state.traccia]; const corr = testiCorretti();
+  if (corr && !t._testiApplicati) { try { applicaTesti(t, corr); t._testiApplicati = true; } catch (e) { console.warn(e); } }
+}
+async function salvaTestiTraccia() {
+  const righe = testoARighe($('#st-testo-tr').value);
+  if (!righe.length) { toast('Testo vuoto'); return; }
+  const t = state.score.tracks[state.traccia];
+  try { applicaTesti(t, righe); t._testiApplicati = true; } catch (e) { toast('Testo non applicato: ' + (e.message || e)); return; }
+  state.brano.testiTab = Object.assign({}, state.brano.testiTab || {}, { [state.traccia]: righe }); db.metti(state.brano).catch(() => {});
+  if (ID_APP && state.ruolo === 'band' && window.__fb && window.__fb.salvaTesti) { try { await window.__fb.salvaTesti(ID_APP, state.traccia, righe); toast('Testo corretto, per tutta la band'); } catch (e) { toast('Salvato solo su questo telefono: ' + (e.message || e)); } }
+  else toast('Testo corretto su questo telefono');
+  if (!$('#spartito').classList.contains('hidden')) disegnaSpartito();
+  aggiornaSetup();
+}
 $('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
 document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
@@ -954,7 +1085,7 @@ async function caricaDaApp(c) {
   let b = state.brani.find(x => x.id === 'app-' + ID_APP);
   if (!b) b = { id: 'app-' + ID_APP, nome: '', aggiunto: Date.now(), traccia: null, miglior: null };
   Object.assign(b, { titolo: c.titolo || b.titolo, artista: c.artista || '', bytes, nome: `${c.titolo} · Songsterr` });
-  if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; }
+  if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; b.testiTab = null; b.muti = null; }
   await db.metti(b).catch(() => {});
   await caricaLista();
   await apriBrano(b.id);

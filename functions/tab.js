@@ -14,7 +14,8 @@
 // Operazioni (POST con il token della band; "file" anche con quello dei fan):
 //   prepara { canzoneId }  → scarica, converte, salva in Storage (tab/<canzoneId>.gp) e
 //                            scrive su canzoni/<id> il campo "tab" { songId, revisionId,
-//                            tracce: [{ partId, nome, strumento, testo }], byte, aggiornata }
+//                            tracce: [{ partId, nome, strumento, voce, testo, note }], testi: { <indice traccia>:
+//                            [{ offset, text }] } (il testo originale, per correggerlo dalla pagina), byte, aggiornata }
 //   file    { canzoneId }  → restituisce il file .gp (application/octet-stream)
 //
 // Il formato interno di Songsterr non è documentato: quando cambia, questa funzione va
@@ -81,11 +82,12 @@ function costruisciGp(meta, tracce) {
   for (const w of warnings || []) console.log("conversione:", w.code, w.message, w.location || "");
   const settings = new alphaTab.Settings();
   const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(data, settings);
-  let conTesto = [];
+  let conTesto = [], testi = {};
   tracce.forEach((tr, i) => {
     const righe = Array.isArray(tr.revision.newLyrics) ? tr.revision.newLyrics.filter(l => l && typeof l.text === "string" && l.text.trim()) : [];
     const track = score.tracks[i];
     if (!righe.length || !track) return;
+    testi[i] = righe.map(l => ({ offset: Math.max(1, Number(l.offset) || 1), text: l.text }));
     const lyrics = righe.map(l => { const x = new alphaTab.model.Lyrics(); x.startBar = Math.max(0, (Number(l.offset) || 1) - 1); x.text = l.text; return x; });
     try { track.applyLyrics(lyrics); conTesto.push(i); } catch (e) { console.warn("testo non applicato alla traccia", i, e.message); }
   });
@@ -97,7 +99,7 @@ function costruisciGp(meta, tracce) {
     strumento: tr.revision.instrument || "", voce: VOCE_RE.test(nomeTraccia(tr)) || VOCE_RE.test(tr.revision.instrument || ""),
     testo: conTesto.includes(i), note: contaNote(score.tracks[i])
   }));
-  return { bytes, info };
+  return { bytes, info, testi };
 }
 function contaNote(track) {
   let n = 0;
@@ -139,9 +141,9 @@ function crea({ cors, ruolo, REGIONE }) {
       const meta = statoDaHtml(await prendi(url, "html"));
       const tracce = await tracceDi(meta);
       if (!tracce.length) { res.status(502).json({ error: "Nessuna traccia scaricata da Songsterr" }); return; }
-      const { bytes, info } = costruisciGp(meta, tracce);
+      const { bytes, info, testi } = costruisciGp(meta, tracce);
       await file(id).save(Buffer.from(bytes), { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
-      const tab = { songId: meta.songId, revisionId: meta.revisionId, titolo: meta.title, artista: meta.artist, tracce: info, byte: bytes.length, aggiornata: FieldValue.serverTimestamp() };
+      const tab = { songId: meta.songId, revisionId: meta.revisionId, titolo: meta.title, artista: meta.artist, tracce: info, testi, byte: bytes.length, aggiornata: FieldValue.serverTimestamp() };
       await db().doc(`canzoni/${id}`).update({ tab });
       res.status(200).json({ ok: true, tab: { ...tab, aggiornata: Date.now() } });
     } catch (e) {
