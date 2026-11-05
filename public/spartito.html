@@ -190,6 +190,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-suono" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
   <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M10.3 3h3.4l.5 2.3 1.9.8 2-1.3 2.4 2.4-1.3 2 .8 1.9 2.3.5v3.4l-2.3.5-.8 1.9 1.3 2-2.4 2.4-2-1.3-1.9.8-.5 2.3h-3.4l-.5-2.3-1.9-.8-2 1.3-2.4-2.4 1.3-2-.8-1.9L3 13.7v-3.4l2.3-.5.8-1.9-1.3-2 2.4-2.4 2 1.3 1.9-.8z"/></symbol>
   <symbol id="i-giu-piccolo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-parti" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12"/><rect x="9.5" y="6" width="5" height="12"/><rect x="16" y="6" width="5" height="12"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
 
@@ -254,7 +255,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div></div>
   <div class="sp-barra">
-    <button class="tog" data-az="sp-loop" id="sp-loop" title="Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito"><svg class="i" style="width:18px;height:18px"><use href="#i-ripeti"/></svg><span>Ripeti</span></button>
+    <button class="tog" data-az="parti" id="sp-parti" title="Parti del brano"><svg class="i" style="width:18px;height:18px"><use href="#i-parti"/></svg><span>Parti</span></button>
     <button class="tog icona" data-az="sp-metro" id="sp-metro" title="Metronomo"><svg class="i"><use href="#i-metro"/></svg></button>
     <div class="tempo"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div>
     <div class="sp"></div>
@@ -270,6 +271,12 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <p class="nota" style="margin:10px 0 4px">Tocca una traccia per vederla (e cantarla); l'altoparlante la silenzia nella base.</p>
     <div id="lista-tracce"></div>
   </div>
+</div></div>
+
+<!-- Parti del brano (Intro, Verse, Chorus…) -->
+<div class="velo basso hidden" id="velo-parti"><div class="foglio-lista">
+  <div class="testa"><h2>Parti</h2><button class="ico" data-az="parti-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l"><div id="lista-parti"></div></div>
 </div></div>
 
 <!-- Attesa / messaggi (brano dall'app) -->
@@ -288,6 +295,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <div class="comandi">
     <div class="mic"><svg class="i"><use href="#i-mic"/></svg><div class="liv"><div id="liv"></div></div><span id="es-nota">—</span></div>
     <div class="sp"></div>
+    <button class="btn" data-az="parti" id="es-parti" title="Parti del brano"><svg class="i"><use href="#i-parti"/></svg></button>
     <button class="btn" data-az="ricomincia" title="Ricomincia"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="play" title="Play / pausa"><svg class="i"><use id="play-ico" href="#i-play"/></svg></button>
   </div>
@@ -341,7 +349,7 @@ const TPQ = 960; // tick per quarto in alphaTab
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
   tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', daSpartito: false,
-  esec: null, loop: false, sel: null, canzone: null, ruolo: null,
+  esec: null, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
 const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
@@ -543,7 +551,7 @@ function creaApi() {
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
   api.playerStateChanged.on(e => { $('#sp-play-ico').setAttribute('href', e.state === 1 ? '#i-pausa' : '#i-play'); if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
   api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
-  api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; aggiornaSpartito(); });
+  api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; });
   api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
   return api;
 }
@@ -741,6 +749,7 @@ async function avviaEsecuzione() {
     $('#tx-sugg').textContent = !manuale ? '' : m.haTesto ? 'Un tocco sul testo passa al verso dopo e corregge il punto' : (x.tempi.some(v => v != null) ? 'I versi avanzano da soli; un tocco corregge il punto' : 'Tocca il testo a ogni verso nuovo: l\'app ricorda il punto');
   }
   $('#tx-prima').textContent = ''; x_righeDis = -2;
+  $('#es-parti').classList.toggle('hidden', !partiDi().length);
   for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
   ridimensiona();
   $('#tx-msg').textContent = 'Caricamento della base…';
@@ -941,16 +950,46 @@ function apriSpartito() {
   mostra('spartito');
   $('#sp-titolo').textContent = state.brano.titolo;
   disegnaSpartito();
-  api.isLooping = !!state.loop; api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
+  api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
   caricaSuoni().then(() => applicaMix()).catch(() => {});
   aggiornaSpartito();
 }
 function aggiornaSpartito() {
   $('#sp-tempo').textContent = state.tempo + '%';
-  $('#sp-loop').classList.toggle('on', !!state.loop);
   $('#sp-metro').classList.toggle('on', !!state.metro);
-  $('#sp-loop').title = state.loop ? (state.sel ? 'Ripete le battute scelte' : 'Ripete tutto il brano') : 'Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito';
+  $('#sp-parti').classList.toggle('hidden', !partiDi().length);
 }
+// parti del brano dai marker delle battute (Intro, Verse, Chorus…), come le sezioni di Yousician
+function partiDi() {
+  if (!state.score) return [];
+  const mb = state.score.masterBars; const out = [];
+  mb.forEach(m => { if (m.section && (m.section.text || m.section.marker)) out.push({ nome: m.section.text || m.section.marker, da: m.index, tick: m.start }); });
+  out.forEach((p, i) => { p.a = i + 1 < out.length ? out[i + 1].da : mb.length; });
+  return out;
+}
+function apriParti() {
+  const parti = partiDi(); if (!parti.length) { toast('Questa tab non ha le parti segnate'); return; }
+  const l = $('#lista-parti'); l.innerHTML = '';
+  const ora = state.esec ? tickOra() : api ? api.tickPosition : 0;
+  parti.forEach((p, i) => {
+    const r = document.createElement('button'); r.className = 'riga' + (ora >= p.tick && (i + 1 >= parti.length || ora < parti[i + 1].tick) ? ' on' : '');
+    r.dataset.az = 'parte-vai'; r.dataset.tick = p.tick;
+    r.innerHTML = `<div class="num">${i + 1}</div><div class="txt"><div class="t"></div><div class="s">battute ${p.da + 1}–${p.a}</div></div><svg class="i" style="color:var(--inchiostro-3)"><use href="#i-play"/></svg>`;
+    $('.t', r).textContent = p.nome; if (r.classList.contains('on')) $('.t', r).style.color = 'var(--accento)';
+    l.appendChild(r);
+  });
+  $('#velo-parti').classList.remove('hidden');
+}
+$('#velo-parti').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if (!b) { if (e.target === e.currentTarget) $('#velo-parti').classList.add('hidden'); return; }
+  if (b.dataset.az === 'parti-chiudi') $('#velo-parti').classList.add('hidden');
+  else if (b.dataset.az === 'parte-vai') {
+    const tick = +b.dataset.tick; $('#velo-parti').classList.add('hidden');
+    if (state.esec) saltaA(tick);
+    else if (api) { try { api.tickPosition = tick; if (api.playerState !== 1) caricaSuoni().then(() => { applicaMix(); api.play(); }); } catch (e) {} }
+  }
+});
 // la voce (su Songsterr è una traccia "a corde") si mostra solo in pentagramma; il resto in tab + pentagramma
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
@@ -1008,7 +1047,7 @@ document.addEventListener('click', async (e) => {
   else if (az === 'spartito') apriSpartito();
   else if (az === 'chiudi-spartito') { try { api.stop(); } catch (e) {} state.daSpartito = false; if (ID_APP) { location.href = './'; return; } mostra('setup'); aggiornaSetup(); }
   else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
-  else if (az === 'sp-loop') { state.loop = !state.loop; if (api) api.isLooping = state.loop; aggiornaSpartito(); }
+  else if (az === 'parti') apriParti();
   else if (az === 'sp-metro') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; aggiornaSpartito(); salvaPref(); }
   else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
   else if (az === 'chiudi-esec') { fermaEsecuzione(); if (state.daSpartito) { state.daSpartito = false; apriSpartito(); return; } mostra('setup'); aggiornaSetup(); }
