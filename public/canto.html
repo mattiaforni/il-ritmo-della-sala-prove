@@ -72,8 +72,15 @@ input[type=range] { accent-color: var(--accento); width: 120px; }
 #esec .topbar .tempo { font-size: 13px; color: var(--inchiostro-2); align-self: center; }
 .rullo { position: relative; flex: none; height: 44vh; min-height: 220px; background: var(--foglio); border-bottom: 1px solid var(--linea); }
 .rullo canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.avanz { height: 3px; background: var(--linea); flex: none; }
-.avanz > div { height: 100%; width: 0; background: var(--accento); }
+.mappa { position: relative; flex: none; height: 54px; background: var(--foglio-2); border-bottom: 1px solid var(--linea); touch-action: none; }
+.mappa canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.testo.manuale { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.testo .prima { font: 400 17px/1.3 var(--display); color: var(--inchiostro-3); min-height: 1.3em; }
+.testo .suggerimento { font-size: 12px; color: var(--inchiostro-3); margin-top: 8px; }
+.testo .riga-indietro { position: absolute; left: 8px; margin-top: -4px; width: 40px; height: 40px; display: grid; place-items: center; color: var(--inchiostro-3); }
+.testo { position: relative; }
+textarea { font: inherit; color: inherit; background: var(--foglio); border: 1px solid var(--linea); border-radius: var(--r); width: 100%; min-height: 140px; padding: 10px; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--accento); }
 .testo { flex: 1; padding: 18px 20px 0; text-align: center; overflow: hidden; }
 .testo .ora { font: 400 30px/1.2 var(--display); min-height: 1.2em; }
 .testo .ora span { color: var(--inchiostro-3); transition: color .1s; }
@@ -168,6 +175,10 @@ input[type=range] { accent-color: var(--accento); width: 120px; }
     <div class="fascia">Microfono</div>
     <div class="campo"><label>Ritardo del microfono<small>Se il tracciato della voce arriva sempre in ritardo, aumenta</small></label><input type="range" id="st-lat" min="0" max="300" step="10" value="120"><div class="val" id="st-lat-v" style="min-width:70px">120 ms</div></div>
     <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
+    <div class="fascia">Testo</div>
+    <p class="nota" id="st-testo-nota" style="margin:8px 0"></p>
+    <textarea id="st-testo" placeholder="Incolla qui il testo, una riga per verso. Mentre canti, un tocco sul testo passa alla riga dopo e l'app ricorda il punto: dalla volta dopo le righe avanzano da sole."></textarea>
+    <div class="campo hidden" id="st-tempi-riga"><label>Righe sincronizzate<small id="st-tempi-info"></small></label><button class="seg" style="padding:6px 12px;font-size:13px" data-az="azzera-tempi">Azzera</button></div>
     <div class="fascia">Brano</div>
     <div class="campo"><label>Ultimo risultato<small id="st-ultimo">Mai cantato</small></label><button class="ico" data-az="elimina" title="Togli il brano"><svg class="i"><use href="#i-cestino"/></svg></button></div>
   </div>
@@ -182,8 +193,8 @@ input[type=range] { accent-color: var(--accento); width: 120px; }
     <div class="tempo" id="es-tempo">100%</div>
   </div>
   <div class="rullo"><canvas id="rullo"></canvas><div class="conto hidden" id="conto"></div></div>
-  <div class="avanz"><div id="es-avanz"></div></div>
-  <div class="testo"><div class="ora" id="tx-ora"></div><div class="dopo" id="tx-dopo"></div><div class="msg" id="tx-msg"></div></div>
+  <div class="mappa"><canvas id="mappa"></canvas></div>
+  <div class="testo" id="testo"><button class="riga-indietro hidden" id="tx-indietro" title="Riga precedente"><svg class="i"><use href="#i-indietro"/></svg></button><div class="prima" id="tx-prima"></div><div class="ora" id="tx-ora"></div><div class="dopo" id="tx-dopo"></div><div class="suggerimento hidden" id="tx-sugg"></div><div class="msg" id="tx-msg"></div></div>
   <div class="comandi">
     <div class="mic"><svg class="i"><use href="#i-mic"/></svg><div class="liv"><div id="liv"></div></div><span id="es-nota">—</span></div>
     <div class="sp"></div>
@@ -334,6 +345,7 @@ function costruisciModello(score, idx) {
   const minMidi = Math.min(...note.map(n => n.midi)), maxMidi = Math.max(...note.map(n => n.midi));
   return { note, frasi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120 };
 }
+function righeDi(testo) { return (testo || '').split('\n').map(r => r.trim()).filter(Boolean); }
 function testoDi(note) {
   let s = '';
   for (const n of note) { const syl = n.syl; if (!syl) continue; if (s && !s.endsWith('-') && !s.endsWith(' ')) s += ' '; if (s.endsWith('-')) s = s.slice(0, -1); s += syl; }
@@ -440,6 +452,15 @@ function aggiornaSetup() {
   $('#st-tempo').textContent = state.tempo + '%';
   $('#st-trasp').textContent = (state.trasp > 0 ? '+' : '') + state.trasp;
   $('#st-lat').value = state.lat; $('#st-lat-v').textContent = state.lat + ' ms';
+  const bb = state.brano;
+  if (bb && state.score) {
+    const haT = contaTesto(state.score.tracks[state.traccia]) > 0;
+    $('#st-testo-nota').textContent = haT ? 'Il file ha già il testo sulla traccia scelta: quello incollato qui non serve.' : 'La traccia scelta non ha il testo. Incollalo qui per averlo mentre canti.';
+    if ($('#st-testo').value !== (bb.testo || '')) $('#st-testo').value = bb.testo || '';
+    const nT = (bb.tempiTesto || []).filter(v => v != null).length; const righe = righeDi(bb.testo);
+    $('#st-tempi-riga').classList.toggle('hidden', !nT);
+    $('#st-tempi-info').textContent = `${nT} su ${righe.length} righe hanno il punto di partenza`;
+  }
   const gs = $('#st-guida-strum'); if (!gs.options.length) for (const [v, n] of GUIDA_STRUM) { const o = document.createElement('option'); o.value = v; o.textContent = n; gs.appendChild(o); }
   gs.value = state.guidaStrum;
   $('#st-sf-riga').classList.toggle('hidden', state.suoni !== 'file');
@@ -502,6 +523,8 @@ const midiDi = (hz) => 69 + 12 * Math.log2(hz / 440);
 
 // ------------------------------------------------------------ esecuzione
 const cv = $('#rullo'); const ctx2d = cv.getContext('2d');
+const cvm = $('#mappa'); const ctxm = cvm.getContext('2d');
+let x_righeDis = -2;
 const PLAYHEAD = 0.3; // posizione della linea del "adesso" (frazione della larghezza)
 
 async function avviaEsecuzione() {
@@ -523,7 +546,14 @@ async function avviaEsecuzione() {
     traccia: [], // [tick, midiCantato] degli ultimi secondi
     ultimoFrame: 0, raf: 0,
     minMidi: m.minMidi + state.trasp - 3, maxMidi: m.maxMidi + state.trasp + 3,
+    righe: !m.haTesto ? righeDi(state.brano.testo) : [], riga: -1, tempi: null, tempiCambiati: false,
   };
+  if (state.esec.righe.length) { const t0 = state.brano.tempiTesto; state.esec.tempi = Array.isArray(t0) && t0.length === state.esec.righe.length ? t0.slice() : new Array(state.esec.righe.length).fill(null); }
+  const manuale = state.esec.righe.length > 0;
+  $('#testo').classList.toggle('manuale', manuale);
+  $('#tx-sugg').classList.toggle('hidden', !manuale); $('#tx-indietro').classList.toggle('hidden', !manuale);
+  $('#tx-sugg').textContent = manuale ? (state.esec.tempi.some(v => v != null) ? 'Le righe avanzano da sole; un tocco corregge il punto' : 'Tocca il testo a ogni riga nuova: l\'app ricorda il punto') : '';
+  $('#tx-prima').textContent = ''; x_righeDis = -2;
   for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
   ridimensiona();
   $('#tx-msg').textContent = 'Caricamento della base…';
@@ -555,6 +585,7 @@ function tickOra() {
 function ridimensiona() {
   const r = cv.parentElement.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
   cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const rm = cvm.parentElement.getBoundingClientRect(); cvm.width = Math.round(rm.width * dpr); cvm.height = Math.round(rm.height * dpr); ctxm.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', () => { if (state.esec) ridimensiona(); });
 
@@ -581,8 +612,7 @@ function loop() {
   const c = $('#conto');
   if (x.suona && x.tick < 5 && ora < x.contoFine) { const n = Math.ceil((x.contoFine - ora) / x.beatMs); if (c.textContent !== String(n)) c.textContent = String(n); c.classList.remove('hidden'); }
   else if (!c.classList.contains('hidden')) c.classList.add('hidden');
-  $('#es-avanz').style.width = Math.max(0, Math.min(100, 100 * t / x.endTick)) + '%';
-  disegna(t);
+  disegna(t); disegnaMappa(t);
   if (ora - x.ultimoFrame > 80) { x.ultimoFrame = ora; disegnaTesto(t); }
 }
 const NOMI = ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
@@ -644,7 +674,71 @@ function disegna(t) {
   const ult = x.traccia[x.traccia.length - 1];
   if (ult && ult[1] != null) { const n = notaA(ult[0]); const att = n ? n.midi + state.trasp : null; const y = n ? toY(att + scarto(ult[1], att) / 100) : toY(ult[1]); c.fillStyle = '#231B15'; c.beginPath(); c.arc(toX(ult[0]), y, 4, 0, 7); c.fill(); }
 }
+function disegnaMappa(t) {
+  const x = state.esec; const m = x.m; const W = cvm.clientWidth, H = cvm.clientHeight; const c = ctxm;
+  c.clearRect(0, 0, W, H);
+  const fine = Math.max(x.endTick || m.fine, 1);
+  const toX = (tick) => 10 + (W - 20) * tick / fine;
+  const rangeN = Math.max(1, x.maxMidi - x.minMidi); const toY = (midi) => H - 8 - (H - 24) * (midi - x.minMidi) / rangeN;
+  // parte già passata
+  c.fillStyle = '#ECE7DF'; c.fillRect(0, 0, toX(t), H);
+  // sezioni
+  c.fillStyle = '#978C80'; c.font = '600 9px Instrument Sans, sans-serif'; c.textBaseline = 'top';
+  for (const sz of m.sezioni) { const xs = toX(state.score.masterBars[sz.da].start); c.fillRect(xs, 0, 1, H); c.fillText(sz.nome.toUpperCase().slice(0, 12), xs + 3, 3); }
+  // note
+  for (const n of m.note) {
+    const xa = toX(n.tick), w = Math.max(1.5, toX(n.tick + n.dur) - xa);
+    c.fillStyle = n.tot > 0 ? (n.ok / n.tot >= 0.5 ? '#6FA376' : '#C9655A') : (t > n.tick + n.dur ? '#E2B9B0' : '#B8AFA3');
+    c.fillRect(xa, toY(n.midi + state.trasp) - 1, w, 2.5);
+  }
+  // righe del testo sincronizzate
+  if (x.tempi) { c.fillStyle = '#D99A2B'; for (const tk of x.tempi) if (tk != null) c.fillRect(toX(tk), H - 5, 1.5, 5); }
+  // adesso
+  c.fillStyle = '#B4552D'; c.fillRect(toX(t) - 1, 0, 2, H);
+}
+function saltaA(tick) {
+  const x = state.esec; if (!x) return;
+  tick = Math.max(0, Math.min(x.endTick || x.m.fine, tick));
+  for (const n of x.m.note) if (n.tick + n.dur > tick) { n.ok = 0; n.tot = 0; }
+  x.traccia = []; x.fraseDis = -1; x.ultimaVal = 0;
+  x.tick = tick; x.tickAt = performance.now(); x.contoFine = 0;
+  try { api.tickPosition = tick; } catch (e) {}
+  if (x.tempi) { let r = -1; x.tempi.forEach((tk, i) => { if (tk != null && tk <= tick) r = i; }); x.riga = r; }
+  disegnaTesto(tick);
+}
+(() => {
+  let giu = false;
+  const tickDa = (e) => { const r = cvm.getBoundingClientRect(); const x = state.esec; const fine = Math.max(x.endTick || x.m.fine, 1); return (e.clientX - r.left - 10) / (r.width - 20) * fine; };
+  cvm.parentElement.addEventListener('pointerdown', (e) => { if (!state.esec) return; giu = true; cvm.parentElement.setPointerCapture(e.pointerId); saltaA(tickDa(e)); });
+  cvm.parentElement.addEventListener('pointermove', (e) => { if (giu && state.esec) saltaA(tickDa(e)); });
+  cvm.parentElement.addEventListener('pointerup', () => { giu = false; });
+  cvm.parentElement.addEventListener('pointercancel', () => { giu = false; });
+  // testo manuale: tocco = riga dopo (e memorizza il punto); freccia = riga prima
+  $('#testo').addEventListener('click', (e) => {
+    const x = state.esec; if (!x || !x.righe.length) return;
+    if (e.target.closest('#tx-indietro')) { x.riga = Math.max(-1, x.riga - 1); disegnaTesto(tickOra()); return; }
+    if (x.riga >= x.righe.length - 1) return;
+    x.riga++; if (x.suona) { x.tempi[x.riga] = Math.round(tickOra()); x.tempiCambiati = true; }
+    disegnaTesto(tickOra());
+  });
+})();
+function salvaTempi() {
+  const x = state.esec; if (!x || !x.tempiCambiati) return;
+  // tiene l'ordine: una riga toccata prima della precedente azzera quella precedente
+  let ult = -1; for (let i = 0; i < x.tempi.length; i++) { if (x.tempi[i] == null) continue; if (x.tempi[i] < ult) x.tempi[i] = null; else ult = x.tempi[i]; }
+  state.brano.tempiTesto = x.tempi.slice(); x.tempiCambiati = false; db.metti(state.brano).catch(() => {});
+}
+function disegnaTestoManuale(t) {
+  const x = state.esec;
+  if (x.tempi && x.suona) { let r = x.riga; x.tempi.forEach((tk, i) => { if (tk != null && tk <= t && i > r) r = i; }); if (r !== x.riga) x.riga = r; }
+  if (x_righeDis === x.riga) return; x_righeDis = x.riga;
+  $('#tx-prima').textContent = x.riga > 0 ? x.righe[x.riga - 1] : '';
+  $('#tx-ora').textContent = x.riga >= 0 ? x.righe[x.riga] : '';
+  $('#tx-ora').style.color = '';
+  $('#tx-dopo').textContent = x.riga + 1 < x.righe.length ? x.righe[x.riga + 1] : '';
+}
 function disegnaTesto(t = 0) {
+  if (state.esec && state.esec.righe.length) return disegnaTestoManuale(t);
   const x = state.esec; const m = x.m; const el = $('#tx-ora'), dopo = $('#tx-dopo');
   let fi = m.frasi.findIndex(f => t < f.note[f.note.length - 1].tick + f.note[f.note.length - 1].dur);
   if (fi < 0) fi = m.frasi.length - 1;
@@ -661,6 +755,7 @@ function disegnaTesto(t = 0) {
 
 function fermaEsecuzione() {
   const x = state.esec; if (!x) return;
+  salvaTempi();
   cancelAnimationFrame(x.raf);
   try { api.stop(); } catch (e) {}
   state.esec = null;
@@ -671,6 +766,7 @@ function fineEsecuzione() {
   const perc = (note) => { let ok = 0, tot = 0; for (const n of note) { if (n.tot === 0) { tot += n.dur; continue; } ok += n.dur * (n.ok / n.tot); tot += n.dur; } return tot ? Math.round(100 * ok / tot) : 0; };
   const tot = perc(m.note);
   const gruppi = (m.sezioni.length >= 2 ? m.sezioni.map(s => ({ nome: s.nome, testo: testoDi(s.note), p: perc(s.note) })) : m.frasi.map((f, i) => ({ nome: `Frase ${i + 1}`, testo: f.testo, p: perc(f.note) })));
+  salvaTempi();
   cancelAnimationFrame(x.raf); state.esec = null;
   const b = state.brano; b.ultimo = tot; b.miglior = b.miglior == null ? tot : Math.max(b.miglior, tot); db.metti(b).catch(() => {});
   mostra('fine');
@@ -697,14 +793,17 @@ document.addEventListener('click', async (e) => {
   else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); aggiornaSetup(); }
   else if (az === 'elimina') { if (confirm(`Togliere «${state.brano.titolo}» da questo dispositivo?`)) { await db.togli(state.brano.id); mostra('brani'); caricaLista(); } }
   else if (az === 'canta') avviaEsecuzione();
+  else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
   else if (az === 'chiudi-esec') { fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
   else if (az === 'riprova') { mostra('setup'); avviaEsecuzione(); }
-  else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.fraseDis = -1; api.stop(); api.tickPosition = 0; partenza(); }
+  else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.fraseDis = -1; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); api.playPause(); }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
 $('#st-suoni').addEventListener('click', async (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return; } state.suoni = b.dataset.v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); });
 $('#st-sf').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; const bytes = new Uint8Array(await f.arrayBuffer()); await db.mettiSuono('file', bytes); $('#st-sf-nome').textContent = `${f.name} · ${(bytes.length / 1048576).toFixed(0)} MB`; state.suoni = 'file'; suoniCaricati = null; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); e.target.value = ''; });
+let testoT = 0;
+$('#st-testo').addEventListener('input', (e) => { const b = state.brano; if (!b) return; const v = e.target.value; clearTimeout(testoT); testoT = setTimeout(() => { if (righeDi(v).join('\n') !== righeDi(b.testo).join('\n')) b.tempiTesto = null; b.testo = v; db.metti(b).catch(() => {}); aggiornaSetup(); }, 400); });
 $('#st-guida-strum').addEventListener('change', (e) => { state.guidaStrum = +e.target.value; salvaPref(); });
 $('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
 $('#st-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; aggiornaSetup(); });
