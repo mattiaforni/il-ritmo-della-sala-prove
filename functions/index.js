@@ -439,3 +439,5 @@ exports.accesso = require("./accesso").crea({
   cors, ruolo, REGIONE, FAN_EMAIL, mandaAlGruppo: telegram.mandaAlGruppo, notifica: notifiche.evento,
   aggiornaPlaylist: () => inCoda(() => sincronizza()), segreti: [telegram.TELEGRAM_TOKEN]
 }).accesso;
+// tablature da Songsterr in file Guitar Pro per la pagina «Spartito»: vedi tab.js
+exports.tab = require("./tab").crea({ cors, ruolo, REGIONE }).tab;

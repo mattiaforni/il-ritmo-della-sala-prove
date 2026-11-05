@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "44",
+      "data": "2026-11-05",
+      "titolo": "Spartito e Canta",
+      "punti": [
+        "Nella pagina di un pezzo con il link Songsterr c'è «Prepara spartito e Canta»: la tab viene scaricata da Songsterr una volta per tutti.",
+        "«Spartito»: tablatura e pentagramma a schermo con la base che suona, cursore che segue, tempo, metronomo e ripetizione (trascina sulle battute per scegliere il pezzo da ripetere).",
+        "«Canta»: le note della voce scorrono con il testo, il microfono ascolta se sei intonato e a fine brano hai il punteggio per sezione. Cuffie consigliate; funziona anche da telefono."
+      ]
+    },
+    {
       "versione": "43",
       "data": "2026-11-04",
       "titolo": "I fan propongono, votano e commentano",

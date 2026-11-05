@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Canto</title>
+<title>Spartito · Il ritmo della sala prove</title>
+<link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
@@ -118,7 +119,28 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .barra > div { height: 100%; background: var(--verde); }
 .barra > div.male { background: var(--rosso); }
 .barra > div.medio { background: var(--ambra-pieno); }
-#alphaTab { position: fixed; left: -9999px; top: 0; width: 600px; height: 10px; overflow: hidden; opacity: 0; pointer-events: none; }
+#spartito.hidden { display: flex !important; visibility: hidden; pointer-events: none; }
+.at-scroll { flex: 1; overflow: auto; background: var(--foglio); -webkit-overflow-scrolling: touch; position: relative; }
+#at { padding: 8px 4px 120px; }
+.at-cursor-bar { background: rgba(180, 85, 45, .12); }
+.at-selection div { background: rgba(217, 154, 43, .22); }
+.at-cursor-beat { background: var(--accento); width: 2px; }
+.at-highlight * { fill: var(--accento); stroke: var(--accento); }
+.sp-barra { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--linea); background: var(--carta); }
+.sp-barra .tog { height: 40px; padding: 0 12px; border: 1px solid var(--linea-forte); border-radius: var(--r); font-size: 13px; color: var(--inchiostro-2); display: inline-flex; align-items: center; gap: 6px; }
+.sp-barra .tog.on { background: var(--accento-tinta); border-color: var(--accento); color: var(--accento); }
+.sp-barra .tempo { display: inline-flex; align-items: center; gap: 2px; }
+.sp-barra .tempo button { width: 36px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-2); }
+.sp-barra .tempo .v { min-width: 48px; text-align: center; font: 400 20px/1 var(--display); }
+.sp-barra .sp { flex: 1; }
+.sp-barra .play { width: 56px; height: 56px; }
+.sp-barra .play .i { width: 26px; height: 26px; }
+.attesa { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--inchiostro-2); }
+.attesa .big { font: 400 28px/1.2 var(--display); color: var(--inchiostro); margin-bottom: 8px; }
+.attesa a, .attesa button.link { color: var(--accento); text-decoration: underline; font: inherit; }
+.fab-due { position: absolute; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); display: flex; gap: 10px; z-index: 5; }
+.fab-due .fab { position: static; }
+.fab-due .fab.sec { background: var(--foglio); color: var(--accento); border: 1px solid var(--accento); box-shadow: none; }
 .toast { position: absolute; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); background: var(--inchiostro); color: var(--carta); padding: 10px 14px; border-radius: var(--r); font-size: 14px; z-index: 80; }
 @media (min-width: 700px) { .schermo { max-width: 760px; margin: 0 auto; } }
 </style>
@@ -138,7 +160,6 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
 
-<div id="alphaTab"></div>
 
 <!-- Brani -->
 <section class="schermo" id="brani">
@@ -182,8 +203,27 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="fascia">Brano</div>
     <div class="campo"><label>Ultimo risultato<small id="st-ultimo">Mai cantato</small></label><button class="ico" data-az="elimina" title="Togli il brano"><svg class="i"><use href="#i-cestino"/></svg></button></div>
   </div>
-  <button class="fab largo" data-az="canta"><svg class="i"><use href="#i-mic"/></svg>Canta</button>
+  <div class="fab-due"><button class="fab largo sec" data-az="spartito"><svg class="i"><use href="#i-nota"/></svg>Spartito</button><button class="fab largo" data-az="canta"><svg class="i"><use href="#i-mic"/></svg>Canta</button></div>
 </section>
+
+<!-- Spartito (tablatura a schermo) -->
+<section class="schermo hidden" id="spartito">
+  <div class="topbar">
+    <button class="ico" data-az="chiudi-spartito"><svg class="i"><use href="#i-x"/></svg></button>
+    <div class="tit"><h1 id="sp-titolo">—</h1><div class="sub"><select id="sp-traccia"></select></div></div>
+  </div>
+  <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div></div>
+  <div class="sp-barra">
+    <button class="tog" data-az="sp-loop" id="sp-loop" title="Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito"><svg class="i" style="width:16px;height:16px"><use href="#i-ripeti"/></svg>Ripeti</button>
+    <button class="tog" data-az="sp-metro" id="sp-metro">Metr.</button>
+    <div class="tempo"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div>
+    <div class="sp"></div>
+    <button class="btn play" data-az="sp-play" title="Play / pausa"><svg class="i"><use id="sp-play-ico" href="#i-play"/></svg></button>
+  </div>
+</section>
+
+<!-- Attesa / messaggi (brano dall'app) -->
+<section class="schermo hidden" id="attesa"><div class="attesa"><div><div class="big" id="at-titolo">Un momento…</div><div id="at-testo"></div><div id="at-azioni" style="margin-top:16px"></div></div></div></section>
 
 <!-- Esecuzione -->
 <section class="schermo hidden" id="esec">
@@ -219,9 +259,29 @@ textarea:focus { outline: none; border-color: var(--accento); }
 
 <div id="toast" class="toast hidden"></div>
 
+<script src="config.js"></script>
+<script type="module">
+// collegamento a Firebase: lo stesso accesso dell'app (band o fan), condiviso sullo stesso sito
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+if (window.FIREBASE_CONFIG) {
+  const app = initializeApp(window.FIREBASE_CONFIG);
+  const auth = getAuth(app); const db = getFirestore(app);
+  window.__auth = auth;
+  window.__fb = {
+    utente: () => new Promise(ok => { const off = onAuthStateChanged(auth, u => { off(); ok(u); }); }),
+    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; }
+  };
+}
+window.dispatchEvent(new Event('fb-pronto'));
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.9.0/dist/alphaTab.min.js"></script>
 <script>
-(() => {
+// parte quando il modulo Firebase ha finito (o dopo 2 s se non può caricarsi, es. pagina aperta da file)
+let __avviato = false;
+function __avvio() {
+if (__avviato) return; __avviato = true;
 'use strict';
 const $ = (s, el = document) => el.querySelector(s);
 const CDN = 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.9.0/dist/';
@@ -231,7 +291,7 @@ const TPQ = 960; // tick per quarto in alphaTab
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
   tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1,
-  esec: null, // esecuzione in corso
+  esec: null, loop: false, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
 const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum }); } catch (e) {} };
@@ -321,7 +381,7 @@ function costruisciModello(score, idx) {
     if (b.isRest || !b.notes.length) continue;
     // melodia: nota più alta dell'accordo
     const n = b.notes.reduce((a, x) => (x.realValue > a.realValue ? x : a), b.notes[0]);
-    if (n.isTieDestination && note.length) { note[note.length - 1].dur += b.playbackDuration; continue; }
+    if (n.isTieDestination && note.length) { const p = note[note.length - 1]; p.dur += b.playbackDuration; const sy = (b.lyrics && b.lyrics.find(x => x)) || ''; if (sy) p.syl = p.syl ? (p.syl.endsWith('-') ? p.syl + sy : p.syl + ' ' + sy) : sy; continue; }
     const syl = (b.lyrics && b.lyrics.find(x => x)) || '';
     note.push({ tick: b.absolutePlaybackStart, dur: b.playbackDuration, midi: n.realValue, syl, bar: b.voice.bar.index });
   }
@@ -358,14 +418,17 @@ function creaApi() {
   if (api) return api;
   const s = {
     core: { fontDirectory: CDN + 'font/', scriptFile: CDN + 'alphaTab.min.js', logLevel: 'warning' },
-    display: { scale: 0.5, layoutMode: 'horizontal' },
-    player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollMode: 'off', enableCursor: false, enableUserInteraction: false, enableElementHighlighting: false, enableAnimatedBeatCursor: false },
+    display: { scale: 0.85, layoutMode: 'page', stretchForce: 1 },
+    notation: { elements: { scoreTitle: false, scoreSubTitle: false, scoreArtist: false, scoreAlbum: false, scoreWords: false, scoreMusic: false, scoreWordsAndMusic: false, scoreCopyright: false, trackNames: false, guitarTuning: false } },
+    player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollElement: '#at-scroll', scrollMode: 'continuous', scrollOffsetY: -80, enableCursor: true, enableUserInteraction: true, enableElementHighlighting: true, enableAnimatedBeatCursor: true },
   };
-  api = new alphaTab.AlphaTabApi($('#alphaTab'), s);
+  api = new alphaTab.AlphaTabApi($('#at'), s);
   caricaSuoni();
   api.error.on(e => { console.error('alphaTab', e); toast('Errore della base musicale: ' + (e.message || e), 5000); });
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
-  api.playerStateChanged.on(e => { if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
+  api.playerStateChanged.on(e => { $('#sp-play-ico').setAttribute('href', e.state === 1 ? '#i-pausa' : '#i-play'); if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
+  api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
+  api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; aggiornaSpartito(); });
   api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
   return api;
 }
@@ -753,6 +816,36 @@ function disegnaTesto(t = 0) {
   for (const n of f.note) { if (!n.el) continue; const cl = t >= n.tick ? (n.tot > 0 ? (n.ok / n.tot >= 0.5 ? 'bene' : 'male') : 'fatto') : ''; if (n.el.className !== cl) n.el.className = cl; }
 }
 
+// ---- Spartito: la tablatura a schermo con alphaTab ----
+function apriSpartito() {
+  if (!state.score) return;
+  creaApi(); salvaPref();
+  mostra('spartito');
+  $('#sp-titolo').textContent = state.brano.titolo;
+  const sel = $('#sp-traccia'); if (sel.options.length !== state.score.tracks.length) { sel.innerHTML = ''; state.score.tracks.forEach((t, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${nomeTraccia(t, i)} · ${strumentoDi(t)}`; sel.appendChild(o); }); }
+  sel.value = state.traccia;
+  disegnaSpartito();
+  api.isLooping = !!state.loop; api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
+  caricaSuoni().then(() => applicaMix()).catch(() => {});
+  aggiornaSpartito();
+}
+function aggiornaSpartito() {
+  $('#sp-tempo').textContent = state.tempo + '%';
+  $('#sp-loop').classList.toggle('on', !!state.loop);
+  $('#sp-metro').classList.toggle('on', !!state.metro);
+  $('#sp-loop').lastChild.textContent = state.loop ? (state.sel ? 'Ripeti le battute' : 'Ripeti tutto') : 'Ripeti';
+}
+// la voce (su Songsterr è una traccia "a corde") si mostra solo in pentagramma; il resto in tab + pentagramma
+function disegnaSpartito() {
+  const t = state.score.tracks[state.traccia];
+  const voce = /voc|voice|voce|cant|sing/i.test(t.name) || [52, 53, 54, 85].includes(t.playbackInfo.program);
+  const prof = voce ? 'Score' : 'Default';
+  if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
+  $('#sp-msg').textContent = 'Disegno lo spartito…';
+  api.renderTracks([t]);
+}
+$('#sp-traccia').addEventListener('change', (e) => { state.traccia = +e.target.value; disegnaSpartito(); applicaMix(); aggiornaSetup(); });
+
 function fermaEsecuzione() {
   const x = state.esec; if (!x) return;
   salvaTempi();
@@ -788,11 +881,16 @@ document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-az]'); if (!b) return;
   const az = b.dataset.az;
   if (az === 'apri') apriBrano(b.dataset.id);
-  else if (az === 'torna-brani') { mostra('brani'); caricaLista(); }
-  else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); }
+  else if (az === 'torna-brani') { if (ID_APP) { location.href = './'; return; } mostra('brani'); caricaLista(); }
+  else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); aggiornaSpartito(); if (api) api.playbackSpeed = state.tempo / 100; salvaPref(); }
   else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); aggiornaSetup(); }
   else if (az === 'elimina') { if (confirm(`Togliere «${state.brano.titolo}» da questo dispositivo?`)) { await db.togli(state.brano.id); mostra('brani'); caricaLista(); } }
   else if (az === 'canta') avviaEsecuzione();
+  else if (az === 'spartito') apriSpartito();
+  else if (az === 'chiudi-spartito') { try { api.stop(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
+  else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
+  else if (az === 'sp-loop') { state.loop = !state.loop; if (api) api.isLooping = state.loop; aggiornaSpartito(); }
+  else if (az === 'sp-metro') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; aggiornaSpartito(); salvaPref(); }
   else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
   else if (az === 'chiudi-esec') { fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
   else if (az === 'riprova') { mostra('setup'); avviaEsecuzione(); }
@@ -812,9 +910,62 @@ document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state.esec && state.esec.suona) api.pause(); });
 
-caricaLista();
+// ---- brano dall'app: spartito.html?id=<canzone>&modo=canta|spartito ----
+const PARAMS = new URLSearchParams(location.search);
+const ID_APP = PARAMS.get('id');
+const TAB_FN = 'https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/tab';
+function attesa(titolo, testo, azioniHtml = '') { mostra('attesa'); $('#at-titolo').textContent = titolo; $('#at-testo').textContent = testo; $('#at-azioni').innerHTML = azioniHtml; }
+async function chiamaTab(op, extra = {}) {
+  const token = await window.__auth.currentUser.getIdToken();
+  const r = await fetch(TAB_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ op, canzoneId: ID_APP, ...extra }) });
+  if (op === 'file') { if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `errore ${r.status}`); } return new Uint8Array(await r.arrayBuffer()); }
+  const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`); return j;
+}
+async function avviaDaApp() {
+  attesa('Un momento…', 'Leggo la canzone dall\'app.');
+  const fb = window.__fb; if (!fb) { attesa('Serve l\'app', 'Apri questa pagina dall\'app della band.', '<a href="./">Apri l\'app</a>'); return; }
+  const user = await fb.utente();
+  if (!user) { attesa('Serve l\'accesso', 'Entra nell\'app della band, poi torna qui dalla pagina del pezzo.', '<a href="./">Apri l\'app</a>'); return; }
+  state.ruolo = /^band@/i.test(user.email || '') ? 'band' : 'fan';
+  let c;
+  try { c = await fb.canzone(ID_APP); } catch (e) { attesa('Canzone non trovata', e.message || String(e), '<a href="./">Torna all\'app</a>'); return; }
+  if (!c) { attesa('Canzone non trovata', '', '<a href="./">Torna all\'app</a>'); return; }
+  state.canzone = c;
+  if (!c.tab || !c.tab.revisionId) {
+    if (state.ruolo !== 'band') { attesa(c.titolo, 'La band non ha ancora preparato la tab di questo pezzo.', '<a href="./">Torna all\'app</a>'); return; }
+    if (!c.songsterrUrl) { attesa(c.titolo, 'Per preparare la tab serve il link Songsterr della canzone: mettilo con «Modifica» nella pagina del pezzo.', '<a href="./">Torna all\'app</a>'); return; }
+    attesa(c.titolo, 'La tab non è ancora stata preparata. Si scarica da Songsterr e resta a disposizione di tutta la band.', '<button class="link" data-az="prepara">Prepara la tab</button> · <a href="./">Torna all\'app</a>');
+    return;
+  }
+  await caricaDaApp(c);
+}
+async function preparaTab() {
+  attesa(state.canzone.titolo, 'Scarico la tab da Songsterr e la converto… (10–30 secondi)');
+  try { const r = await chiamaTab('prepara'); state.canzone.tab = r.tab; await caricaDaApp(state.canzone); }
+  catch (e) { attesa('Non ci sono riuscito', e.message || String(e), '<button class="link" data-az="prepara">Riprova</button> · <a href="./">Torna all\'app</a>'); }
+}
+async function caricaDaApp(c) {
+  attesa(c.titolo, 'Scarico la tab…');
+  const chiave = `tab:${ID_APP}:${c.tab.revisionId}`;
+  let bytes = await db.suono(chiave).catch(() => null);
+  if (!bytes) { try { bytes = await chiamaTab('file'); db.mettiSuono(chiave, bytes).catch(() => {}); } catch (e) { attesa('Tab non scaricata', e.message || String(e), '<a href="./">Torna all\'app</a>'); return; } }
+  // il brano resta in archivio locale (impostazioni, testo incollato, punteggi) con l'id della canzone dell'app
+  await caricaLista();
+  let b = state.brani.find(x => x.id === 'app-' + ID_APP);
+  if (!b) b = { id: 'app-' + ID_APP, nome: '', aggiunto: Date.now(), traccia: null, miglior: null };
+  Object.assign(b, { titolo: c.titolo || b.titolo, artista: c.artista || '', bytes, nome: `${c.titolo} · Songsterr` });
+  if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; }
+  await db.metti(b).catch(() => {});
+  await caricaLista();
+  await apriBrano(b.id);
+  if (PARAMS.get('modo') === 'spartito') apriSpartito();
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-az=prepara]')) preparaTab(); });
+if (ID_APP) avviaDaApp(); else caricaLista();
 window.__canto = { state, costruisciModello, rilevaAltezza, mic, get api() { return api; } };
-})();
+}
+window.addEventListener('fb-pronto', __avvio, { once: true });
+setTimeout(__avvio, 2000);
 </script>
 </body>
 </html>

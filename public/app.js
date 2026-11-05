@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "43";
+const APP_VERSION = "44";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -81,6 +81,7 @@ const PLAYLIST_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunction
 const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/notifiche";
 // password dei fan (la imposta, cambia o disattiva la band) e messaggi dei fan alla band: vedi functions/accesso.js
 const ACCESSO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/accesso";
+const TAB_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/tab";
 const EVENTI_PUSH = [
   { key: "proposta", nome: "Nuove proposte da votare" },
   { key: "task", nome: "Task assegnate a te" },
@@ -1343,6 +1344,7 @@ function songPage(c) {
       <h2 class="pg-title">${gen ? "Generale" : esc(c.titolo)}</h2>
       <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
       ${gen ? "" : `<div class="pg-link">${linksHtml(c, true)}</div>`}
+      ${gen ? "" : tabBlock(c)}
       ${linkBlock(c)}
     </header>
     <section class="sez">
@@ -1470,6 +1472,36 @@ function recsCard(c) {
       <h3 class="fascia">Registrazioni <small>${recs.length}</small></h3>
       ${recs.map(r => recRow(r, "song")).join("")}
     </section>`;
+}
+// Spartito e Canta: la tab di Songsterr convertita in un file Guitar Pro dalla funzione "tab" (vedi functions/tab.js),
+// aperta in spartito.html (tablatura a schermo con la base, e la modalità Canta con il microfono)
+function tabBlock(c) {
+  if (isNostro(c)) return "";
+  const t = c.tab;
+  if (t && t.revisionId) {
+    const tracce = Array.isArray(t.tracce) ? t.tracce : [];
+    const voce = tracce.find(x => x.voce);
+    const info = `${tracce.length} ${tracce.length === 1 ? "traccia" : "tracce"}${voce ? ` · voce${voce.testo ? " con testo" : ""}` : " · senza traccia voce"}`;
+    return `<div class="pg-tab">
+      <a class="btn quiet" href="spartito.html?id=${c.id}&modo=spartito">${IC("nota")}Spartito</a>
+      <a class="btn quiet" href="spartito.html?id=${c.id}&modo=canta">${IC("mic")}Canta</a>
+      <small>${esc(info)}</small>${state.fan ? "" : `<button class="btn quiet mini" data-action="tab-prepara" data-id="${c.id}" title="Scarica di nuovo la tab da Songsterr">Aggiorna</button>`}
+    </div>`;
+  }
+  if (state.fan || !c.songsterrUrl) return "";
+  return `<div class="pg-tab"><button class="btn quiet" data-action="tab-prepara" data-id="${c.id}">${IC("nota")}Prepara spartito e Canta</button><small>dalla tab di Songsterr, per tutta la band</small></div>`;
+}
+async function preparaTab(id) {
+  const c = state.canzoni.find(x => x.id === id); if (!c) return;
+  toast(`Scarico la tab di «${c.titolo}» da Songsterr…`);
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch(TAB_FN, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ op: "prepara", canzoneId: id }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+    const voce = (j.tab.tracce || []).find(x => x.voce);
+    toast(`Tab pronta: ${j.tab.tracce.length} tracce${voce ? (voce.testo ? ", voce con testo" : ", voce senza testo") : ", senza traccia voce"}.`);
+  } catch (e) { toast("Tab non preparata: " + (e.message || e)); }
 }
 function linkBlock(c) {
   if (state.linkEdit !== c.id) return "";
@@ -2845,7 +2877,7 @@ const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
   "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "del-commento",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
-  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg"
+  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
@@ -3257,6 +3289,8 @@ async function act(btn) {
     case "link-edit":
       state.linkEdit = state.linkEdit === id ? null : id;
       render(); break;
+    case "tab-prepara":
+      preparaTab(id); break;
     case "link-cancel":
       state.linkEdit = null;
       render(); break;
