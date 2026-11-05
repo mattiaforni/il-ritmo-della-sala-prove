@@ -1,0 +1,41 @@
+# Pubblica le regole del database (firestore.rules) quando cambiano su main.
+# Fino alla v43 le regole si incollavano a mano in Console Firebase.
+# Usa lo stesso account di servizio di sito e funzioni: serve in più il ruolo
+# "Firebase Rules Admin" (vedi README, "Pubblicare le regole da GitHub").
+# Si può anche avviare a mano: GitHub → Actions → "Pubblica le regole" → Run workflow.
+name: Pubblica le regole
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "firestore.rules"
+      - "firebase.json"
+      - ".github/workflows/firestore-rules-merge.yml"
+  workflow_dispatch:
+concurrency:
+  group: rules-deploy
+  cancel-in-progress: false
+jobs:
+  deploy_rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Credenziali Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_IL_RITMO_DELLA_SALA_PROVE }}
+      - name: Pubblica
+        run: |
+          set -o pipefail
+          if ! npx --yes firebase-tools@15 deploy --only firestore:rules --project il-ritmo-della-sala-prove --non-interactive 2>&1 | tee deploy.log; then
+            # gli errori diventano annotazioni, leggibili nella pagina del run senza aprire il log
+            grep -iE "error|permission|denied|403|missing|required" deploy.log | grep -v "^\s*$" | tail -n 6 | while IFS= read -r l; do echo "::error::${l:0:900}"; done || true
+            if [ -f firebase-debug.log ]; then
+              grep -iE "permission|denied|\"code\": 4|PERMISSION" firebase-debug.log | tail -n 4 | while IFS= read -r l; do echo "::error::${l:0:900}"; done || true
+            fi
+            exit 1
+          fi

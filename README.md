@@ -135,7 +135,7 @@ In cima alla sezione **Audio**. Il computer della sala trasmette quello che entr
 - **La password dei fan** la imposta chiunque della band da Personale, card «Accesso fan» (funzione `accesso`, che crea o aggiorna l'account `fan@…` e tiene la password in `privato/fan`). Cambiandola, le sessioni aperte vengono revocate: le funzioni rifiutano subito, il database entro un'ora; le iscrizioni alle notifiche fatte con la password vecchia smettono di ricevere. «Disattiva» spegne l'account dei fan.
 - **I fan vedono** Scaletta, Proposte (voti visibili, non votano), Audio con la diretta e Bacheca. Non vedono Cassa e Personale: la cassa è chiusa anche dalle regole del database.
 - **Fan che propongono e votano (v43):** il + in Proposte e i voti 👍/👎 passano dalla funzione `accesso` (doppioni rifiutati, al massimo 3 proposte a settimana per telefono, limiti orari), che riallinea anche la playlist Proposte. Le proposte dei fan entrano subito fra le altre con l'etichetta «fan»; i voti dei fan stanno in `votiFan` e contano come quelli della band. Non c'è più una soglia «pronta per la scaletta»: in scaletta sposta solo la band.
-- **Commenti alle registrazioni (v43):** collezione `commenti`, nel lettore a schermo intero e toccando «N commenti» sulla riga; mi piace come in Bacheca; la band toglie i commenti, i fan scrivono tramite `accesso`. Servono le regole nuove (`firestore.rules`, collezione `commenti`) in Console Firebase.
+- **Commenti alle registrazioni (v43):** collezione `commenti`, nel lettore a schermo intero e toccando «N commenti» sulla riga; mi piace come in Bacheca; la band toglie i commenti, i fan scrivono tramite `accesso`. Servono le regole nuove (`firestore.rules`, collezione `commenti`), pubblicate dal workflow «Pubblica le regole».
 - **Bacheca:** post e commenti sotto i post, con «mi piace». I fan pubblicano tramite la funzione `accesso` (limite: 20 all'ora per tutti i fan insieme), che gira il messaggio anche nel gruppo Telegram; la band scrive direttamente e può togliere post e commenti. I «mi piace» li scrivono tutti direttamente (per i fan le regole permettono solo il campo `piace`).
 - **Regole del database:** con questa funzione cambiano; il file `firestore.rules` va copiato in Console Firebase → Firestore Database → Regole → Pubblica. Finché non c'è, la Bacheca lo segnala e il resto funziona come prima.
 
@@ -153,6 +153,14 @@ Il workflow usa l'account di servizio `github-action-…` che pubblica già il s
 - Service Usage Consumer (`roles/serviceusage.serviceUsageConsumer`)
 - Firebase Viewer (`roles/firebase.viewer`)
 - Cloud Scheduler Admin (`roles/cloudscheduler.admin`), per la funzione oraria del bot Telegram; serve anche l'API Cloud Scheduler attiva nel progetto
+
+## Pubblicare le regole da GitHub
+
+Dalla v43 anche le regole del database (`firestore.rules`) si pubblicano da sole quando il file cambia su `main` (workflow `firestore-rules-merge.yml`, avviabile anche a mano da GitHub → Actions → "Pubblica le regole"); `firebase.json` indica il file. Prima andavano incollate a mano in Console Firebase → Firestore Database → Regole. Il workflow usa lo stesso account `github-action-…`, che per questo ha bisogno in più del ruolo:
+
+- Firebase Rules Admin (`roles/firebaserules.admin`)
+
+Se manca, il run fallisce con un errore di permessi (annotazione nella pagina del run) e le regole online restano quelle di prima: si aggiunge il ruolo e si rilancia il workflow a mano.
 
 Funzioni presenti:
 
