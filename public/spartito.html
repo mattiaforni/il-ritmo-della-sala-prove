@@ -627,11 +627,30 @@ function creaApi() {
   caricaSuoni();
   api.error.on(e => { console.error('alphaTab', e); toast('Errore della base musicale: ' + (e.message || e), 5000); });
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
-  api.playerStateChanged.on(e => { $('#sp-play-ico').setAttribute('href', e.state === 1 ? '#i-pausa' : '#i-play'); if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
+  api.playerStateChanged.on(e => {
+    $('#sp-play-ico').setAttribute('href', e.state === 1 ? '#i-pausa' : '#i-play');
+    const x = state.esec; if (!x) return;
+    const prima = x.suona;
+    x.suona = e.state === 1;
+    // v55: a ogni partenza (anche dopo una pausa) alphaTab fa il conto alla rovescia e intanto non manda posizioni:
+    // fino alla prima posizione vera il disegno resta fermo (prima correva avanti e poi tornava indietro)
+    if (x.suona && !prima) { const c = contoDa(x.tick); x.contoClic = c.clic; x.beatMs = c.beatMs; x.attesaAvvio = performance.now(); }
+    if (!x.suona) {
+      x.attesaAvvio = 0;
+      // v55: in pausa alphaTab riporta la base all'inizio della battuta del suo cursore, che in Canta non si
+      // muove: si rimette la base dove si era fermata
+      if (!e.stopped && x.tickPausa != null) { const p = x.tickPausa; x.tickPausa = null; try { api.tickPosition = p; } catch (err) {} x.tick = p; x.tickAt = performance.now(); }
+    }
+    aggiornaPlay();
+  });
   api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
   api.midiLoaded.on(() => { const f = dopoMidi; dopoMidi = null; if (f) f(); });
   api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; });
-  api.playerPositionChanged.on(e => { const x = state.esec; if (!x) { aggiornaParte(e.currentTick); return; } x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
+  api.playerPositionChanged.on(e => {
+    const x = state.esec; if (!x) { aggiornaParte(e.currentTick); return; }
+    x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null;
+    if (x.attesaAvvio && !e.isSeek) x.attesaAvvio = 0;   // la base è ripartita davvero
+  });
   return api;
 }
 // ---- suoni (soundfont): base = sonivox 1 MB; migliori = FluidR3 GM 14 MB (MIT), scaricato una volta e tenuto sul dispositivo; file = .sf2/.sf3 scelto
@@ -856,12 +875,21 @@ async function avviaEsecuzione() {
   disegnaTesto();
   loop();
 }
+// Il conto alla rovescia di alphaTab (1.9) da una posizione: una battuta di clic, più i movimenti che mancano al
+// punto in cui si riparte (da capo: una battuta). Serve solo per il numero sullo schermo.
+function contoDa(tick) {
+  const mbs = state.score.masterBars; let mb = mbs[0];
+  for (const b of mbs) { if (b.start > tick + 1) break; mb = b; }
+  const num = mb.timeSignatureNumerator || 4, den = mb.timeSignatureDenominator || 4;
+  const passo = TPQ * 4 / den, off = mb.anacrusisOffset || 0;
+  const unMs = state.esec.m.tempo * TPQ / 60000;   // come alphaTab: il clic «prossimo» può essere fino a 1 ms prima
+  const k = Math.max(Math.ceil(off / passo), Math.ceil((tick - unMs - mb.start + off) / passo));
+  return { clic: num + (k % num), beatMs: 60000 / state.esec.m.tempo * (4 / den) * (100 / state.tempo) };
+}
 function partenza() {
   // conto alla rovescia con il count-in di alphaTab (una battuta)
   const x = state.esec; if (!x) return;
-  const beatMs = 60000 / x.m.tempo * (100 / state.tempo);
-  const num = (state.score.masterBars[0] && state.score.masterBars[0].timeSignatureNumerator) || 4;
-  x.beatMs = beatMs; x.contoFine = performance.now() + beatMs * num; x.partito = true;
+  x.partito = true;   // il conto alla rovescia lo fa alphaTab; il numero sullo schermo lo segue (playerStateChanged)
   $('#tx-msg').textContent = '';
   if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume();
   api.play();
@@ -869,10 +897,10 @@ function partenza() {
 function aggiornaPlay() { $('#play-ico').setAttribute('href', state.esec && state.esec.suona ? '#i-pausa' : '#i-play'); }
 function tickOra() {
   const x = state.esec; if (!x) return 0;
-  if (!x.suona) return x.tick;
-  if (x.contoFine && performance.now() < x.contoFine) return x.tick; // conto alla rovescia: la base non è ancora partita
+  if (!x.suona || x.attesaAvvio) return x.tick;   // ferma, o nel conto alla rovescia di alphaTab
   const tpm = (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
-  return x.tick + (performance.now() - x.tickAt) * tpm;
+  // al massimo 250 ms oltre l'ultima posizione: se le posizioni si fermano, il disegno aspetta invece di correre
+  return x.tick + Math.min(250, performance.now() - x.tickAt) * tpm;
 }
 function ridimensiona() {
   const r = cv.parentElement.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -890,19 +918,27 @@ function loop() {
     mic.an.getFloatTimeDomainData(mic.buf);
     const [hz, chi, rms] = rilevaAltezza(mic.buf, mic.ctx.sampleRate);
     const liv = $('#liv'); liv.style.width = Math.min(100, rms * 600) + '%';
-    const tick = tickOra() - state.lat * (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
+    const tpm = (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
+    const tick = tickOra() - state.lat * tpm;
+    const scorre = x.suona && !x.attesaAvvio;   // da fermi (o nel conto alla rovescia) la voce non si disegna né conta
     if (hz > 0 && chi > 0.85) {
       const md = midiDi(hz);
-      x.traccia.push([tick, md, ora]);
       $('#es-nota').textContent = nomeNota(md);
-      if (x.suona) valuta(tick, md, ora);
+      // v55: attacco. Il rilevatore dice la nota solo quando è stabile, cioè ~40 ms (una finestra) dopo che la voce
+      // è entrata: il primo punto dopo un silenzio si mette dove la voce è iniziata davvero, e il punteggio lascia
+      // stare i primi 150 ms della frase (la voce parte da sotto e si assesta dopo)
+      const ult = x.traccia[x.traccia.length - 1];
+      const attacco = !ult || ult[1] == null;
+      if (attacco) x.fraseDa = ora;
+      x.traccia.push([attacco ? tick - 40 * tpm : tick, scorre ? md : null, ora]);
+      if (scorre) valuta(tick, md, ora, ora - x.fraseDa < 150);
     } else { $('#es-nota').textContent = '—'; x.traccia.push([tick, null, ora]); }
     while (x.traccia.length && ora - x.traccia[0][2] > 6000) x.traccia.shift();
   }
-  // conto alla rovescia (count-in: prima del tick 0)
   const t = tickOra();
+  // conto alla rovescia di alphaTab (a ogni partenza, anche dopo una pausa)
   const c = $('#conto');
-  if (x.suona && x.contoFine && ora < x.contoFine) { const n = Math.ceil((x.contoFine - ora) / x.beatMs); if (c.textContent !== String(n)) c.textContent = String(n); c.classList.remove('hidden'); }
+  if (x.suona && x.attesaAvvio && x.beatMs && ora - x.attesaAvvio > 150) { const n = Math.max(1, x.contoClic - Math.floor((ora - x.attesaAvvio) / x.beatMs)); if (c.textContent !== String(n)) c.textContent = String(n); c.classList.remove('hidden'); }
   else if (!c.classList.contains('hidden')) c.classList.add('hidden');
   disegna(t); disegnaMappa(t);
   if (ora - x.ultimoFrame > 80) { x.ultimoFrame = ora; disegnaTesto(t); }
@@ -912,12 +948,12 @@ function nomeNota(md) { const r = Math.round(md); return NOMI[(r % 12 + 12) % 12
 
 // confronto con la nota attesa: ignora l'ottava (chi canta un'ottava sotto va bene)
 function scarto(cantato, atteso) { let d = ((cantato - atteso) % 12 + 12) % 12; if (d > 6) d -= 12; return d * 100; } // in cent
-function valuta(tick, md, ora) {
+function valuta(tick, md, ora, attacco) {
   const x = state.esec; const m = x.m;
   const n = notaA(tick); if (!n) return;
   if (!x.ultimaVal) x.ultimaVal = ora;
   const peso = Math.min(100, ora - x.ultimaVal); x.ultimaVal = ora;
-  if (tick - n.tick < 70) return; // attacco: non conta
+  if (attacco || tick - n.tick < 70) return; // attacco della frase o della nota: non conta
   n.tot += peso;
   if (Math.abs(scarto(md, n.midi)) <= state.tol) n.ok += peso;
 }
@@ -993,7 +1029,7 @@ function saltaA(tick) {
   tick = Math.max(0, Math.min(x.endTick || x.m.fine, tick));
   for (const n of x.m.note) if (n.tick + n.dur > tick) { n.ok = 0; n.tot = 0; }
   x.traccia = []; x.ultimaVal = 0;
-  x.tick = tick; x.tickAt = performance.now(); x.contoFine = 0;
+  x.tick = tick; x.tickAt = performance.now();
   if (!x.partito) { x.partito = true; $('#tx-msg').textContent = ''; }
   try { api.tickPosition = tick; } catch (e) {}
   if (x.tempi) { let r = -1; x.tempi.forEach((tk, i) => { if (tk != null && tk <= tick) r = i; }); x.riga = r; x_righeDis = -2; }
@@ -1168,7 +1204,7 @@ document.addEventListener('click', async (e) => {
   else if (az === 'chiudi-esec') { fermaEsecuzione(); if (state.cantaDaSpartito) apriSpartito(); else chiudiTutto(); }   // si torna dove si era entrati
   else if (az === 'riprova') avviaEsecuzione();
   else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
-  else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); if (!x.partito) partenza(); else api.playPause(); }
+  else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); if (!x.partito) partenza(); else { if (x.suona) x.tickPausa = tickOra(); api.playPause(); } }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
 $('#st-suoni').addEventListener('click', async (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return; } state.suoni = b.dataset.v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); });
@@ -1255,7 +1291,7 @@ $('#velo-canto').addEventListener('click', (e) => {
 $('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
 document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && api) { try { api.pause(); } catch (e) {} } });
+document.addEventListener('visibilitychange', () => { if (document.hidden && api) { if (state.esec && state.esec.suona) state.esec.tickPausa = tickOra(); try { api.pause(); } catch (e) {} } });
 
 // ---- brano dall'app: spartito.html?id=<canzone>&modo=canta|spartito&t=<titolo>&a=<artista>&rc=canzoni|studio ----
 // rc: la raccolta del pezzo, "canzoni" (scaletta e proposte) o "studio" (i pezzi «Da cantare», v49)
@@ -1362,7 +1398,7 @@ window.__apri = (p) => {
 };
 document.addEventListener('click', (e) => { if (e.target.closest('[data-az=prepara]')) preparaTab(); });
 if (ID_APP) avviaDaApp(); else caricaLista();
-window.__canto = { state, costruisciModello, rilevaAltezza, mic, get api() { return api; } };
+window.__canto = { state, costruisciModello, rilevaAltezza, mic, tickOra, contoDa, get api() { return api; } };
 }
 let __dentroApp = false; try { __dentroApp = window.parent !== window && !!window.parent.__spartitoPonte; } catch (e) {}
 if (__dentroApp) __avvio();

@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "55",
+      "data": "2026-11-06",
+      "titolo": "Canta: attacchi della voce, pausa e ripresa",
+      "punti": [
+        "A ogni attacco della voce la linea parte da quando hai iniziato davvero (non 40 ms dopo) e i primi 150 ms di ogni frase non tolgono punti.",
+        "In pausa la base resta dov'è (prima tornava indietro) e alla ripresa riparte da lì, con il disegno fermo durante i clic del conto alla rovescia."
+      ]
+    },
+    {
       "versione": "54",
       "data": "2026-11-06",
       "titolo": "Canta: la linea della voce torna com'era",
