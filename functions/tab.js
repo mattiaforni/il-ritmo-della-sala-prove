@@ -11,12 +11,15 @@
 // formato Guitar Pro 7 con alphaTab. Il testo delle tracce voce (campo "newLyrics",
 // nello stesso formato dei testi di Guitar Pro) viene applicato alle note.
 //
-// Operazioni (POST con il token della band; "file" anche con quello dei fan):
-//   prepara { canzoneId }  → scarica, converte, salva in Storage (tab/<canzoneId>.gp) e
-//                            scrive su canzoni/<id> il campo "tab" { songId, revisionId,
+// Operazioni (POST con il token della band; "file" anche con quello dei fan). "raccolta" è "canzoni"
+// (scaletta e proposte, il default) o "studio" (i pezzi «Da cantare» di ognuno, dalla v49):
+//   prepara { canzoneId, raccolta } → scarica, converte, salva in Storage (tab/<id>.gp, tab/studio/<id>.gp) e
+//                            scrive sul documento il campo "tab" { songId, revisionId,
 //                            url (link usato), tracce: [{ partId, nome, strumento, voce, testo, note }], testi: { <indice traccia>:
 //                            [{ offset, text }] } (il testo originale, per correggerlo dalla pagina), byte, aggiornata }
-//   file    { canzoneId }  → restituisce il file .gp (application/octet-stream)
+//   file    { canzoneId, raccolta } → restituisce il file .gp (application/octet-stream)
+//   cerca   { q }           → cerca su Songsterr (titolo o artista): { risultati: [{ songId, titolo, artista, url }] }
+//   togli   { canzoneId }   → toglie un pezzo «Da cantare» e il suo file
 //
 // Il formato interno di Songsterr non è documentato: quando cambia, questa funzione va
 // aggiornata; i file già salvati restano.
@@ -28,20 +31,60 @@ const alphaTab = require("@coderline/alphatab");
 const { SongsterrToAlphaTabConverter } = require("./songsterr-converter");
 
 const CDN = ["https://dqsljvtekg760.cloudfront.net", "https://d3d3l6a6rcgkaf.cloudfront.net"];
+const SITO = "https://www.songsterr.com";
+const RACCOLTE = ["canzoni", "studio"];
 const SONGSTERR_RE = /^https:\/\/(?:www\.)?songsterr\.com\/a\/wsa\/[^\s"'<>]+$/i;
 const INTESTAZIONI = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
   "Accept-Language": "it-IT,it;q=0.9,en;q=0.8"
 };
 
-async function prendi(url, cosa, ms = 20000) {
+async function prendi(url, cosa, ms = 20000, conUrl = false) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
     const r = await fetch(url, { headers: { ...INTESTAZIONI, Accept: cosa === "json" ? "application/json" : "text/html" }, signal: ctl.signal });
     if (!r.ok) { const e = new Error(`${cosa} ${r.status}`); e.status = r.status; throw e; }
-    return cosa === "json" ? r.json() : r.text();
+    const corpo = cosa === "json" ? await r.json() : await r.text();
+    return conUrl ? { corpo, url: r.url || url } : corpo;
   } finally { clearTimeout(t); }
+}
+
+// pagina della tab; se il link non risponde (es. un indirizzo costruito dai risultati della ricerca con un
+// nome scritto diversamente) si riprova con l'indirizzo per numero, che Songsterr gira alla pagina giusta
+async function paginaTab(url) {
+  try { return await prendi(url, "html", 20000, true); }
+  catch (e) {
+    const m = url.match(/-s(\d+)(?:t\d+)?$/);
+    if (!m || e.status !== 404) throw e;
+    return prendi(`${SITO}/a/wa/song?id=${m[1]}`, "html", 20000, true);
+  }
+}
+
+// indirizzo della pagina di una tab, come quelli di Songsterr: /a/wsa/<artista>-<titolo>-tab-s<id>
+function slug(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/['’]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+const urlTab = (songId, artista, titolo) => `${SITO}/a/wsa/${slug(`${artista} ${titolo}`) || "tab"}-tab-s${songId}`;
+
+// ricerca: l'API pubblica del sito (la stessa della casella di ricerca); il formato vecchio come riserva
+async function cercaSongsterr(q) {
+  const p = encodeURIComponent(q);
+  let lista = null, ultimo = null;
+  for (const u of [`${SITO}/api/songs?pattern=${p}&size=25`, `${SITO}/a/ra/songs.json?pattern=${p}`]) {
+    try { lista = await prendi(u, "json", 12000); if (Array.isArray(lista)) break; }
+    catch (e) { ultimo = e; }
+  }
+  if (!Array.isArray(lista)) throw ultimo || new Error("ricerca non disponibile");
+  const visti = new Set();
+  return lista.map(x => {
+    const songId = Number(x.songId ?? x.id);
+    const artista = typeof x.artist === "string" ? x.artist : (x.artist && (x.artist.name || x.artist.nameWithoutThePrefix)) || "";
+    const titolo = String(x.title || "").trim();
+    return { songId, titolo, artista: String(artista).trim(), player: x.hasPlayer !== false };
+  }).filter(x => x.songId > 0 && x.titolo && x.player && !visti.has(x.songId) && visti.add(x.songId))
+    .slice(0, 20).map(({ songId, titolo, artista }) => ({ songId, titolo, artista, url: urlTab(songId, artista, titolo) }));
 }
 
 // legge lo stato della pagina Songsterr
@@ -110,7 +153,7 @@ function contaNote(track) {
 
 function crea({ cors, ruolo, REGIONE }) {
   const db = () => getFirestore();
-  const file = (id) => getStorage().bucket().file(`tab/${id}.gp`);
+  const file = (id, raccolta) => getStorage().bucket().file(raccolta === "studio" ? `tab/studio/${id}.gp` : `tab/${id}.gp`);
 
   const tab = onRequest({ region: REGIONE, memory: "512MiB", timeoutSeconds: 120, maxInstances: 2 }, async (req, res) => {
     cors(req, res);
@@ -118,35 +161,70 @@ function crea({ cors, ruolo, REGIONE }) {
     if (req.method !== "POST") { res.status(405).json({ error: "metodo non valido" }); return; }
     const chi = await ruolo(req);
     if (!chi) { res.status(401).json({ error: "accesso negato" }); return; }
-    const { op, canzoneId } = req.body || {};
+    const { op, canzoneId, q } = req.body || {};
+    const raccolta = RACCOLTE.includes(req.body && req.body.raccolta) ? req.body.raccolta : "canzoni";
+    try {
+      if (op === "cerca") {
+        if (chi !== "band") { res.status(403).json({ error: "solo la band" }); return; }
+        const testo = String(q || "").replace(/\s+/g, " ").trim().slice(0, 80);
+        if (testo.length < 2) { res.status(200).json({ risultati: [] }); return; }
+        res.set("Cache-Control", "private, max-age=300");
+        res.status(200).json({ risultati: await cercaSongsterr(testo) });
+        return;
+      }
+    } catch (e) {
+      console.error("tab cerca", e);
+      res.status(502).json({ error: "Songsterr non risponde alla ricerca" });
+      return;
+    }
     const id = String(canzoneId || "").replace(/[^A-Za-z0-9_-]/g, "");
     if (!id) { res.status(400).json({ error: "manca la canzone" }); return; }
     try {
       if (op === "file") {
-        const [esiste] = await file(id).exists();
+        const [esiste] = await file(id, raccolta).exists();
         if (!esiste) { res.status(404).json({ error: "tab non ancora preparata" }); return; }
-        const [buf] = await file(id).download();
+        const [buf] = await file(id, raccolta).download();
         res.set("Content-Type", "application/octet-stream");
         res.set("Cache-Control", "private, max-age=3600");
         res.status(200).send(buf);
         return;
       }
-      if (op !== "prepara") { res.status(400).json({ error: "operazione sconosciuta" }); return; }
       if (chi !== "band") { res.status(403).json({ error: "solo la band" }); return; }
-      const snap = await db().doc(`canzoni/${id}`).get();
+      if (op === "togli") {
+        // un pezzo «Da cantare» tolto dalla lista: via il documento (se c'è ancora) e il file
+        if (raccolta !== "studio") { res.status(400).json({ error: "si tolgono solo i pezzi Da cantare" }); return; }
+        await db().doc(`studio/${id}`).delete();
+        await file(id, raccolta).delete({ ignoreNotFound: true });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (op !== "prepara") { res.status(400).json({ error: "operazione sconosciuta" }); return; }
+      const rif = db().doc(`${raccolta}/${id}`);
+      const snap = await rif.get();
       if (!snap.exists) { res.status(404).json({ error: "canzone non trovata" }); return; }
       const c = snap.data();
-      const url = String(c.songsterrUrl || "").replace(/[?#].*$/, "");
+      let url = String(c.songsterrUrl || "").replace(/[?#].*$/, "");
       if (!SONGSTERR_RE.test(url)) { res.status(400).json({ error: "La canzone non ha il link Songsterr della pagina della tab" }); return; }
-      const meta = statoDaHtml(await prendi(url, "html"));
+      const pagina = await paginaTab(url);
+      const meta = statoDaHtml(pagina.corpo);
       const tracce = await tracceDi(meta);
       if (!tracce.length) { res.status(502).json({ error: "Nessuna traccia scaricata da Songsterr" }); return; }
       const { bytes, info, testi } = costruisciGp(meta, tracce);
-      await file(id).save(Buffer.from(bytes), { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
+      await file(id, raccolta).save(Buffer.from(bytes), { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
+      // i pezzi «Da cantare» prendono titolo, artista e indirizzo vero della pagina da Songsterr
+      // (aggiunti da un link incollato non hanno titolo; quelli dalla ricerca hanno un indirizzo ricostruito)
+      const extra = {};
+      if (raccolta === "studio") {
+        const vero = String(pagina.url || "").replace(/[?#].*$/, "");
+        if (SONGSTERR_RE.test(vero) && vero !== url) { url = vero; extra.songsterrUrl = vero; }
+        if (!c.titolo && meta.title) extra.titolo = meta.title;
+        if (!c.artista && meta.artist) extra.artista = meta.artist;
+        extra.songId = meta.songId;
+      }
       // url: il link da cui viene la tab, per accorgersi quando la canzone ne ha uno diverso
       const tab = { songId: meta.songId, revisionId: meta.revisionId, url, titolo: meta.title, artista: meta.artist, tracce: info, testi, byte: bytes.length, aggiornata: FieldValue.serverTimestamp() };
-      await db().doc(`canzoni/${id}`).update({ tab });
-      res.status(200).json({ ok: true, tab: { ...tab, aggiornata: Date.now() } });
+      await rif.update({ tab, ...extra });
+      res.status(200).json({ ok: true, tab: { ...tab, aggiornata: Date.now() }, ...extra });
     } catch (e) {
       console.error("tab", op, id, e);
       res.status(500).json({ error: e.message || String(e) });
@@ -155,4 +233,4 @@ function crea({ cors, ruolo, REGIONE }) {
   return { tab };
 }
 
-module.exports = { crea, statoDaHtml, costruisciGp };
+module.exports = { crea, statoDaHtml, costruisciGp, cercaSongsterr, urlTab, slug };

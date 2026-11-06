@@ -99,6 +99,7 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 | `diretta` | `stato`: `attiva`, `sessione`, `da`, `inizio`, `battito`; `ascolto-…`: `tipo`, `sessione`, `chi`, `offer`, `answer`, `creato` |
 | `bacheca` | post: `nome`, `testo`, `band` (vero se l'ha scritto la band), `creato`, `piace` (mappa chiave → true), per i fan anche `fanId` (id del telefono, per le notifiche); commenti: gli stessi campi più `postId` |
 | `commenti` | commenti alle registrazioni (dalla v43): `su` ("registrazione"), `rifId` (id della registrazione), `nome`, `band`, `fanId` (fan), `testo`, `creato`, `piace` |
+| `studio` | pezzi «Da cantare» di ognuno, fuori da scaletta e proposte (dalla v49, solo la band): `titolo`, `artista`, `songId`, `songsterrUrl`, `membroId`, `membro`, `creato`, `tab` (come in `canzoni`) |
 | `privato` | solo per le funzioni, i telefoni non la leggono: `spotify` (playlist), `telegram` (gruppo e impostazioni del bot) con la sottocollezione `eventi`, `telegram-foto` (ultima fotografia del database), `push` (chiavi delle notifiche) con la sottocollezione `iscrizioni` (un documento per telefono iscritto), `fan` (password dei fan, generazione, chi l'ha impostata) |
 
 ## Costi
@@ -169,6 +170,7 @@ Funzioni presenti:
 
 - `telegram` e `telegramOgniOra` — il bot Telegram della band (secret `TELEGRAM_TOKEN`), vedi sotto.
 - `accesso` — password dei fan (stato, imposta, disattiva: solo la band) e post/commenti dei fan in Bacheca, girati nel gruppo Telegram (secret `TELEGRAM_TOKEN`); dalla v43 anche proposte (`proposta`), voti (`voto`) e commenti alle registrazioni (`commento`) dei fan.
+- `tab` — la tab di Songsterr in un file Guitar Pro per Spartito e Canta (`prepara`, `file`), salvata in Storage (`tab/<id>.gp`, `tab/studio/<id>.gp`); dalla v49 anche la ricerca su Songsterr (`cerca`) e `togli` per i pezzi «Da cantare». Il formato interno di Songsterr non è documentato: se cambia, va aggiornata.
 - `notifiche` — notifiche push ai telefoni (Web Push standard, libreria `web-push`). Le chiavi VAPID si creano da sole alla prima richiesta e restano in `privato/push`; ogni telefono si iscrive dalla pagina Personale scegliendo gli eventi (proposte, task assegnate, registrazioni, diretta, passaggi in scaletta, post e commenti in Bacheca, commenti alle registrazioni). Gli eventi li segnala l'app di chi fa l'azione (quelli dei fan la funzione `accesso`); con `riepilogo` la band vede chi ha le notifiche attive (persone della band e numero di telefoni dei fan). Chi non le ha trova nell'app, una volta sola per telefono, un invito ad attivarle; il testo lo scrive la funzione leggendo il database. Su iPhone funziona solo con l'app aggiunta alla schermata Home.
 
 Runtime Node.js 22 (il 20 viene dismesso da Google il 30 ottobre 2026).

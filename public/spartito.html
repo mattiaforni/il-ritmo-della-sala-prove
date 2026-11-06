@@ -362,7 +362,7 @@ if (!ponte && window.FIREBASE_CONFIG) {
   const auth = getAuth(app); const db = getFirestore(app);
   window.__fb = {
     utente: () => new Promise(ok => { const off = onAuthStateChanged(auth, u => { off(); ok(u); }); }),
-    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+    canzone: async (id, raccolta) => { const s = await getDoc(doc(db, raccolta === 'studio' ? 'studio' : 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
     token: () => auth.currentUser.getIdToken()
   };
 }
@@ -1254,10 +1254,11 @@ document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && api) { try { api.pause(); } catch (e) {} } });
 
-// ---- brano dall'app: spartito.html?id=<canzone>&modo=canta|spartito&t=<titolo>&a=<artista> ----
+// ---- brano dall'app: spartito.html?id=<canzone>&modo=canta|spartito&t=<titolo>&a=<artista>&rc=canzoni|studio ----
+// rc: la raccolta del pezzo, "canzoni" (scaletta e proposte) o "studio" (i pezzi «Da cantare», v49)
 // Dentro l'app la pagina sta in sovrimpressione (iframe) e resta viva fra un'apertura e l'altra: __apri, __chiudi, __indietro.
 const PARAMS = new URLSearchParams(location.search);
-let ID_APP = PARAMS.get('id'), MODO = PARAMS.get('modo') || 'spartito';
+let ID_APP = PARAMS.get('id'), MODO = PARAMS.get('modo') || 'spartito', RACCOLTA = PARAMS.get('rc') === 'studio' ? 'studio' : 'canzoni';
 let PONTE = null; try { PONTE = window.parent !== window ? window.parent.__spartitoPonte || null : null; } catch (e) {}
 const TAB_FN = 'https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/tab';
 let richiesta = 0;
@@ -1269,7 +1270,7 @@ function statoSpartito(titolo, testo, azioniHtml = '') {
 const AZ_CHIUDI = '<button class="link" data-az="chiudi-spartito">Chiudi</button>';
 async function token() { return PONTE ? PONTE.token() : window.__fb.token(); }
 async function chiamaTab(op, extra = {}) {
-  const r = await fetch(TAB_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await token() }, body: JSON.stringify({ op, canzoneId: ID_APP, ...extra }) });
+  const r = await fetch(TAB_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await token() }, body: JSON.stringify({ op, canzoneId: ID_APP, raccolta: RACCOLTA, ...extra }) });
   if (op === 'file') { if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `errore ${r.status}`); } return new Uint8Array(await r.arrayBuffer()); }
   const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`); return j;
 }
@@ -1282,7 +1283,7 @@ async function avviaDaApp() {
     const user = await fb.utente();
     if (!user) { statoSpartito('Serve l\'accesso', 'Entra nell\'app della band, poi apri lo spartito dalla pagina del pezzo.', '<a class="link" href="./">Apri l\'app</a>'); return; }
     state.ruolo = /^band@/i.test(user.email || '') ? 'band' : 'fan';
-    try { c = await fb.canzone(ID_APP); } catch (e) { statoSpartito('Canzone non trovata', e.message || String(e), AZ_CHIUDI); return; }
+    try { c = await fb.canzone(ID_APP, RACCOLTA); } catch (e) { statoSpartito('Canzone non trovata', e.message || String(e), AZ_CHIUDI); return; }
   }
   if (mia !== richiesta) return;
   if (!c) { statoSpartito('Canzone non trovata', '', AZ_CHIUDI); return; }
@@ -1341,7 +1342,7 @@ window.__indietro = () => {
 window.__chiudi = () => fermaTutto();
 window.__apri = (p) => {
   fermaTutto();
-  ID_APP = p.id; MODO = p.modo || 'spartito';
+  ID_APP = p.id; MODO = p.modo || 'spartito'; RACCOLTA = p.rc === 'studio' ? 'studio' : 'canzoni';
   const canta = MODO === 'canta';
   state.cantaDaSpartito = false;
   $('#sp-stato').classList.add('hidden');

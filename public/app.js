@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "48";
+const APP_VERSION = "49";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -82,6 +82,9 @@ const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctio
 // password dei fan (la imposta, cambia o disattiva la band) e messaggi dei fan alla band: vedi functions/accesso.js
 const ACCESSO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/accesso";
 const TAB_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/tab";
+// pagina di una tab (quella da cui la funzione sa scaricare), e il numero del pezzo su Songsterr (…-tab-s27)
+const TAB_PAGINA_RE = /^https:\/\/(?:www\.)?songsterr\.com\/a\/wsa\/[^\s"'<>]+$/i;
+const idSongsterr = (u) => { const m = String(u || "").replace(/[?#].*$/, "").match(/-s(\d+)(?:t\d+)?$/); return m ? Number(m[1]) : null; };
 const EVENTI_PUSH = [
   { key: "proposta", nome: "Nuove proposte da votare" },
   { key: "task", nome: "Task assegnate a te" },
@@ -157,7 +160,12 @@ const state = {
   userId: store.get("prove_user_id"),   // l'identità del telefono segue la persona anche se cambia nome
   renaming: null,                        // id della persona che si sta rinominando
   membri: [], canzoni: [], tasks: [], registrazioni: [], movimenti: [], bacheca: [],
-  ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false, bacheca: false },
+  studio: [],                 // pezzi «Da cantare» (fuori da scaletta e proposte), di ognuno: collezione "studio" (v49)
+  ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false, bacheca: false, studio: false },
+  studioNegato: false,        // le regole del database non includono ancora "studio"
+  studioModifica: false,      // «Da cantare» con i cestini al posto di Spartito e Canta
+  cerca: null,                // foglio «Aggiungi un pezzo»: { q, stato: "" | "cerco" | "errore", errore, risultati }
+  tabInCorso: new Set(),      // pezzi di cui la funzione sta scaricando la tab (la freccetta gira)
   subscribed: false,
   generaleOk: false,
   tab: (store.get("prove_tab") || "scaletta").replace("persone", "personale"),
@@ -366,7 +374,7 @@ function linksHtml(c, conTesto) {
   const tab = c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`;
   return `<div class="links">
     <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}">${SP_ICO}${conTesto ? "<span>Spotify</span>" : ""}</a>
-    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>
+    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>${conTesto ? frecciaTab(c) : ""}
   </div>`;
 }
 // icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
@@ -1003,6 +1011,13 @@ function subscribe() {
   });
   // la cassa i fan non la vedono (e il database non gliela darebbe)
   if (!state.fan) listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
+  // pezzi «Da cantare» (v49): finché le regole non li includono, avviso solo nella sezione
+  if (!state.fan) listen("studio", query(collection(db, "studio"), orderBy("creato")), "studio", null, err => {
+    console.warn("[studio]", err);
+    state.ready.studio = true;
+    state.studioNegato = !!err && err.code === "permission-denied";
+    render();
+  });
   else state.ready.movimenti = true;
 }
 // la scheda Generale è un documento con id fisso: crearla due volte non produce doppioni
@@ -1241,6 +1256,7 @@ function render() {
   renderAudio();
   renderBacheca();
   if (!state.fan) { renderCassa(); renderPersonale(); }
+  if (state.cerca) aggiornaRisultati();   // ✓ sui pezzi appena aggiunti
   restoreInputs(kept);
   renderFan();
   updateNavMe();
@@ -1320,6 +1336,7 @@ window.addEventListener("popstate", () => {
     return;
   }
   if (state.lettore) { chiudiLettore(true); return; }
+  if (state.cerca) { chiudiCerca(true); return; }
   if (state.songPage) chiudiCanzone();
 });
 
@@ -1481,39 +1498,60 @@ function recsCard(c) {
     </section>`;
 }
 // Spartito e Canta: la tab di Songsterr convertita in un file Guitar Pro dalla funzione "tab" (vedi functions/tab.js),
-// aperta in spartito.html (tablatura a schermo con la base, e la modalità Canta con il microfono)
+// aperta in spartito.html (tablatura a schermo con la base, e la modalità Canta con il microfono).
+// La freccetta accanto a «Tablatura» la scarica di nuovo: grigia se la tab c'è, ambra con il pallino se manca
+// o se il link è cambiato, rossa e in rotazione mentre la funzione lavora.
+const scaricabile = (c) => !!c && !isNostro(c) && TAB_PAGINA_RE.test(normalizzaSongsterr(c.songsterrUrl || ""));
+const tabPronta = (c) => !!(c && c.tab && c.tab.revisionId);
+function frecciaTab(c) {
+  if (state.fan || !scaricabile(c)) return "";
+  const gira = state.tabInCorso.has(c.id);
+  const t = tabPronta(c) ? c.tab : null;
+  // tab fatta da un link diverso da quello che la canzone ha adesso (le tab precedenti alla v48 non lo sanno)
+  const vecchia = !!(t && t.url && normalizzaSongsterr(t.url) !== normalizzaSongsterr(c.songsterrUrl));
+  const tit = gira ? "Scarico la tab da Songsterr…" : !t ? "Scarica la tab da Songsterr per Spartito e Canta"
+    : vecchia ? "Il link è cambiato: scarica la tab nuova" : "Scarica di nuovo la tab da Songsterr";
+  return `<button type="button" class="tab-agg${gira ? " gira" : !t || vecchia ? " nuova" : ""}" data-action="tab-prepara" data-id="${c.id}" title="${tit}" aria-label="${tit}"${gira ? ' aria-busy="true"' : ""}>${IC("aggiorna")}</button>`;
+}
 function tabBlock(c) {
   if (isNostro(c)) return "";
-  const t = c.tab;
-  if (t && t.revisionId) {
-    const tracce = Array.isArray(t.tracce) ? t.tracce : [];
-    const voce = tracce.find(x => x.voce);
-    const info = `${tracce.length} ${tracce.length === 1 ? "traccia" : "tracce"}${voce ? ` · voce${voce.testo ? " con testo" : ""}` : " · senza traccia voce"}`;
-    // tab fatta da un link diverso da quello che la canzone ha adesso (le tab precedenti alla v48 non lo sanno)
-    const vecchia = !!(t.url && c.songsterrUrl && normalizzaSongsterr(t.url) !== normalizzaSongsterr(c.songsterrUrl));
-    const aggiorna = state.fan ? "" : vecchia
-      ? `<button class="btn quiet mini tab-vecchia" data-action="tab-prepara" data-id="${c.id}" title="Scarica la tab dal link nuovo">Link cambiato · Aggiorna</button>`
-      : `<button class="btn quiet mini" data-action="tab-prepara" data-id="${c.id}" title="Scarica di nuovo la tab da Songsterr">Aggiorna</button>`;
-    return `<div class="pg-tab">
+  // senza tab, toccando Spartito o Canta la tab si scarica (la freccetta gira) e poi si apre
+  if (!tabPronta(c) && (state.fan || !scaricabile(c))) return "";
+  return `<div class="pg-tab">
       <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito">${IC("nota")}Spartito</button>
       <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="canta">${IC("mic")}Canta</button>
-      <small>${esc(info)}</small>${aggiorna}
     </div>`;
-  }
-  if (state.fan || !c.songsterrUrl) return "";
-  return `<div class="pg-tab"><button class="btn quiet" data-action="tab-prepara" data-id="${c.id}">${IC("nota")}Prepara spartito e Canta</button><small>dalla tab di Songsterr, per tutta la band</small></div>`;
 }
-async function preparaTab(id) {
-  const c = state.canzoni.find(x => x.id === id); if (!c) return;
-  toast(`Scarico la tab di «${c.titolo}» da Songsterr…`);
+// un pezzo della scaletta o delle proposte, o uno «Da cantare»
+const trovaPezzo = (id) => state.canzoni.find(x => x.id === id) || state.studio.find(x => x.id === id) || null;
+const raccoltaDi = (id) => (state.studio.some(x => x.id === id) ? "studio" : "canzoni");
+async function chiamaTabFn(op, extra = {}) {
+  const token = await auth.currentUser.getIdToken();
+  const r = await fetch(TAB_FN, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ op, ...extra }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+  return j;
+}
+// apriPoi: "spartito" | "canta" per aprire il pezzo appena la tab è pronta (tocco su Spartito o Canta senza tab)
+async function preparaTab(id, rc = raccoltaDi(id), apriPoi = null) {
+  if (state.tabInCorso.has(id)) { toast("Sto già scaricando la tab…"); return; }
+  const nome = () => { const c = trovaPezzo(id); return c && c.titolo ? `«${c.titolo}»` : "del pezzo"; };
+  state.tabInCorso.add(id);
+  render();
   try {
-    const token = await auth.currentUser.getIdToken();
-    const r = await fetch(TAB_FN, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ op: "prepara", canzoneId: id }) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
-    const voce = (j.tab.tracce || []).find(x => x.voce);
-    toast(`Tab pronta: ${j.tab.tracce.length} tracce${voce ? (voce.testo ? ", voce con testo" : ", voce senza testo") : ", senza traccia voce"}.`);
-  } catch (e) { toast("Tab non preparata: " + (e.message || e)); }
+    const j = await chiamaTabFn("prepara", { canzoneId: id, raccolta: rc });
+    state.tabInCorso.delete(id);
+    // la tab nuova arriva anche dal database; intanto va sul pezzo, così si può aprire subito
+    const c = trovaPezzo(id);
+    if (c) { c.tab = j.tab; if (j.titolo && !c.titolo) c.titolo = j.titolo; if (j.artista && !c.artista) c.artista = j.artista; }
+    render();
+    if (apriPoi && !state.spartito) apriSpartito(id, apriPoi);
+    else toast(`Tab di ${nome()} pronta.`);
+  } catch (e) {
+    state.tabInCorso.delete(id);
+    render();
+    toast(`Tab di ${nome()} non scaricata: ${e.message || e}`);
+  }
 }
 // Spartito e Canta in sovrimpressione: spartito.html in un iframe sopra l'app, che resta viva sotto
 // (chiudere è immediato e la pagina da cui si è partiti resta com'era). L'iframe resta caricato fra
@@ -1521,9 +1559,16 @@ async function preparaTab(id) {
 const spOv = document.getElementById("spartito-ov");
 let spFrame = null;
 function apriSpartito(id, modo) {
-  const c = state.canzoni.find(x => x.id === id); if (!c || !c.tab || !spOv) return;
+  const c = trovaPezzo(id); if (!c || !spOv) return;
+  modo = modo === "canta" ? "canta" : "spartito";
+  if (!tabPronta(c)) {
+    if (state.fan || !scaricabile(c)) { toast("La tab di questo pezzo non è ancora pronta."); return; }
+    preparaTab(id, raccoltaDi(id), modo);
+    return;
+  }
   if (state.playId && riproduzione.vuole) { riproduzione.vuole = false; player.pause(); }
-  const p = { id, modo: modo === "canta" ? "canta" : "spartito", t: c.titolo || "", a: c.artista || "", r: c.tab.revisionId };
+  // rc: da quale raccolta viene il pezzo (la pagina la passa alla funzione per scaricare il file)
+  const p = { id, modo, t: c.titolo || "", a: c.artista || "", r: c.tab.revisionId, rc: raccoltaDi(id) };
   state.spartito = true;
   spOv.classList.remove("hidden", "via");
   spOv.classList.add("entra");
@@ -1556,7 +1601,7 @@ function chiudiSpartito(daStoria = false) {
 // quello che la pagina dello Spartito chiede all'app
 window.__spartitoPonte = {
   chiudi: () => chiudiSpartito(),
-  canzone: (id) => state.canzoni.find(x => x.id === id) || null,
+  canzone: (id) => trovaPezzo(id),
   token: () => auth.currentUser.getIdToken(),
   ruolo: () => (state.fan ? "fan" : "band")
 };
@@ -2910,11 +2955,151 @@ function renderPersonale() {
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
+    ${mia ? daCantareCard() : ""}
     ${mia ? notificheCard() : ""}
     ${mia ? accessoCard() : ""}
     ${mia ? spotifyCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · <button class="app-ver-btn" data-action="copia-diag">Copia diagnostica</button></p>`;
+}
+
+// ---------- Da cantare: pezzi fuori da scaletta e proposte, per lo Spartito e per Canta ----------
+// Ognuno ha la sua lista (collezione "studio", con l'id della persona). Si aggiungono cercando su Songsterr
+// (la ricerca passa dalla funzione "tab") o incollando il link di una tab; la tab si scarica da sola.
+const mieiStudio = () => state.studio.filter(s => (s.membroId ? s.membroId === state.userId : s.membro === state.user));
+function rigaStudio(s) {
+  const titolo = s.titolo || "Pezzo da Songsterr";
+  const gira = state.tabInCorso.has(s.id);
+  const sotto = gira ? `<span class="prep">Scarico la tab…</span>`
+    : `<span>${esc(s.artista || "")}${tabPronta(s) ? "" : `${s.artista ? " · " : ""}<em>tab da scaricare</em>`}</span>`;
+  const destra = state.studioModifica
+    ? `<button class="dc-togli" data-action="studio-togli" data-id="${s.id}" title="Togli dalla lista" aria-label="Togli ${esc(titolo)}">${IC("cestino")}</button>`
+    : ["spartito", "canta"].map(m => `<button class="dc-btn" data-action="apri-spartito" data-id="${s.id}" data-modo="${m}" title="${m === "canta" ? "Canta" : "Spartito"}" aria-label="${m === "canta" ? "Canta" : "Spartito di"} ${esc(titolo)}"${gira ? " disabled" : ""}>${IC(m === "canta" ? "mic" : "nota")}</button>`).join("");
+  return `<div class="dc-riga"><span class="t"><b>${esc(titolo)}</b>${sotto}</span>${destra}</div>`;
+}
+function daCantareCard() {
+  const miei = mieiStudio();
+  if (!miei.length) state.studioModifica = false;
+  const corpo = state.studioNegato
+    ? `<p class="empty">La lista non è ancora disponibile: riprova fra qualche minuto.</p>`
+    : miei.length ? miei.map(rigaStudio).join("")
+      : `<p class="empty">Pezzi fuori da scaletta e proposte, da leggere nello Spartito o da cantare.</p>`;
+  return `<article class="card da-cantare">
+      <h3 class="sec-title">Da cantare ${miei.length ? `<small>${miei.length}</small>` : ""}${miei.length ? `<button data-action="studio-modifica">${state.studioModifica ? "Fatto" : "Modifica"}</button>` : ""}</h3>
+      ${corpo}
+      ${state.studioNegato ? "" : `<button class="addline" data-action="cerca-apri"><span class="plus">${IC("piu")}</span>Aggiungi un pezzo</button>`}
+    </article>`;
+}
+// il foglio di ricerca sta in un suo contenitore dentro main, fuori dalle pagine: render() non lo rifà,
+// così mentre si scrive il campo non perde il fuoco e i risultati non tornano in cima
+function cercaBox() {
+  let b = document.getElementById("cerca-box");
+  if (!b) { b = document.createElement("div"); b.id = "cerca-box"; document.querySelector("main").appendChild(b); }
+  return b;
+}
+function apriCerca() {
+  state.cerca = { q: "", stato: "", errore: "", risultati: null };
+  cercaBox().innerHTML = `
+    <form class="foglio cerca-foglio" data-form="cerca">
+      <div class="foglio-testa"><h2>Aggiungi un pezzo</h2><button type="button" class="x" data-action="cerca-chiudi" aria-label="Chiudi">${IC("x")}</button></div>
+      <div class="foglio-corpo"><div>
+        <label class="cerca-campo">${IC("cerca")}<input class="field" name="q" data-keep="cerca-q" placeholder="Titolo o artista" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Cerca su Songsterr"></label>
+        <p class="cerca-aiuto">Titolo, artista, o incolla il link di una tab di Songsterr.</p>
+        <div id="cerca-ris" aria-live="polite"></div>
+      </div></div>
+    </form>`;
+  history.pushState({ cerca: true }, "");   // il tasto indietro del telefono chiude il foglio
+  cercaBox().querySelector("input").focus();
+}
+// daStoria: la chiusura arriva dal tasto indietro (la voce nella cronologia è già stata tolta)
+function chiudiCerca(daStoria = false) {
+  if (!state.cerca) return;
+  if (!daStoria && history.state && history.state.cerca) { history.back(); return; }
+  state.cerca = null;
+  clearTimeout(cercaTimer); cercaN++;
+  cercaBox().innerHTML = "";
+}
+// dove sta già un risultato: fra i miei «Da cantare», in scaletta o fra le proposte ("" = da nessuna parte)
+const chiaveTitolo = (t, a) => `${String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "")}|${String(a || "").toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+function dovePezzo(r) {
+  const id = r.songId;
+  if (mieiStudio().some(s => (id && (s.songId === id || idSongsterr(s.songsterrUrl) === id)) || normalizzaSongsterr(s.songsterrUrl) === r.url)) return "studio";
+  const k = r.titolo ? chiaveTitolo(r.titolo, r.artista) : null;
+  const c = state.canzoni.find(c => !isGenerale(c) && ((id && ((c.tab && c.tab.songId === id) || idSongsterr(c.songsterrUrl) === id)) || (k && chiaveTitolo(c.titolo, c.artista) === k)));
+  return c ? (c.stato === "proposta" ? "proposta" : "scaletta") : "";
+}
+function cercaRisultati() {
+  const k = state.cerca;
+  if (!k) return "";
+  if (k.stato === "errore") return `<p class="cerca-stato">Ricerca non riuscita: ${esc(k.errore)}</p>`;
+  if (!k.risultati || (!k.risultati.length && k.stato === "cerco")) return k.stato === "cerco" ? `<p class="cerca-stato">Cerco su Songsterr…</p>` : "";
+  if (!k.risultati.length) return `<p class="cerca-stato">Nessun pezzo trovato su Songsterr.</p>`;
+  const daLink = k.risultati.some(r => r.daLink);
+  return k.risultati.map((r, i) => {
+    const dove = dovePezzo(r);
+    const fine = dove === "studio" ? `<span class="ris-agg fatto" title="Già fra i tuoi">${IC("check")}</span>`
+      : dove ? `<span class="ris-tag">${dove === "proposta" ? "tra le proposte" : "in scaletta"}</span>`
+        : `<span class="ris-agg">${IC("piu")}</span>`;
+    return `<button type="button" class="ris" data-action="studio-aggiungi" data-i="${i}"${dove ? " disabled" : ""}>
+        <span class="t"><b>${r.daLink ? "Tab da questo link" : esc(r.titolo)}</b><span>${r.daLink ? esc(r.url.replace(/^https:\/\/(www\.)?/, "")) : esc(r.artista)}</span></span>${fine}
+      </button>`;
+  }).join("") + (daLink ? "" : `<p class="cerca-fonte">Risultati da Songsterr</p>`);
+}
+function aggiornaRisultati() {
+  const box = document.getElementById("cerca-ris");
+  if (box) box.innerHTML = cercaRisultati();
+}
+let cercaTimer = null, cercaN = 0;
+function programmaRicerca(q, subito = false) {
+  clearTimeout(cercaTimer);
+  cercaTimer = setTimeout(() => cercaPezzi(q), subito ? 0 : 450);
+}
+async function cercaPezzi(testo) {
+  const k = state.cerca;
+  if (!k) return;
+  const q = String(testo || "").replace(/\s+/g, " ").trim();
+  if (q === k.q && k.stato !== "errore" && k.risultati) return;
+  k.q = q;
+  const n = ++cercaN;
+  // un link incollato: un solo risultato, si aggiunge così com'è (titolo e artista li mette la funzione)
+  const link = normalizzaSongsterr(q);
+  if (TAB_PAGINA_RE.test(link)) {
+    k.stato = ""; k.risultati = [{ songId: idSongsterr(link), titolo: "", artista: "", url: link, daLink: true }];
+    aggiornaRisultati(); return;
+  }
+  if (q.length < 2) { k.stato = ""; k.risultati = null; aggiornaRisultati(); return; }
+  k.stato = "cerco"; aggiornaRisultati();
+  try {
+    const j = await chiamaTabFn("cerca", { q });
+    if (n !== cercaN || state.cerca !== k) return;
+    k.risultati = Array.isArray(j.risultati) ? j.risultati : []; k.stato = "";
+  } catch (e) {
+    if (n !== cercaN || state.cerca !== k) return;
+    k.stato = "errore"; k.errore = e.message || String(e);
+  }
+  aggiornaRisultati();
+}
+async function aggiungiStudio(i) {
+  const r = state.cerca && state.cerca.risultati && state.cerca.risultati[Number(i)];
+  if (!r || dovePezzo(r)) return;
+  if (!state.userId) { toast("Scegli prima il tuo nome."); return; }
+  const ref = doc(collection(db, "studio"));
+  // la riga compare subito con «Scarico la tab…»; la funzione legge il documento, quindi prima si scrive
+  state.tabInCorso.add(ref.id);
+  const ok = await scrivi(setDoc(ref, {
+    titolo: r.titolo || "", artista: r.artista || "", songId: r.songId || null, songsterrUrl: r.url,
+    membroId: state.userId, membro: state.user, creato: serverTimestamp()
+  }).then(() => true));
+  state.tabInCorso.delete(ref.id);
+  aggiornaRisultati();
+  if (ok) preparaTab(ref.id, "studio"); else render();
+}
+async function togliStudio(id) {
+  const s = state.studio.find(x => x.id === id);
+  if (!s || !confirm(`Togliere «${s.titolo || "questo pezzo"}» da Da cantare?`)) return;
+  const ok = await scrivi(deleteDoc(doc(db, "studio", id)).then(() => true));
+  // il file della tab lo toglie la funzione (non serve aspettarla)
+  if (ok) chiamaTabFn("togli", { canzoneId: id, raccolta: "studio" }).catch(e => console.warn("[studio] file non tolto", e));
 }
 
 // ---------- azioni ----------
@@ -2935,7 +3120,8 @@ const SCRITTURE = new Set([
   "addtask-open", "parte-picker", "parte-altro", "parte-add", "parte-del", "pick", "check", "parte",
   "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "del-commento",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
-  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara"
+  "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara",
+  "studio-modifica", "studio-togli", "studio-aggiungi", "cerca-apri"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
@@ -3349,6 +3535,17 @@ async function act(btn) {
       render(); break;
     case "tab-prepara":
       preparaTab(id); break;
+    case "studio-modifica":
+      state.studioModifica = !state.studioModifica;
+      render(); break;
+    case "studio-togli":
+      togliStudio(id); break;
+    case "cerca-apri":
+      apriCerca(); break;
+    case "cerca-chiudi":
+      chiudiCerca(); break;
+    case "studio-aggiungi":
+      aggiungiStudio(btn.dataset.i); break;
     case "apri-spartito":
       apriSpartito(id, btn.dataset.modo); break;
     case "link-cancel":
@@ -3444,6 +3641,9 @@ mainEl.addEventListener("keydown", e => {
   const el = e.target;
   if (el.matches?.('[role="button"][data-action]')) { e.preventDefault(); act(el); }
 });
+mainEl.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.keep === "cerca-q") programmaRicerca(e.target.value);
+});
 mainEl.addEventListener("change", e => {
   if (e.target.dataset.change === "dir-ingresso") { diretta.cambiaIngresso(e.target.value); return; }
   if (e.target.dataset.row != null) {
@@ -3483,6 +3683,7 @@ mainEl.addEventListener("submit", async e => {
   if (state.fan && !["bacheca", "bacheca-commento", "add-song", "reg-commento"].includes(kind)) return;
 
   if (kind === "reg-commento") { await inviaCommentoReg(form); return; }
+  if (kind === "cerca") { programmaRicerca(form.q.value, true); form.q.blur(); return; }
 
   if (kind === "bacheca" || kind === "bacheca-commento") {
     const campo = form.testo;
