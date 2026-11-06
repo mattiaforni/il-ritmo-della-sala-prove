@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "52",
+      "data": "2026-11-06",
+      "titolo": "Pagina del pezzo: solo icone",
+      "punti": [
+        "Con la tab la riga sotto il titolo ha solo icone: Spotify, la chiave per lo Spartito, il microfono per Canta e la lente per cambiare la tablatura.",
+        "Senza tab resta «+ Aggiungi la tablatura»."
+      ]
+    },
+    {
       "versione": "51",
       "data": "2026-11-06",
       "titolo": "La tablatura dei pezzi con la ricerca, o caricata da te",
