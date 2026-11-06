@@ -253,7 +253,8 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="campo"><label>Qualità della base<small id="st-suoni-msg">Migliori: 14 MB scaricati una volta</small></label><div class="seg" id="st-suoni"><button data-v="base">Base</button><button data-v="migliori" class="on">Migliori</button><button data-v="file">File tuo</button></div></div>
     <div class="campo hidden" id="st-sf-riga"><label>File dei suoni<small id="st-sf-nome">Un file .sf2 o .sf3 (es. GeneralUser GS)</small></label><button class="ico" style="position:relative"><svg class="i"><use href="#i-file"/></svg><input type="file" id="st-sf" accept=".sf2,.sf3"></button></div>
     <div class="fascia">Microfono</div>
-    <div class="campo"><label>Ritardo del microfono<small>Se il tracciato della voce arriva sempre in ritardo, aumenta</small></label><input type="range" id="st-lat" min="0" max="300" step="10" value="120"><div class="val" id="st-lat-v" style="min-width:70px">120 ms</div></div>
+    <div class="campo"><label>Ritardo del microfono<small>Automatico: si regola da solo mentre canti, guardando quando attacchi le note. Spostandolo resta fisso.</small></label><div class="seg" id="st-latauto"><button data-v="1" class="on">Automatico</button><button data-v="0">Fisso</button></div></div>
+    <div class="campo"><label>&nbsp;</label><input type="range" id="st-lat" min="0" max="600" step="10" value="120"><div class="val" id="st-lat-v" style="min-width:70px">120 ms</div></div>
     <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
     <div class="fascia">Testo</div>
     <p class="nota" id="st-testo-nota" style="margin:8px 0"></p>
@@ -382,11 +383,11 @@ const TPQ = 960; // tick per quarto in alphaTab
 // ------------------------------------------------------------ stato
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
-  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', origine: 'spartito', tracciaSp: 0, tracciaCanto: 0, cantaDaSpartito: false, parti: [], parteOra: -1,
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, latAuto: true, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', origine: 'spartito', tracciaSp: 0, tracciaCanto: 0, cantaDaSpartito: false, parti: [], parteOra: -1,
   esec: null, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
-const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, latAuto: state.latAuto, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
 
 // ------------------------------------------------------------ archivio (IndexedDB)
 const db = {
@@ -744,7 +745,7 @@ function aggiornaSetup() {
   const gs = $('#st-guida-strum'); if (!gs.options.length) for (const [v, n] of GUIDA_STRUM) { const o = document.createElement('option'); o.value = v; o.textContent = n; gs.appendChild(o); }
   gs.value = state.guidaStrum;
   $('#st-sf-riga').classList.toggle('hidden', state.suoni !== 'file');
-  for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
+  for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol], ['#st-latauto', state.latAuto ? 1 : 0]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
   for (const b of document.querySelectorAll('#st-suoni button')) b.classList.toggle('on', b.dataset.v === state.suoni);
 }
 
@@ -816,6 +817,8 @@ async function avviaEsecuzione() {
   if (!m.note.length) { toast('La traccia scelta non ha note da cantare'); return; }
   salvaPref();
   if (!(await apriMic())) return;
+  // ritardo automatico: si parte almeno da quello che il telefono dichiara per l'uscita (cuffie Bluetooth: molto)
+  if (state.latAuto && mic.ctx && mic.ctx.outputLatency > 0.06) state.lat = Math.max(state.lat, Math.min(600, Math.round((80 + mic.ctx.outputLatency * 1000) / 5) * 5));
   creaApi();
   mostra('esec');
   $('#es-titolo').textContent = state.brano.titolo;
@@ -826,7 +829,7 @@ async function avviaEsecuzione() {
     tickPerMs: m.tempo * TPQ / 60000, tempoCorr: null,
     pxPerTick: pxPerSec / 1000 / (m.tempo * TPQ / 60000),
     traccia: [], // [tick, midi da disegnare, ora, volume 0–1] degli ultimi secondi; null = interruzione
-    voce: nuovaVoce(), palla: { y: null, alfa: 0, tick: 0, ora: 0 },
+    voce: nuovaVoce(), palla: { y: null, alfa: 0, tick: 0, ora: 0 }, allinea: [],
     ultimoFrame: 0, raf: 0,
     minMidi: m.minMidi - 3, maxMidi: m.maxMidi + 3,
     righe: [], versi: [], riga: -1, tempi: null, tempiCambiati: false,
@@ -891,12 +894,13 @@ function loop() {
     const tick = tickOra() - state.lat * (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
     // punteggio: la misura com'è, con la soglia piena (come prima della v50)
     if (hz > 0 && chi > 0.85 && rms >= 0.008 && x.suona) valuta(tick, midiDi(hz), ora);
-    // disegno: la voce filtrata; la linea si allunga solo mentre il rullo scorre
+    // disegno: la voce filtrata (punti di 3 fotogrammi fa, al loro tempo); la linea si allunga solo mentre il rullo scorre
     const r = passoVoce(x, hz, chi, rms, tick, ora);
     const scorre = x.suona && !(x.contoFine && ora < x.contoFine);
     if (r && scorre) {
       if (r !== 'segue' && x.traccia.length && x.traccia[x.traccia.length - 1]) x.traccia.push(null);
-      if (r !== 'fine') x.traccia.push([tick, x.voce.disp, ora, x.voce.vol]);
+      if (r !== 'fine') x.traccia.push([x.voce.tick, x.voce.disp, ora, x.voce.vol]);
+      if (r === 'nuovo') imparaRitardo(x, x.voce.tick);
     }
     const nn = x.voce.seg && x.voce.v != null ? nomeNota(x.voce.v) : '—';
     if ($('#es-nota').textContent !== nn) $('#es-nota').textContent = nn;
@@ -910,17 +914,19 @@ function loop() {
   disegna(t); disegnaMappa(t);
   if (ora - x.ultimoFrame > 80) { x.ultimoFrame = ora; disegnaTesto(t); }
 }
-// ---- voce da disegnare (v50). La misura del microfono oscilla da un fotogramma all'altro, ogni tanto
-// sbaglia d'ottava e con le cuffie perde dei pezzi: per il disegno (non per il punteggio) si filtra.
-// - soglia doppia: per iniziare un tratto serve una voce chiara (chiarezza 0,85, volume 0,008), per
-//   continuarlo basta meno (0,6 e 0,006); buchi fino a 100 ms uniti, se la voce è rimasta lì (entro
-//   un tono e mezzo), altrimenti tratto nuovo
-// - errori d'ottava di un fotogramma riportati vicino al valore seguito; mediana su 5 misure
-// - filtro "One Euro" (Casiez 2012): liscia quando la nota è ferma, segue subito quando la voce si muove
-// - ottava: quella della nota attesa più vicina, decisa una volta e cambiata solo se la differenza dura
-//   300 ms (prima, fuori dalle note la linea tornava nell'ottava vera e precipitava a fine nota)
-// - volume rispetto al picco della frase (0–1): lo spessore della linea, che si assottiglia quando la voce si spegne
-function nuovaVoce() { return { seg: false, conta: 0, buco: 0, buf: [], v: null, dv: 0, k: null, kc: null, kDa: 0, picco: -60, ultima: 0, disp: null, vol: 0, tick: 0 }; }
+// ---- voce da disegnare (v53). Nella v50 i filtri (mediana su 5 e filtro One Euro, che guardano solo indietro,
+// e una soglia più bassa per continuare) spostavano la linea di circa 50 ms e trasformavano gli errori in curve.
+// Provato sul canto vero (registrazioni vocadito, confronto con pYIN): la misura com'è aveva 17 ms di ritardo
+// e pochissimi punti sbagliati, la v50 67 ms e un punto su sei a più di un semitono.
+// Ora i filtri sono centrati: ogni punto si decide guardando anche i 3 fotogrammi dopo e va al suo tempo giusto
+// (la punta della linea arriva qualche centesimo di secondo dopo, la posizione resta quella vera):
+// - soglia piena (chiarezza 0,85, volume 0,008); un fotogramma meno chiaro (0,75) vale solo se sta a meno
+//   di un semitono da un vicino buono
+// - mediana su 3 (toglie punti isolati e picchi di un fotogramma, riempie un buco di uno), poi media 1-2-1
+// - buchi fino a 5 fotogrammi uniti se la voce resta entro un semitono; altrimenti tratto nuovo
+// - ottava decisa all'inizio di ogni tratto dalla nota attesa più vicina, tenuta per tutto il tratto
+// - volume rispetto al picco della frase (0–1): lo spessore della linea
+function nuovaVoce() { return { R: [], seg: false, buco: 99, k: 0, v: null, disp: null, tick: 0, picco: -60, vol: 0, oraPrec: 0, ultimaOra: -1e9, pausa: 0 }; }
 function notaVicina(m, tick) {
   const note = m.note; if (!note.length) return null;
   let lo = 0, hi = note.length - 1;
@@ -929,37 +935,65 @@ function notaVicina(m, tick) {
   if (tick >= n.tick) return n;
   return p && tick - (p.tick + p.dur) < n.tick - tick ? p : n;
 }
-// restituisce 'nuovo' (inizia un tratto), 'segue', 'fine' (tratto chiuso) o null (niente da aggiungere)
+function med3(a, b, c) {
+  const v = [a, b, c].filter(q => q != null); if (v.length < 2) return null;
+  v.sort((p, q) => p - q);
+  if (v.length === 3) return v[1];
+  return Math.abs(v[0] - v[1]) <= 1 ? (b != null ? b : (v[0] + v[1]) / 2) : null;
+}
+// una misura nuova; restituisce cosa succede al punto di 3 fotogrammi fa: 'nuovo' (inizia un tratto),
+// 'segue', 'fine' (tratto chiuso) o null; il punto è in x.voce (tick, disp, vol)
 function passoVoce(x, hz, chi, rms, tick, ora) {
-  const s = x.voce; const dt = Math.min(100, Math.max(4, s.ultima ? ora - s.ultima : 16)); s.ultima = ora;
-  const md0 = hz > 0 ? midiDi(hz) : null;
-  const forte = md0 != null && chi > 0.85 && rms >= 0.008, debole = md0 != null && chi > 0.6 && rms >= 0.006;
-  if (!(s.seg ? debole : forte)) {
-    s.conta = 0;
-    if (s.seg && (s.buco += dt) > 100) { s.seg = false; s.buf = []; s.v = null; return 'fine'; }
-    return null;
+  const s = x.voce, R = s.R;
+  const md = hz > 0 ? midiDi(hz) : null;
+  R.push({ tick, md, ora, rms, forte: md != null && chi > 0.85 && rms >= 0.008, debole: md != null && chi > 0.75 && rms >= 0.006 });
+  if (R.length > 8) R.shift();
+  const n = R.length - 1;
+  if (n >= 1) {   // buono? (fotogramma n-1: guarda anche quello dopo)
+    const f = R[n - 1], vic = [R[n - 2], R[n]].filter(Boolean);
+    f.g = f.forte ? f.md : f.debole && vic.some(q => q.forte && Math.abs(q.md - f.md) < 1) ? f.md : null;
   }
-  let md = md0, nuovo = false;
-  if (s.v != null) { const o = Math.round((md - s.v) / 12); if (o && Math.abs(md - 12 * o - s.v) < 1.2) md -= 12 * o; }
-  if (s.seg && s.buco > 0 && s.v != null && Math.abs(md - s.v) > 1.5) { s.buf = []; s.v = null; nuovo = true; }
-  s.buf.push(md); if (s.buf.length > 5) s.buf.shift();
-  if (!s.seg) { if (++s.conta < 2) return null; s.seg = true; s.v = null; nuovo = true; }
-  s.buco = 0;
-  const med = [...s.buf].sort((a, b) => a - b)[s.buf.length >> 1];
-  const alfa = (fc) => 1 / (1 + 1000 / (2 * Math.PI * fc * dt));
-  if (s.v == null) { s.v = med; s.dv = 0; }
-  else { s.dv += alfa(2) * ((med - s.v) * 1000 / dt - s.dv); s.v += alfa(4 + 0.35 * Math.abs(s.dv)) * (med - s.v); }
-  const n = notaVicina(x.m, tick);
-  if (n) {
-    const k = Math.round((n.midi - s.v) / 12);
-    if (s.k == null) s.k = k;
-    else if (k !== s.k) { if (s.kc !== k) { s.kc = k; s.kDa = ora; } else if (ora - s.kDa > 300) { s.k = k; s.kc = null; } }
-    else s.kc = null;
+  if (n >= 3) R[n - 2].m = med3(R[n - 3].g, R[n - 2].g, R[n - 1].g);
+  if (n < 4) return null;
+  const f = R[n - 3];
+  let v = f.m;
+  if (v != null) { let sum = 2 * v, w = 2; for (const q of [R[n - 4].m, R[n - 2].m]) if (q != null && Math.abs(q - v) < 1) { sum += q; w++; } v = sum / w; }
+  const dt = s.oraPrec ? Math.min(100, f.ora - s.oraPrec) : 16; s.oraPrec = f.ora;
+  if (v == null) { s.buco++; if (s.seg && s.buco > 5) { s.seg = false; return 'fine'; } return null; }
+  const db = 20 * Math.log10(Math.max(f.rms, 1e-5));
+  let r = 'segue';
+  if (!s.seg || (s.buco > 0 && Math.abs(v - s.v) > 1)) {
+    const nt = notaVicina(x.m, f.tick);
+    s.k = nt ? Math.round((nt.midi - v) / 12) : 0;
+    s.pausa = f.ora - s.ultimaOra;
+    s.seg = true; s.picco = db; r = 'nuovo';
   }
-  const db = 20 * Math.log10(Math.max(rms, 1e-5)); s.picco = Math.max(db, s.picco - 0.005 * dt);
+  s.buco = 0; s.v = v; s.tick = f.tick; s.ultimaOra = f.ora;
+  s.picco = Math.max(db, s.picco - 0.005 * dt);
   s.vol = Math.max(0.18, Math.min(1, (db - (s.picco - 22)) / 12));
-  s.disp = s.v + 12 * (s.k || 0); s.tick = tick;
-  return nuovo ? 'nuovo' : 'segue';
+  s.disp = v + 12 * s.k;
+  return r;
+}
+// ritardo automatico (v53): ogni attacco (dopo almeno 60 ms senza voce: una pausa o una consonante) si confronta
+// con l'inizio della nota più vicina che ha la stessa altezza (ottava a parte: le riprese a metà nota, per esempio
+// dopo un buco del microfono, non contano); ogni 5 attacchi il ritardo si sposta del 60% della differenza mediana. Così si
+// compensano cuffie Bluetooth, microfono e telefono senza regolare niente (si può fissare nelle impostazioni).
+function imparaRitardo(x, tick) {
+  if (!state.latAuto || x.voce.pausa < 60) return;
+  const k = (x.tempoCorr || x.tickPerMs) * (state.tempo / 100);
+  let best = null;
+  for (const n of x.m.note) {
+    const d = (tick - n.tick) / k; if (d < -250) break;
+    if (d <= 400 && Math.abs(scarto(x.voce.v, n.midi)) <= 150 && (best == null || Math.abs(d) < Math.abs(best))) best = d;
+  }
+  if (best == null) return;
+  x.allinea.push(best);
+  if (x.allinea.length < 5) return;
+  const med = [...x.allinea].sort((p, q) => p - q)[x.allinea.length >> 1];
+  x.allinea = [];
+  if (Math.abs(med) < 20) return;
+  state.lat = Math.round(Math.max(40, Math.min(600, state.lat + med * 0.6)) / 5) * 5;
+  salvaPref();
 }
 const NOMI = ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
 function nomeNota(md) { const r = Math.round(md); return NOMI[(r % 12 + 12) % 12] + (Math.floor(r / 12) - 1); }
@@ -1027,7 +1061,7 @@ function disegna(t) {
   const dtf = pl.ora ? Math.min(100, ora - pl.ora) : 16; pl.ora = ora;
   if (s.seg && s.disp != null) {
     const yb = toY(s.disp);
-    pl.y = pl.y == null || pl.alfa === 0 ? yb : pl.y + (yb - pl.y) * (1 - Math.exp(-dtf / 25));
+    pl.y = pl.y == null || pl.alfa === 0 ? yb : pl.y + (yb - pl.y) * (1 - Math.exp(-dtf / 10));
     pl.tick = s.tick; pl.alfa = 1;
   } else if (pl.alfa > 0) pl.alfa = Math.max(0, pl.alfa - dtf / 260);
   if (pl.y != null && pl.alfa > 0 && pl.y > -10 && pl.y < H + 10) {
@@ -1248,7 +1282,8 @@ $('#st-sf').addEventListener('change', async (e) => { const f = e.target.files[0
 let testoT = 0;
 $('#st-testo').addEventListener('input', (e) => { const b = state.brano; if (!b) return; const v = e.target.value; clearTimeout(testoT); testoT = setTimeout(() => { if (righeDi(v).join('\n') !== righeDi(b.testo).join('\n')) b.tempiTesto = null; b.testo = v; db.metti(b).catch(() => {}); aggiornaSetup(); }, 400); });
 $('#st-guida-strum').addEventListener('change', (e) => { state.guidaStrum = +e.target.value; salvaPref(); });
-$('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
+$('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; state.latAuto = false; $('#st-lat-v').textContent = state.lat + ' ms'; aggiornaSetup(); });
+$('#st-latauto').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.latAuto = b.dataset.v === '1'; aggiornaSetup(); salvaPref(); });
 // ---- foglio delle tracce dello Spartito: scelta della parte da leggere e volume nella base ----
 const ICONA_VOL = { n: '#i-vol-n', p: '#i-vol-p', m: '#i-muto' }, TITOLO_VOL = { n: 'Volume normale', p: 'Più forte', m: 'Muta' };
 function apriTracce() {
