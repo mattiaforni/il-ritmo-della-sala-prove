@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "47";
+const APP_VERSION = "48";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1489,10 +1489,15 @@ function tabBlock(c) {
     const tracce = Array.isArray(t.tracce) ? t.tracce : [];
     const voce = tracce.find(x => x.voce);
     const info = `${tracce.length} ${tracce.length === 1 ? "traccia" : "tracce"}${voce ? ` · voce${voce.testo ? " con testo" : ""}` : " · senza traccia voce"}`;
+    // tab fatta da un link diverso da quello che la canzone ha adesso (le tab precedenti alla v48 non lo sanno)
+    const vecchia = !!(t.url && c.songsterrUrl && normalizzaSongsterr(t.url) !== normalizzaSongsterr(c.songsterrUrl));
+    const aggiorna = state.fan ? "" : vecchia
+      ? `<button class="btn quiet mini tab-vecchia" data-action="tab-prepara" data-id="${c.id}" title="Scarica la tab dal link nuovo">Link cambiato · Aggiorna</button>`
+      : `<button class="btn quiet mini" data-action="tab-prepara" data-id="${c.id}" title="Scarica di nuovo la tab da Songsterr">Aggiorna</button>`;
     return `<div class="pg-tab">
       <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito">${IC("nota")}Spartito</button>
       <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="canta">${IC("mic")}Canta</button>
-      <small>${esc(info)}</small>${state.fan ? "" : `<button class="btn quiet mini" data-action="tab-prepara" data-id="${c.id}" title="Scarica di nuovo la tab da Songsterr">Aggiorna</button>`}
+      <small>${esc(info)}</small>${aggiorna}
     </div>`;
   }
   if (state.fan || !c.songsterrUrl) return "";
@@ -3671,6 +3676,8 @@ mainEl.addEventListener("submit", async e => {
     // un pezzo nostro non si cerca mai (e un link trovato per sbaglio si toglie)
     const ricerca = !nostro && (cerca || (testoCambiato && c.spotifyAuto !== false) || !c.spotifyUrl || isNostro(c));
     const upd = { titolo, artista, nostro, songsterrUrl: nostro ? "" : ss ? normalizzaSongsterr(ss) : "" };
+    // link Songsterr nuovo: la tab di Spartito e Canta si rifà da sola dopo il salvataggio
+    const nuovaTab = !!upd.songsterrUrl && upd.songsterrUrl !== normalizzaSongsterr(c.songsterrUrl || "");
     if (ricerca) { upd.spotifyUrl = ""; upd.spotifyAuto = null; }
     if (nostro) { upd.spotifyUrl = ""; upd.spotifyAuto = false; }
     form.songsterr.value = "";
@@ -3678,7 +3685,8 @@ mainEl.addEventListener("submit", async e => {
     const ok = await scrivi(updateDoc(doc(db, "canzoni", song), upd).then(() => true));
     render();
     if (!ok) return;
-    if (!ricerca) { toast("Salvato."); playlistDaAggiornare(); return; }
+    if (nuovaTab) preparaTab(song);
+    if (!ricerca) { if (!nuovaTab) toast("Salvato."); playlistDaAggiornare(); return; }
     if (playlistInfo()?.scaletta) {
       // con Spotify collegato la ricerca la fa la funzione delle playlist: subito, per dire com'è andata
       toast(`Salvato. Cerco "${titolo}" su Spotify…`);

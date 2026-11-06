@@ -2,6 +2,17 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "48",
+      "data": "2026-11-06",
+      "titolo": "Spartito e Canta più semplici",
+      "punti": [
+        "Spartito e Canta hanno ciascuno la sua traccia: nello Spartito scegli la parte che leggi (il nome in alto, con la freccia), in Canta cosa canti («Canti: Voce»). Chiudendo torni sempre dove eri entrato.",
+        "Nello Spartito, in basso, le parti del brano come rettangolini da toccare e due icone per tablatura e pentagramma; il tempo si cambia toccando «100%».",
+        "Nel foglio delle tracce un tasto per traccia cambia il volume nella base: normale, più forte, muta.",
+        "Passando da un pezzo all'altro lo Spartito non resta più sulle tracce del pezzo prima; se cambi il link Songsterr con «Modifica» la tab si rifà da sola (e una tab rimasta al link vecchio lo segnala)."
+      ]
+    },
+    {
       "versione": "47",
       "data": "2026-11-06",
       "titolo": "Spartito sopra l'app, passaggi più puliti",
