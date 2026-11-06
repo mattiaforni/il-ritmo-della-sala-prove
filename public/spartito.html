@@ -147,9 +147,32 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .sel-traccia .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sel-traccia .s { font-size: 13px; color: var(--inchiostro-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sel-traccia .i { color: var(--inchiostro-3); flex: none; }
-.topbar .sel-traccia { padding: 2px 0 0; }
-.topbar .sel-traccia .t { font-weight: 400; font-size: 14px; color: var(--inchiostro-2); }
+.topbar .sel-traccia { width: auto; max-width: 100%; padding: 3px 0 0; gap: 4px; cursor: pointer; }
+.topbar .sel-traccia .txt { flex: 0 1 auto; }
+.topbar .sel-traccia .t { font-weight: 500; font-size: 15px; color: var(--accento); }
+.topbar .sel-traccia .i { color: var(--accento); width: 18px; height: 18px; }
 .topbar .sel-traccia .s { display: none; }
+/* parti del brano: barra a rettangolini sopra i comandi */
+.sp-parti { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 0; background: var(--carta); border-top: 1px solid var(--linea); }
+.sp-parti b { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accento); min-height: 1.3em; }
+.sp-parti .bar { display: flex; gap: 2px; height: 18px; }
+.sp-parti .bar i { display: block; height: 100%; background: var(--linea); cursor: pointer; }
+.sp-parti .bar i.fatto { background: var(--accento-tinta); }
+.sp-parti .bar i.on { background: var(--accento); }
+.sp-parti:not(.hidden) + .sp-barra { border-top: 0; }
+.vista-ic { width: 44px; height: 44px; border: 1px solid var(--linea-forte); border-radius: var(--r); display: grid; place-items: center; color: var(--inchiostro-3); flex: none; }
+.vista-ic.on { background: var(--accento-tinta); border-color: var(--accento); color: var(--accento); }
+.vista-ic[disabled] { opacity: .35; cursor: default; }
+.vista-ic .i { width: 24px; height: 24px; }
+.tempo-btn { height: 44px; padding: 0 10px; border: 1px solid var(--linea-forte); border-radius: var(--r); font: 400 20px/1 var(--display); color: var(--inchiostro); margin-left: 6px; flex: none; }
+.tempo-pop { position: absolute; z-index: 20; display: flex; align-items: center; gap: 4px; background: var(--foglio); border: 1px solid var(--linea-forte); border-radius: var(--r); padding: 6px; box-shadow: 0 10px 28px -14px rgba(35,27,21,.45); }
+.tempo-pop button { width: 42px; height: 42px; border: 1px solid var(--linea-forte); border-radius: var(--r); display: grid; place-items: center; color: var(--inchiostro-2); }
+.tempo-pop .v { min-width: 60px; text-align: center; font: 400 22px/1 var(--display); }
+.riga-tr .vol { width: 40px; height: 40px; border: 1px solid var(--linea-forte); border-radius: var(--r); display: grid; place-items: center; color: var(--inchiostro-2); flex: none; }
+.riga-tr .vol .i { width: 20px; height: 20px; }
+.riga-tr .vol.m { background: var(--rosso-tinta); border-color: var(--rosso); color: var(--rosso); }
+.riga-tr .vol.p { background: var(--accento-tinta); border-color: var(--accento); color: var(--accento); }
+.sez-t { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-2); margin: 14px 0 0; }
 .foglio-lista { background: var(--foglio); border-radius: var(--r-g) var(--r-g) 0 0; width: 100%; max-height: 80vh; display: flex; flex-direction: column; align-self: end; }
 .velo.basso { align-items: end; padding: 0; grid-template-columns: minmax(0, 1fr); }
 .foglio-lista { min-width: 0; max-width: 100%; }
@@ -190,6 +213,10 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-suono" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
   <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M10.3 3h3.4l.5 2.3 1.9.8 2-1.3 2.4 2.4-1.3 2 .8 1.9 2.3.5v3.4l-2.3.5-.8 1.9 1.3 2-2.4 2.4-2-1.3-1.9.8-.5 2.3h-3.4l-.5-2.3-1.9-.8-2 1.3-2.4-2.4 1.3-2-.8-1.9L3 13.7v-3.4l2.3-.5.8-1.9-1.3-2 2.4-2.4 2 1.3 1.9-.8z"/></symbol>
   <symbol id="i-giu-piccolo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-tab" viewBox="0 0 24 24"><g fill="currentColor" stroke="none" font-family="Instrument Sans, sans-serif" font-weight="600" font-size="9" text-anchor="middle"><text x="12" y="8.6">T</text><text x="12" y="15.9">A</text><text x="12" y="23.2">B</text></g></symbol>
+  <symbol id="i-penta" viewBox="0 0 24 24"><path d="M3 6h18M3 9.5h18M3 13h18M3 16.5h18M3 20h18" stroke-width="1"/><ellipse cx="11" cy="16.6" rx="2.9" ry="2.1" transform="rotate(-20 11 16.6)" fill="currentColor" stroke="none"/><path d="M13.6 15.9V3.2" stroke-width="1.5"/></symbol>
+  <symbol id="i-vol-n" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 9.5a3.5 3.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-vol-p" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
   <symbol id="i-parti" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12"/><rect x="9.5" y="6" width="5" height="12"/><rect x="16" y="6" width="5" height="12"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
@@ -216,8 +243,6 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="tit"><h1>Impostazioni</h1><div class="sub" id="st-sub"></div></div>
   </div>
   <div class="corpo">
-    <div class="fascia">Traccia della voce</div>
-    <button class="sel-traccia" data-az="tracce"><div class="txt"><div class="t" id="st-tr-nome">—</div><div class="s" id="st-info"></div></div><svg class="i"><use href="#i-giu-piccolo"/></svg></button>
     <div class="fascia">Esecuzione</div>
     <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
@@ -248,39 +273,40 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <button class="ico piccolo" data-az="sp-impostazioni" title="Impostazioni"><svg class="i"><use href="#i-ingranaggio"/></svg></button>
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div><div class="sp-stato hidden" id="sp-stato"><div><div class="big" id="sps-titolo"></div><div id="sps-testo"></div><div id="sps-azioni" style="margin-top:12px"></div></div></div></div>
+  <div class="sp-parti hidden" id="sp-parti"><b id="sp-parte"></b><div class="bar" id="sp-parti-bar"></div></div>
   <div class="sp-barra">
-    <button class="tog" data-az="parti" id="sp-parti" title="Parti del brano"><svg class="i" style="width:18px;height:18px"><use href="#i-parti"/></svg><span>Parti</span></button>
-    <button class="tog icona" data-az="sp-metro" id="sp-metro" title="Metronomo"><svg class="i"><use href="#i-metro"/></svg></button>
-    <div class="tempo"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div>
+    <button class="vista-ic" data-az="vista" data-v="tab" id="vis-tab" title="Tablatura"><svg class="i"><use href="#i-tab"/></svg></button>
+    <button class="vista-ic" data-az="vista" data-v="score" id="vis-score" title="Pentagramma"><svg class="i"><use href="#i-penta"/></svg></button>
+    <button class="tempo-btn" data-az="tempo-pop" id="sp-tempo" title="Tempo">100%</button>
     <div class="sp"></div>
     <button class="btn" data-az="sp-ricomincia" title="Ricomincia da capo"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="sp-play" title="Play / pausa"><svg class="i"><use id="sp-play-ico" href="#i-play"/></svg></button>
   </div>
+  <div class="tempo-pop hidden" id="tempo-pop"><button data-az="tempo" data-d="-5" title="Più lento"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo-v">100%</div><button data-az="tempo" data-d="5" title="Più veloce"><svg class="i"><use href="#i-piu"/></svg></button></div>
 </section>
 
 <!-- Tracce: scelta, silenzio, vista -->
 <div class="velo basso hidden" id="velo-tracce"><div class="foglio-lista">
   <div class="testa"><h2>Tracce</h2><button class="ico" data-az="tracce-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
   <div class="corpo-l">
-    <div class="campo" id="riga-vista"><label>Vista<small>Vale per tutti i brani; la voce è sempre in pentagramma</small></label><div class="seg" id="st-vista"><button data-v="tab" class="on">Tab</button><button data-v="score" class="on">Pentagramma</button></div></div>
-    <p class="nota" style="margin:10px 0 4px">Tocca una traccia per vederla (e cantarla); l'altoparlante la silenzia nella base.</p>
+    <p class="nota" style="margin:2px 0 4px">Tocca il nome per leggere quella parte. Il tasto a destra cambia il volume nella base: normale, più forte, muta.</p>
     <div id="lista-tracce"></div>
   </div>
 </div></div>
 
-<!-- Parti del brano (Intro, Verse, Chorus…) -->
-<div class="velo basso hidden" id="velo-parti"><div class="foglio-lista">
-  <div class="testa"><h2>Parti</h2><button class="ico" data-az="parti-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
-  <div class="corpo-l"><div id="lista-parti"></div></div>
+<!-- Cosa canti (solo Canta) -->
+<div class="velo basso hidden" id="velo-canto"><div class="foglio-lista">
+  <div class="testa"><h2>Cosa canti</h2><button class="ico" data-az="canto-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l"><div id="lista-canto"></div></div>
+</div></div>
 </div></div>
 
 
 <!-- Esecuzione -->
 <section class="schermo hidden" id="esec">
   <div class="topbar">
-    <button class="ico" data-az="chiudi-esec" title="Torna allo spartito"><svg class="i"><use href="#i-x"/></svg></button>
-    <div class="tit"><h1 id="es-titolo">—</h1><div class="sub" id="es-sub"></div></div>
-    <div class="tempo" id="es-tempo">100%</div>
+    <button class="ico" data-az="chiudi-esec" title="Chiudi"><svg class="i"><use href="#i-x"/></svg></button>
+    <div class="tit"><h1 id="es-titolo">—</h1><div class="sel-traccia" data-az="tracce-canto"><div class="txt"><div class="t" id="es-tr-nome"></div></div><svg class="i"><use href="#i-giu-piccolo"/></svg></div><div class="sub hidden" id="es-sub"></div></div>
     <button class="ico piccolo" data-az="es-impostazioni" title="Impostazioni"><svg class="i"><use href="#i-ingranaggio"/></svg></button>
   </div>
   <div class="rullo"><canvas id="rullo"></canvas><div class="conto hidden" id="conto"></div></div>
@@ -289,7 +315,6 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <div class="comandi">
     <div class="mic"><svg class="i"><use href="#i-mic"/></svg><div class="liv"><div id="liv"></div></div><span id="es-nota">—</span></div>
     <div class="sp"></div>
-    <button class="btn" data-az="parti" id="es-parti" title="Parti del brano"><svg class="i"><use href="#i-parti"/></svg></button>
     <button class="btn" data-az="ricomincia" title="Ricomincia"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="play" title="Play / pausa"><svg class="i"><use id="play-ico" href="#i-play"/></svg></button>
   </div>
@@ -318,7 +343,6 @@ textarea:focus { outline: none; border-color: var(--accento); }
   document.getElementById('brani').classList.add('hidden');
   document.getElementById(canta ? 'esec' : 'spartito').classList.remove('hidden');
   document.getElementById('sp-titolo').textContent = document.getElementById('es-titolo').textContent = p.get('t') || '';
-  document.getElementById('es-sub').textContent = p.get('a') || '';
   document.getElementById('sp-tr-nome').textContent = '';
   document.getElementById(canta ? 'tx-msg' : 'sp-msg').textContent = 'Carico la tab…';
 })();
@@ -358,7 +382,7 @@ const TPQ = 960; // tick per quarto in alphaTab
 // ------------------------------------------------------------ stato
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
-  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', origine: 'spartito',
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', origine: 'spartito', tracciaSp: 0, tracciaCanto: 0, cantaDaSpartito: false, parti: [], parteOra: -1,
   esec: null, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
@@ -418,10 +442,46 @@ function nomeTraccia(tr, i) {
   if (/^(Дорожка|Track|Traccia|Piste|Spur|Pista)\s*\d*$/i.test(n.trim()) || !n.trim()) n = '';
   return n || `Traccia ${i + 1}`;
 }
-// Songsterr chiama le tracce «Dan Auerbach | Gibson… | Lead Vocals»: come titolo si usa l'ultima parte
-function nomeBreve(tr, i) { const n = nomeTraccia(tr, i); const parti = n.split('|').map(x => x.trim()).filter(Boolean); return parti.length > 1 ? parti[parti.length - 1] : n; }
-function sottotitolo(tr, i) { const n = nomeTraccia(tr, i); const parti = n.split('|').map(x => x.trim()).filter(Boolean); const resto = parti.length > 1 ? parti.slice(0, -1).join(' · ') + ' · ' : ''; const p = profiloTraccia(tr); return `${resto}${strumentoDi(tr)} · ${p.note} note${contaTesto(tr) ? ' · testo' : ''}`; }
-const muti = () => (state.brano && Array.isArray(state.brano.muti)) ? state.brano.muti : [];
+// Songsterr chiama le tracce «Robert Plant | Lead Vocals», «Jimmy Page | Fender XII | 12-String Guitar»:
+// il nome breve è il ruolo in italiano (o lo strumento), il resto va nel sottotitolo; i doppioni prendono un numero
+const RUOLI = [
+  [/backing vocals?|harmony vocals?|background vocals?|choir|\bcori\b/i, 'Cori'],
+  [/vocals?|voice|\bvoce\b|singer/i, 'Voce'],
+  [/acoustic guitar|chitarra acustica|nylon/i, 'Chitarra acustica'],
+  [/lead guitar|solo guitar|chitarra solista/i, 'Chitarra solista'],
+  [/rhythm guitar|chitarra ritmica/i, 'Chitarra ritmica'],
+  [/12[- ]?string/i, 'Chitarra 12 corde'],
+  [/bass|basso/i, 'Basso'],
+  [/percussion|percussioni/i, 'Percussioni'],
+  [/drums?|batteria/i, 'Batteria'],
+  [/guitar|chitarra/i, 'Chitarra'],
+  [/accordion|fisarmonica/i, 'Fisarmonica'], [/violin|fiddle|violino/i, 'Violino'], [/banjo/i, 'Banjo'], [/mandolin/i, 'Mandolino'],
+  [/piano/i, 'Piano'], [/organ|organo/i, 'Organo'], [/synth/i, 'Synth'], [/keys|keyboard|tastier/i, 'Tastiera'], [/sax/i, 'Sax'], [/trumpet|tromba/i, 'Tromba']
+];
+function ruoloDi(testo) { for (const [re, n] of RUOLI) if (re.test(testo)) return n; return null; }
+function nomiTracce() {
+  const sc = state.score; if (!sc) return [];
+  if (sc._nomi) return sc._nomi;
+  const base = sc.tracks.map((t, i) => {
+    const parti = nomeTraccia(t, i).split('|').map(x => x.trim()).filter(Boolean);
+    const ultima = parti[parti.length - 1] || '';
+    let breve = t.playbackInfo.isPercussion ? (/percussion/i.test(ultima) ? 'Percussioni' : 'Batteria') : ruoloDi(ultima.split(' - ')[0]) || ruoloDi(ultima) || null;
+    const restoParti = breve && ruoloDi(ultima) ? parti.slice(0, -1) : parti;
+    if (!breve) breve = strumentoDi(t);
+    const sub = restoParti.map(x => x.split(' - ')[0]).filter(x => x && x !== breve).join(' · ');
+    return { breve, sub };
+  });
+  const conti = {}; for (const x of base) conti[x.breve] = (conti[x.breve] || 0) + 1;
+  const visti = {};
+  for (const x of base) { if (conti[x.breve] > 1) { visti[x.breve] = (visti[x.breve] || 0) + 1; if (visti[x.breve] > 1) x.breve += ' ' + visti[x.breve]; } }
+  return (sc._nomi = base);
+}
+function nomeBreve(tr, i) { return (nomiTracce()[i] || {}).breve || nomeTraccia(tr, i); }
+function sottotitolo(tr, i) { const x = nomiTracce()[i] || {}; return [x.sub, contaTesto(tr) ? 'con il testo' : ''].filter(Boolean).join(' · ') || strumentoDi(tr); }
+// volume di ogni traccia nella base: n normale, p più forte, m muta (prima c'era solo «muti»)
+function volDi(i) { const b = state.brano; if (!b) return 'n'; if (b.volumi) return b.volumi[i] || 'n'; return Array.isArray(b.muti) && b.muti.includes(i) ? 'm' : 'n'; }
+const VOL_PIU = 1.6;
+function eVoce(t) { return /voc|voice|voce|cant|sing|choir|cori/i.test(t.name) || [52, 53, 54, 85].includes(t._prog != null ? t._prog : t.playbackInfo.program); }
 function profiloTraccia(tr) {
   let note = 0, mono = 0, somma = 0;
   for (const b of beatsDi(tr)) { if (b.isRest || !b.notes.length) continue; note++; if (b.notes.length === 1) mono++; somma += b.notes[0].realValue; }
@@ -567,7 +627,7 @@ function creaApi() {
   api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
   api.midiLoaded.on(() => { const f = dopoMidi; dopoMidi = null; if (f) f(); });
   api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; });
-  api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
+  api.playerPositionChanged.on(e => { const x = state.esec; if (!x) { aggiornaParte(e.currentTick); return; } x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
   return api;
 }
 // ---- suoni (soundfont): base = sonivox 1 MB; migliori = FluidR3 GM 14 MB (MIT), scaricato una volta e tenuto sul dispositivo; file = .sf2/.sf3 scelto
@@ -628,8 +688,13 @@ function applicaMix(pos) {
     }
   }
   if (rigenera) rigeneraBase(pos);
-  const m = muti();
-  for (const t of tracce) { api.changeTrackMute([t], m.includes(t.index)); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
+  for (const t of tracce) {
+    // in Canta la traccia cantata segue «Voce guida»; il resto (e tutto nello Spartito) il volume scelto nel foglio Tracce
+    const guida = !!state.esec && t.index === state.traccia;
+    const v = volDi(t.index);
+    api.changeTrackMute([t], !guida && v === 'm');
+    api.changeTrackVolume([t], guida ? state.guida : v === 'p' ? VOL_PIU : 1);
+  }
   api.playbackSpeed = state.tempo / 100;
   api.metronomeVolume = state.metro ? 1 : 0;
   api.countInVolume = 1;
@@ -642,9 +707,12 @@ async function apriBrano(id) {
   $('#st-sub').textContent = b.titolo + (b.artista ? ' · ' + b.artista : '');
   $('#st-elimina').classList.toggle('hidden', String(b.id).startsWith('app-'));
   $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
-  $('#st-tr-nome').textContent = 'Lettura…'; $('#st-info').textContent = '';
   try { state.score = await caricaScore(b); } catch (e) { toast('Non riesco a leggere il file: ' + (e.message || e), 5000); if (!ID_APP) mostra('brani'); return false; }
-  state.traccia = b.traccia != null && b.traccia < state.score.tracks.length ? b.traccia : indovinaTraccia(state.score);
+  // Spartito e Canta hanno ciascuno la sua traccia: quella che leggi e quella che canti
+  const valida = (i) => i != null && i < state.score.tracks.length;
+  state.tracciaSp = valida(b.traccia) ? b.traccia : indovinaTraccia(state.score);
+  state.tracciaCanto = valida(b.tracciaCanto) ? b.tracciaCanto : indovinaTraccia(state.score);
+  state.traccia = state.tracciaSp;
   state.trasp = b.trasp || 0;   // la tonalità è del brano
   applicaTrasposizione();
   aggiornaSetup();
@@ -657,7 +725,7 @@ function aggiornaSetup() {
   $('#st-lat').value = state.lat; $('#st-lat-v').textContent = state.lat + ' ms';
   const bb = state.brano;
   if (bb && state.score) {
-    const haT = contaTesto(state.score.tracks[state.traccia]) > 0;
+    const haT = contaTesto(state.score.tracks[state.tracciaCanto]) > 0;
     $('#st-testo-nota').textContent = haT ? 'Il testo viene dalla tab, un verso alla volta. Mentre canti, se un verso parte prima o dopo del dovuto, tocca il testo al momento giusto: l\'app ricorda il punto.' : 'La traccia non ha il testo. Incollalo qui, un verso per riga: mentre canti, un tocco sul testo passa al verso dopo e l\'app ricorda il punto.';
     $('#st-testo').classList.toggle('hidden', haT);
     if ($('#st-testo').value !== (bb.testo || '')) $('#st-testo').value = bb.testo || '';
@@ -670,13 +738,6 @@ function aggiornaSetup() {
   $('#st-sf-riga').classList.toggle('hidden', state.suoni !== 'file');
   for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
   for (const b of document.querySelectorAll('#st-suoni button')) b.classList.toggle('on', b.dataset.v === state.suoni);
-  if (state.score) {
-    const tr = state.score.tracks[state.traccia];
-    $('#st-tr-nome').textContent = nomeBreve(tr, state.traccia);
-    const m = costruisciModello(state.score, state.traccia);
-    const nome = (x) => ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'][(x % 12 + 12) % 12] + (Math.floor(x / 12) - 1);
-    $('#st-info').textContent = m.note.length ? `${m.note.length} note, da ${nome(m.minMidi)} a ${nome(m.maxMidi)}${m.haTesto ? ', con il testo' : ', senza testo'}` : 'Questa traccia non ha note';
-  }
 }
 
 // ------------------------------------------------------------ microfono e intonazione
@@ -742,15 +803,15 @@ const PLAYHEAD = 0.3; // posizione della linea del "adesso" (frazione della larg
 async function avviaEsecuzione() {
   if (!state.score) return;
   fermaBase();
+  state.traccia = state.tracciaCanto;
   const m = costruisciModello(state.score, state.traccia);
   if (!m.note.length) { toast('La traccia scelta non ha note da cantare'); return; }
-  state.brano.traccia = state.traccia; db.metti(state.brano).catch(() => {});
   salvaPref();
   if (!(await apriMic())) return;
   creaApi();
   mostra('esec');
-  $('#es-titolo').textContent = state.brano.titolo; $('#es-sub').textContent = state.brano.artista || '';
-  $('#es-tempo').textContent = state.tempo + '%' + (state.trasp ? ` · ${state.trasp > 0 ? '+' : ''}${state.trasp}` : '');
+  $('#es-titolo').textContent = state.brano.titolo;
+  $('#es-tr-nome').textContent = 'Canti: ' + nomeBreve(state.score.tracks[state.traccia], state.traccia);
   const pxPerSec = 160; // velocità del rullo a tempo 100%
   state.esec = {
     m, tick: 0, tickAt: performance.now(), endTick: m.fine, suona: false, finita: false,
@@ -773,7 +834,6 @@ async function avviaEsecuzione() {
     $('#tx-sugg').textContent = !manuale ? '' : m.haTesto ? 'Un tocco sul testo passa al verso dopo e corregge il punto' : (x.tempi.some(v => v != null) ? 'I versi avanzano da soli; un tocco corregge il punto' : 'Tocca il testo a ogni verso nuovo: l\'app ricorda il punto');
   }
   $('#tx-prima').textContent = ''; x_righeDis = -2;
-  $('#es-parti').classList.toggle('hidden', !partiDi().length);
   for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
   ridimensiona();
   $('#tx-msg').textContent = 'Caricamento della base…';
@@ -975,6 +1035,8 @@ function apriSpartito() {
   creaApi(); salvaPref();
   mostra('spartito');
   $('#sp-titolo').textContent = state.brano.titolo;
+  state.traccia = state.tracciaSp;
+  disegnaParti();
   disegnaSpartito();
   api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
   caricaSuoni().then(() => applicaMix()).catch(() => {});
@@ -982,10 +1044,42 @@ function apriSpartito() {
   aggiornaSpartito();
 }
 function aggiornaSpartito() {
-  $('#sp-tempo').textContent = state.tempo + '%';
-  $('#sp-metro').classList.toggle('on', !!state.metro);
-  $('#sp-parti').classList.toggle('hidden', !partiDi().length);
+  $('#sp-tempo').textContent = $('#sp-tempo-v').textContent = state.tempo + '%';
+  const t = state.score && state.score.tracks[state.traccia];
+  const fissa = !!t && (eVoce(t) || t.playbackInfo.isPercussion);   // voce e batteria: solo pentagramma
+  $('#vis-tab').classList.toggle('on', !fissa && state.vista !== 'score');
+  $('#vis-score').classList.toggle('on', fissa || state.vista !== 'tab');
+  $('#vis-tab').disabled = $('#vis-score').disabled = fissa;
 }
+// barra delle parti: un rettangolo per parte, largo quanto le sue battute; il tocco porta lì
+function disegnaParti() {
+  state.parti = partiDi(); state.parteOra = -2;
+  const bar = $('#sp-parti-bar'); bar.innerHTML = '';
+  $('#sp-parti').classList.toggle('hidden', state.parti.length < 2);
+  state.parti.forEach((p, i) => { const r = document.createElement('i'); r.style.flex = String(p.a - p.da); r.dataset.i = i; r.title = p.nome; bar.appendChild(r); });
+  aggiornaParte(api ? api.tickPosition : 0);
+}
+function aggiornaParte(tick) {
+  const pp = state.parti; if (!pp.length) return;
+  let k = 0; pp.forEach((p, i) => { if (p.tick <= tick) k = i; });
+  if (k === state.parteOra) return; state.parteOra = k;
+  $('#sp-parte').textContent = pp[k].nome;
+  [...$('#sp-parti-bar').children].forEach((r, i) => { r.className = i === k ? 'on' : i < k ? 'fatto' : ''; });
+}
+$('#sp-parti-bar').addEventListener('click', (e) => {
+  const r = e.target.closest('i[data-i]'); if (!r || !api) return;
+  const p = state.parti[+r.dataset.i]; if (!p) return;
+  try { api.tickPosition = p.tick; } catch (er) {}
+  aggiornaParte(p.tick);
+});
+function apriTempo() {
+  const pop = $('#tempo-pop'), btn = $('#sp-tempo'), sp = $('#spartito'), barra = sp.querySelector('.sp-barra');
+  if (!pop.classList.contains('hidden')) { pop.classList.add('hidden'); return; }
+  pop.style.left = Math.max(8, btn.offsetLeft + btn.offsetWidth / 2 - 82) + 'px';
+  pop.style.bottom = (sp.clientHeight - barra.offsetTop + 8) + 'px';
+  pop.classList.remove('hidden');
+}
+document.addEventListener('click', (e) => { const pop = $('#tempo-pop'); if (!pop.classList.contains('hidden') && !e.target.closest('#tempo-pop, [data-az=tempo-pop]')) pop.classList.add('hidden'); }, true);
 // parti del brano dai marker delle battute (Intro, Verse, Chorus…), come le sezioni di Yousician
 function partiDi() {
   if (!state.score) return [];
@@ -994,29 +1088,6 @@ function partiDi() {
   out.forEach((p, i) => { p.a = i + 1 < out.length ? out[i + 1].da : mb.length; });
   return out;
 }
-function apriParti() {
-  const parti = partiDi(); if (!parti.length) { toast('Questa tab non ha le parti segnate'); return; }
-  const l = $('#lista-parti'); l.innerHTML = '';
-  const ora = state.esec ? tickOra() : api ? api.tickPosition : 0;
-  parti.forEach((p, i) => {
-    const r = document.createElement('button'); r.className = 'riga' + (ora >= p.tick && (i + 1 >= parti.length || ora < parti[i + 1].tick) ? ' on' : '');
-    r.dataset.az = 'parte-vai'; r.dataset.tick = p.tick;
-    r.innerHTML = `<div class="num">${i + 1}</div><div class="txt"><div class="t"></div><div class="s">battute ${p.da + 1}–${p.a}</div></div><svg class="i" style="color:var(--inchiostro-3)"><use href="#i-play"/></svg>`;
-    $('.t', r).textContent = p.nome; if (r.classList.contains('on')) $('.t', r).style.color = 'var(--accento)';
-    l.appendChild(r);
-  });
-  $('#velo-parti').classList.remove('hidden');
-}
-$('#velo-parti').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-az]');
-  if (!b) { if (e.target === e.currentTarget) $('#velo-parti').classList.add('hidden'); return; }
-  if (b.dataset.az === 'parti-chiudi') $('#velo-parti').classList.add('hidden');
-  else if (b.dataset.az === 'parte-vai') {
-    const tick = +b.dataset.tick; $('#velo-parti').classList.add('hidden');
-    if (state.esec) saltaA(tick);
-    else if (api) { try { api.tickPosition = tick; if (api.playerState !== 1) caricaSuoni().then(() => { applicaMix(); api.play(); }); } catch (e) {} }
-  }
-});
 // la voce (su Songsterr è una traccia "a corde") si mostra solo in pentagramma; il resto in tab + pentagramma
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
@@ -1068,17 +1139,22 @@ document.addEventListener('click', async (e) => {
   else if (az === 'sp-impostazioni') { state.origine = 'spartito'; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
   else if (az === 'es-impostazioni') { state.origine = 'canta'; fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
   else if (az === 'setup-indietro') { if (state.origine === 'canta') avviaEsecuzione(); else apriSpartito(); }
-  else if (az === 'sp-canta') avviaEsecuzione();
+  else if (az === 'sp-canta') { state.cantaDaSpartito = true; avviaEsecuzione(); }
   else if (az === 'sp-ricomincia') { creaApi(); caricaSuoni().then(() => { fermaBase(); try { api.tickPosition = 0; } catch (e) {} api.play(); }); }
   else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); aggiornaSpartito(); if (api) api.playbackSpeed = state.tempo / 100; salvaPref(); }
   else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); state.brano.trasp = state.trasp; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); }
   else if (az === 'elimina') { await db.togli(state.brano.id); toast(`Tolto «${state.brano.titolo}»`); fermaBase(); state.brano = null; state.score = null; scoreCaricato = null; mostra('brani'); caricaLista(); }
   else if (az === 'chiudi-spartito') chiudiTutto();
   else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
-  else if (az === 'parti') apriParti();
-  else if (az === 'sp-metro') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; aggiornaSpartito(); salvaPref(); }
-  else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
-  else if (az === 'chiudi-esec') { fermaEsecuzione(); apriSpartito(); }
+  else if (az === 'tempo-pop') apriTempo();
+  else if (az === 'tracce-canto') { if (state.score) apriCanto(); }
+  else if (az === 'vista') {
+    const tab = state.vista !== 'score', sc = state.vista !== 'tab';
+    let nt = tab, ns = sc; if (b.dataset.v === 'tab') nt = !tab; else ns = !sc;
+    if (!nt && !ns) return;   // almeno uno resta acceso
+    state.vista = nt && ns ? 'entrambi' : nt ? 'tab' : 'score'; salvaPref(); aggiornaSpartito(); disegnaSpartito();
+  }  else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
+  else if (az === 'chiudi-esec') { fermaEsecuzione(); if (state.cantaDaSpartito) apriSpartito(); else chiudiTutto(); }   // si torna dove si era entrati
   else if (az === 'riprova') avviaEsecuzione();
   else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); if (!x.partito) partenza(); else api.playPause(); }
@@ -1090,24 +1166,29 @@ let testoT = 0;
 $('#st-testo').addEventListener('input', (e) => { const b = state.brano; if (!b) return; const v = e.target.value; clearTimeout(testoT); testoT = setTimeout(() => { if (righeDi(v).join('\n') !== righeDi(b.testo).join('\n')) b.tempiTesto = null; b.testo = v; db.metti(b).catch(() => {}); aggiornaSetup(); }, 400); });
 $('#st-guida-strum').addEventListener('change', (e) => { state.guidaStrum = +e.target.value; salvaPref(); });
 $('#st-lat').addEventListener('input', (e) => { state.lat = +e.target.value; $('#st-lat-v').textContent = state.lat + ' ms'; });
-// ---- foglio delle tracce (scelta, silenzio, vista) ----
+// ---- foglio delle tracce dello Spartito: scelta della parte da leggere e volume nella base ----
+const ICONA_VOL = { n: '#i-vol-n', p: '#i-vol-p', m: '#i-muto' }, TITOLO_VOL = { n: 'Volume normale', p: 'Più forte', m: 'Muta' };
 function apriTracce() {
   const l = $('#lista-tracce'); l.innerHTML = '';
-  const m = muti();
   state.score.tracks.forEach((t, i) => {
-    const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.traccia ? ' on' : '');
-    r.innerHTML = `<button class="scegli" data-az="traccia-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button><button class="muta${m.includes(i) ? ' on' : ''}" data-az="traccia-muta" data-i="${i}" title="Silenzia nella base"><svg class="i"><use href="${m.includes(i) ? '#i-muto' : '#i-suono'}"/></svg></button>`;
+    const v = volDi(i);
+    const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.tracciaSp ? ' on' : '');
+    r.innerHTML = `<button class="scegli" data-az="traccia-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button><button class="vol ${v}" data-az="traccia-vol" data-i="${i}" title="${TITOLO_VOL[v]}"><svg class="i"><use href="${ICONA_VOL[v]}"/></svg></button>`;
     $('.t', r).textContent = nomeBreve(t, i); $('.s', r).textContent = sottotitolo(t, i);
     l.appendChild(r);
   });
-  for (const b of document.querySelectorAll('#st-vista button')) b.classList.toggle('on', state.vista === 'entrambi' || state.vista === b.dataset.v);
-  $('#riga-vista').classList.toggle('hidden', $('#spartito').classList.contains('hidden'));
   $('#velo-tracce').classList.remove('hidden');
 }
 function scegliTraccia(i) {
-  state.traccia = i; state.brano.traccia = i; state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {});
-  aggiornaSetup();
-  if (api && api.score) { const pos = api.tickPosition; disegnaSpartito(); applicaMix(); try { api.tickPosition = pos; } catch (e) {} }
+  state.tracciaSp = i; state.traccia = i; state.brano.traccia = i; db.metti(state.brano).catch(() => {});
+  if (api && api.score) { const pos = api.tickPosition; disegnaSpartito(); aggiornaSpartito(); applicaMix(); try { api.tickPosition = pos; } catch (e) {} }
+  apriTracce();
+}
+function cambiaVolume(i) {
+  const prossimo = { n: 'p', p: 'm', m: 'n' }[volDi(i)];
+  const vol = {}; state.score.tracks.forEach((t, k) => { const v = k === i ? prossimo : volDi(k); if (v !== 'n') vol[k] = v; });
+  state.brano.volumi = vol; delete state.brano.muti; db.metti(state.brano).catch(() => {});
+  if (api) applicaMix();
   apriTracce();
 }
 $('#velo-tracce').addEventListener('click', (e) => {
@@ -1115,16 +1196,49 @@ $('#velo-tracce').addEventListener('click', (e) => {
   if (!b) { if (e.target === e.currentTarget) $('#velo-tracce').classList.add('hidden'); return; }
   if (b.dataset.az === 'tracce-chiudi') $('#velo-tracce').classList.add('hidden');
   else if (b.dataset.az === 'traccia-scegli') scegliTraccia(+b.dataset.i);
-  else if (b.dataset.az === 'traccia-muta') { const i = +b.dataset.i; const m = muti().slice(); const k = m.indexOf(i); if (k >= 0) m.splice(k, 1); else m.push(i); state.brano.muti = m; db.metti(state.brano).catch(() => {}); if (api) applicaMix(); apriTracce(); }
+  else if (b.dataset.az === 'traccia-vol') cambiaVolume(+b.dataset.i);
 });
-$('#st-vista').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  // due interruttori, almeno uno acceso
-  const tab = state.vista !== 'score', score = state.vista !== 'tab';
-  const nuovo = b.dataset.v === 'tab' ? (tab && score ? 'score' : tab ? 'entrambi' : 'entrambi') : (tab && score ? 'tab' : score ? 'entrambi' : 'entrambi');
-  state.vista = nuovo; salvaPref();
-  for (const x of document.querySelectorAll('#st-vista button')) x.classList.toggle('on', state.vista === 'entrambi' || state.vista === x.dataset.v);
-  if (!$('#spartito').classList.contains('hidden')) disegnaSpartito();
+// ---- «Cosa canti»: solo per Canta; prima le voci, poi le altre melodie (niente batteria, basso, accordi) ----
+function candidatiCanto() {
+  const voci = [], altre = [];
+  state.score.tracks.forEach((t, i) => {
+    if (t.playbackInfo.isPercussion) return;
+    const p = profiloTraccia(t); if (p.note < 10) return;
+    const prog = t._prog != null ? t._prog : t.playbackInfo.program;
+    if (eVoce(t) || contaTesto(t) > 0) voci.push(i);
+    else if (p.mono / p.note > 0.85 && !(prog >= 32 && prog <= 39) && !/bass|basso/i.test(t.name)) altre.push(i);
+  });
+  if (!voci.includes(state.tracciaCanto) && !altre.includes(state.tracciaCanto)) altre.unshift(state.tracciaCanto);
+  return { voci, altre };
+}
+function apriCanto() {
+  const { voci, altre } = candidatiCanto(); const l = $('#lista-canto'); l.innerHTML = '';
+  const gruppo = (titolo, lista) => {
+    if (!lista.length) return;
+    const h = document.createElement('div'); h.className = 'sez-t'; h.textContent = titolo; l.appendChild(h);
+    for (const i of lista) {
+      const t = state.score.tracks[i];
+      const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.tracciaCanto ? ' on' : '');
+      r.innerHTML = `<button class="scegli" data-az="canto-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button>`;
+      $('.t', r).textContent = nomeBreve(t, i); $('.s', r).textContent = sottotitolo(t, i);
+      l.appendChild(r);
+    }
+  };
+  gruppo('Voci', voci); gruppo('Altre melodie', altre);
+  $('#velo-canto').classList.remove('hidden');
+}
+function scegliCanto(i) {
+  $('#velo-canto').classList.add('hidden');
+  if (i === state.tracciaCanto) return;
+  const x = state.esec; if (x) { salvaTempi(); cancelAnimationFrame(x.raf); fermaBase(); state.esec = null; }   // il microfono resta aperto
+  state.tracciaCanto = i; state.brano.tracciaCanto = i; state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {});
+  avviaEsecuzione();
+}
+$('#velo-canto').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if (!b) { if (e.target === e.currentTarget) $('#velo-canto').classList.add('hidden'); return; }
+  if (b.dataset.az === 'canto-chiudi') $('#velo-canto').classList.add('hidden');
+  else if (b.dataset.az === 'canto-scegli') scegliCanto(+b.dataset.i);
 });
 
 $('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
@@ -1192,7 +1306,7 @@ async function caricaDaApp(c, mia) {
   await db.metti(b).catch(() => {});
   state.brani = state.brani.filter(x => x.id !== b.id).concat([b]);
   if (!(await apriBrano(b.id)) || mia !== richiesta) return;
-  if (MODO === 'canta') avviaEsecuzione(); else apriSpartito();
+  if (MODO === 'canta') { state.cantaDaSpartito = false; avviaEsecuzione(); } else apriSpartito();
 }
 // chiusura: dentro l'app si chiude la sovrimpressione; da sola si torna all'app; con i file locali alla lista
 function fermaTutto() {
@@ -1213,7 +1327,7 @@ window.__indietro = () => {
   const vis = [...document.querySelectorAll('.schermo')].find(x => !x.classList.contains('hidden'));
   const id = vis && vis.id;
   if (id === 'setup') { if (state.origine === 'canta') avviaEsecuzione(); else apriSpartito(); return true; }
-  if (id === 'esec' || id === 'fine') { fermaEsecuzione(); apriSpartito(); return true; }
+  if ((id === 'esec' || id === 'fine') && state.cantaDaSpartito) { fermaEsecuzione(); apriSpartito(); return true; }
   return false;
 };
 window.__chiudi = () => fermaTutto();
@@ -1221,8 +1335,9 @@ window.__apri = (p) => {
   fermaTutto();
   ID_APP = p.id; MODO = p.modo || 'spartito';
   const canta = MODO === 'canta';
+  state.cantaDaSpartito = false;
   $('#sp-stato').classList.add('hidden');
-  $('#sp-titolo').textContent = $('#es-titolo').textContent = p.t || ''; $('#es-sub').textContent = p.a || '';
+  $('#sp-titolo').textContent = $('#es-titolo').textContent = p.t || ''; $('#es-tr-nome').textContent = '';
   // stesso brano già pronto: si riapre subito; altrimenti la pagina giusta con «Carico la tab…»
   if (state.brano && state.brano.id === 'app-' + p.id && state.brano.revisionId === p.r && state.score) {
     if (PONTE) state.canzone = PONTE.canzone(p.id) || state.canzone;
