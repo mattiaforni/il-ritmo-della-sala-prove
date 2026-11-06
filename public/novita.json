@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "54",
+      "data": "2026-11-06",
+      "titolo": "Canta: la linea della voce torna com'era",
+      "punti": [
+        "La linea della voce e il pallino tornano come nella versione 49: ogni misura del microfono disegnata così com'è, senza filtri.",
+        "Il ritardo del microfono torna fisso a 120 ms, regolabile nelle impostazioni."
+      ]
+    },
+    {
       "versione": "53",
       "data": "2026-11-06",
       "titolo": "Canta: linea della voce di nuovo puntuale",
