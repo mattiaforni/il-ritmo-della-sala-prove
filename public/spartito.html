@@ -620,6 +620,7 @@ function creaApi() {
     player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollElement: '#at-scroll', scrollMode: 'continuous', scrollOffsetY: -80, enableCursor: true, enableUserInteraction: true, enableElementHighlighting: true, enableAnimatedBeatCursor: true },
   };
   api = new alphaTab.AlphaTabApi($('#at'), s);
+  api.soundFontLoaded.on(() => { suoniContati++; });   // registrato prima di qualsiasi banco: nessuna risposta anticipata
   caricaSuoni();
   api.error.on(e => { console.error('alphaTab', e); toast('Errore della base musicale: ' + (e.message || e), 5000); });
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
@@ -632,7 +633,7 @@ function creaApi() {
 }
 // ---- suoni (soundfont): base = sonivox 1 MB; migliori = FluidR3 GM 14 MB (MIT), scaricato una volta e tenuto sul dispositivo; file = .sf2/.sf3 scelto
 const SUONI = { base: CDN + 'soundfont/sonivox.sf3', migliori: 'https://cdn.jsdelivr.net/npm/@librescore/sf3@0.8.0/FluidR3Mono_GM.sf3.wasm' };
-let suoniCaricati = null, suoniRichiesta = 0;
+let suoniCaricati = null, suoniRichiesta = 0, suoniContati = 0;
 function caricaSuoni() {
   const scelta = state.suoni; if (suoniCaricati === scelta) return apiPronto;
   const mia = ++suoniRichiesta;
@@ -644,7 +645,11 @@ function caricaSuoni() {
     } catch (e) { console.error(e); toast('Suoni non scaricati: ' + (e.message || e) + '. Uso quelli base.', 5000); }
     if (mia !== suoniRichiesta) return;
     if (!bytes) { if (scelta !== 'base') { state.suoni = 'base'; aggiornaSetup(); suoniCaricati = null; return caricaSuoni(); } throw new Error('suoni non disponibili'); }
-    await new Promise((ok, no) => { let h = null; h = api.soundFontLoaded.on(() => { if (h) api.soundFontLoaded.off(h); ok(); }); const t = setTimeout(() => no(new Error('i suoni non si caricano')), 60000); if (!api.loadSoundFont(bytes, false)) { clearTimeout(t); no(new Error('file dei suoni non valido')); } });
+    // si aspetta un caricamento in più rispetto a prima (soundFontLoaded, come scoreLoaded, risponde subito con quello vecchio)
+    const prima = suoniContati;
+    if (!api.loadSoundFont(bytes, false)) throw new Error('file dei suoni non valido');
+    const limite = Date.now() + 60000;
+    while (suoniContati === prima) { if (Date.now() > limite) throw new Error('i suoni non si caricano'); await new Promise(r => setTimeout(r, 100)); }
     suoniCaricati = scelta;
     while (!api.isReadyForPlayback) await new Promise(r => setTimeout(r, 100));
   })();
@@ -659,15 +664,18 @@ async function scarica(url) {
 }
 function avvisaSuoni(msg) { const el = $('#tx-msg'); if (el && state.esec) el.textContent = msg; const st = $('#st-suoni-msg'); if (st) st.textContent = msg; }
 const GUIDA_STRUM = [[-1, 'Originale'], [0, 'Piano'], [73, 'Flauto'], [68, 'Oboe'], [65, 'Sax'], [56, 'Tromba']];
+// La partitura si legge qui e si passa ad alphaTab. Prima si aspettava l'evento scoreLoaded, ma alphaTab,
+// appena ci si mette in ascolto, lo manda subito con la partitura già caricata: quella del pezzo precedente
+// (passando da un pezzo all'altro restavano le sue tracce, e dopo «Aggiorna» restava la tab vecchia).
 function caricaScore(brano) {
-  return new Promise((ok, no) => {
-    creaApi();
-    if (scoreCaricato === brano.id) return ok(api.score);
-    let h = null, fatto = false;
-    h = api.scoreLoaded.on(s => { fatto = true; if (h) api.scoreLoaded.off(h); scoreCaricato = brano.id; ok(s); });
-    try { api.load(brano.bytes.buffer.slice(brano.bytes.byteOffset, brano.bytes.byteOffset + brano.bytes.byteLength)); } catch (e) { no(e); }
-    if (fatto && h) api.scoreLoaded.off(h);
-  });
+  creaApi();
+  if (scoreCaricato === brano.id && api.score) return Promise.resolve(api.score);
+  try {
+    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(brano.bytes, api.settings);
+    api.renderScore(score, [0]);
+    scoreCaricato = brano.id;
+    return Promise.resolve(score);
+  } catch (e) { return Promise.reject(e); }
 }
 function applicaMix(pos) {
   if (!api || !state.score) return;

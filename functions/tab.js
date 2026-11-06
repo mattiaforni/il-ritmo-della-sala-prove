@@ -14,7 +14,7 @@
 // Operazioni (POST con il token della band; "file" anche con quello dei fan):
 //   prepara { canzoneId }  → scarica, converte, salva in Storage (tab/<canzoneId>.gp) e
 //                            scrive su canzoni/<id> il campo "tab" { songId, revisionId,
-//                            tracce: [{ partId, nome, strumento, voce, testo, note }], testi: { <indice traccia>:
+//                            url (link usato), tracce: [{ partId, nome, strumento, voce, testo, note }], testi: { <indice traccia>:
 //                            [{ offset, text }] } (il testo originale, per correggerlo dalla pagina), byte, aggiornata }
 //   file    { canzoneId }  → restituisce il file .gp (application/octet-stream)
 //
@@ -143,7 +143,8 @@ function crea({ cors, ruolo, REGIONE }) {
       if (!tracce.length) { res.status(502).json({ error: "Nessuna traccia scaricata da Songsterr" }); return; }
       const { bytes, info, testi } = costruisciGp(meta, tracce);
       await file(id).save(Buffer.from(bytes), { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
-      const tab = { songId: meta.songId, revisionId: meta.revisionId, titolo: meta.title, artista: meta.artist, tracce: info, testi, byte: bytes.length, aggiornata: FieldValue.serverTimestamp() };
+      // url: il link da cui viene la tab, per accorgersi quando la canzone ne ha uno diverso
+      const tab = { songId: meta.songId, revisionId: meta.revisionId, url, titolo: meta.title, artista: meta.artist, tracce: info, testi, byte: bytes.length, aggiornata: FieldValue.serverTimestamp() };
       await db().doc(`canzoni/${id}`).update({ tab });
       res.status(200).json({ ok: true, tab: { ...tab, aggiornata: Date.now() } });
     } catch (e) {
