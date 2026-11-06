@@ -345,7 +345,9 @@ button.ini.on { border-color: transparent; color: #fff; }
   font: 500 13px var(--ui); color: var(--inchiostro); text-decoration: none; cursor: pointer;
 }
 .pg-riga .i, .pg-riga .ico, .pg-riga .ico-sp { width: 18px; height: 18px; }
-.pg-riga .sola-icona { width: 34px; padding: 0; justify-content: center; }
+.pg-riga > a, .pg-riga > button, .pg-riga > .tab-scarica { min-height: 36px; }
+.pg-riga .sola-icona { width: 46px; padding: 0; justify-content: center; }
+.pg-riga .sola-icona .i, .pg-riga .sola-icona .ico, .pg-riga .sola-icona .ico-sp { width: 21px; height: 21px; }
 .pg-riga > .tab-aggiungi { border-style: dashed; border-color: var(--accento); color: var(--accento); }
 .pg-riga > .tab-scarica { color: var(--accento); border-color: var(--linea); cursor: default; }
 .pg-riga > .tab-scarica svg { animation: tab-gira .9s linear infinite; }

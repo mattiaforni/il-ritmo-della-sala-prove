@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "51";
+const APP_VERSION = "52";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1498,9 +1498,9 @@ function recsCard(c) {
 }
 // Spartito e Canta: la tab (da Songsterr, convertita dalla funzione "tab", o un file Guitar Pro caricato)
 // aperta in spartito.html (tablatura a schermo con la base, e la modalità Canta con il microfono).
-// Pagina del pezzo (v51): una riga sola. Senza tab: Spotify e «Aggiungi la tablatura», che apre il foglio
-// «Tablatura» (ricerca su Songsterr già fatta con titolo e artista, link incollato, file caricato); con la tab:
-// Spotify (solo icona), Spartito, Canta e l'icona della tablatura, che apre lo stesso foglio per vederla o cambiarla.
+// Pagina del pezzo (v51): una riga sola. Senza tab: Spotify e «+ Aggiungi la tablatura», che apre il foglio
+// «Tablatura» (ricerca su Songsterr già fatta con titolo e artista, link incollato, file caricato); con la tab
+// (v52) solo icone: Spotify, chiave (Spartito), microfono (Canta) e lente, che apre lo stesso foglio per cambiarla.
 const scaricabile = (c) => !!c && TAB_PAGINA_RE.test(normalizzaSongsterr(c.songsterrUrl || ""));
 const tabPronta = (c) => !!(c && c.tab && c.tab.revisionId);
 const CLEF = `<svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>`;
@@ -1519,10 +1519,10 @@ function rigaPezzo(c) {
   let tab = "";
   if (gira) tab = `<span class="tab-scarica" role="status">${IC("aggiorna")}Scarico la tab…</span>`;
   else if (conTab) {
-    tab = ["spartito", "canta"].map(m => `<button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="${m}">${IC(m === "canta" ? "mic" : "nota")}${m === "canta" ? "Canta" : "Spartito"}</button>`).join("");
-    if (!state.fan) tab += `<button class="sola-icona" data-action="tab-foglio" data-id="${c.id}" title="Tablatura" aria-label="Tablatura">${CLEF}</button>`;
-    else if (c.songsterrUrl) tab += `<a ${appLink(normalizzaSongsterr(c.songsterrUrl), "com.songsterr")} data-link class="sola-icona" title="Tablatura su Songsterr" aria-label="Tablatura su Songsterr">${CLEF}</a>`;
-  } else if (!state.fan) tab = `<button class="tab-aggiungi" data-action="tab-foglio" data-id="${c.id}">${CLEF}Aggiungi la tablatura</button>`;
+    tab = `<button class="sola-icona" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito" title="Spartito" aria-label="Spartito">${CLEF}</button>`
+      + `<button class="sola-icona" data-action="apri-spartito" data-id="${c.id}" data-modo="canta" title="Canta" aria-label="Canta">${IC("mic")}</button>`;
+    if (!state.fan) tab += `<button class="sola-icona" data-action="tab-foglio" data-id="${c.id}" title="Cambia la tablatura" aria-label="Cambia la tablatura">${IC("cerca")}</button>`;
+  } else if (!state.fan) tab = `<button class="tab-aggiungi" data-action="tab-foglio" data-id="${c.id}">${IC("piu")}Aggiungi la tablatura</button>`;
   else if (!nostro) tab = `<a ${appLink(c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${encodeURIComponent(songQuery(c))}`, "com.songsterr")} data-link title="Tablatura su Songsterr">${CLEF}<span>Tablatura</span></a>`;
   return `<div class="pg-link pg-riga">${sp}${tab}</div>`;
 }
