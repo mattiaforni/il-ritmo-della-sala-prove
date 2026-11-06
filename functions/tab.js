@@ -20,6 +20,9 @@
 //   file    { canzoneId, raccolta } → restituisce il file .gp (application/octet-stream)
 //   cerca   { q }           → cerca su Songsterr (titolo o artista): { risultati: [{ songId, titolo, artista, url }] }
 //   togli   { canzoneId }   → toglie un pezzo «Da cantare» e il suo file
+//   carica  { canzoneId, raccolta, nome, dati (base64), da } → un file Guitar Pro caricato a mano (pezzi nostri,
+//                            tab proprie, v51): lo legge con alphaTab per controllarlo e contare tracce e testo,
+//                            lo salva com'è e scrive "tab" { fonte: "file", nome, da, revisionId (ora), tracce, … }
 //
 // Il formato interno di Songsterr non è documentato: quando cambia, questa funzione va
 // aggiornata; i file già salvati restano.
@@ -144,6 +147,11 @@ function costruisciGp(meta, tracce) {
   }));
   return { bytes, info, testi };
 }
+function haTesto(track) {
+  for (const st of track.staves) for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) if (b.lyrics && b.lyrics.some(x => x && String(x).trim())) return true;
+  return false;
+}
+const MAX_FILE = 5 * 1024 * 1024;
 function contaNote(track) {
   let n = 0;
   if (!track) return 0;
@@ -198,10 +206,33 @@ function crea({ cors, ruolo, REGIONE }) {
         res.status(200).json({ ok: true });
         return;
       }
-      if (op !== "prepara") { res.status(400).json({ error: "operazione sconosciuta" }); return; }
+      if (op !== "prepara" && op !== "carica") { res.status(400).json({ error: "operazione sconosciuta" }); return; }
       const rif = db().doc(`${raccolta}/${id}`);
       const snap = await rif.get();
       if (!snap.exists) { res.status(404).json({ error: "canzone non trovata" }); return; }
+      if (op === "carica") {
+        const buf = Buffer.from(String(req.body.dati || ""), "base64");
+        if (!buf.length) { res.status(400).json({ error: "file vuoto" }); return; }
+        if (buf.length > MAX_FILE) { res.status(413).json({ error: "file troppo grande (massimo 5 MB)" }); return; }
+        let score;
+        try { score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(new Uint8Array(buf), new alphaTab.Settings()); }
+        catch (e) { res.status(400).json({ error: "non è un file Guitar Pro leggibile" }); return; }
+        if (!score.tracks.length) { res.status(400).json({ error: "il file non ha tracce" }); return; }
+        const tracce = score.tracks.map((t, i) => {
+          const nome = String(t.name || "").trim() || `Traccia ${i + 1}`;
+          const prog = t.playbackInfo ? t.playbackInfo.program : -1;
+          return { partId: i, nome, strumento: "", voce: VOCE_RE.test(nome) || [52, 53, 54, 85].includes(prog), testo: haTesto(t), note: contaNote(t) };
+        });
+        await file(id, raccolta).save(buf, { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
+        const tab = {
+          fonte: "file", nome: String(req.body.nome || "").replace(/[\\/]/g, "").slice(0, 120) || "tab.gp", da: String(req.body.da || "").slice(0, 40),
+          songId: null, revisionId: Date.now(), url: null, titolo: score.title || "", artista: score.artist || "",
+          tracce, testi: {}, byte: buf.length, aggiornata: FieldValue.serverTimestamp()
+        };
+        await rif.update({ tab });
+        res.status(200).json({ ok: true, tab: { ...tab, aggiornata: Date.now() } });
+        return;
+      }
       const c = snap.data();
       let url = String(c.songsterrUrl || "").replace(/[?#].*$/, "");
       if (!SONGSTERR_RE.test(url)) { res.status(400).json({ error: "La canzone non ha il link Songsterr della pagina della tab" }); return; }
@@ -211,12 +242,12 @@ function crea({ cors, ruolo, REGIONE }) {
       if (!tracce.length) { res.status(502).json({ error: "Nessuna traccia scaricata da Songsterr" }); return; }
       const { bytes, info, testi } = costruisciGp(meta, tracce);
       await file(id, raccolta).save(Buffer.from(bytes), { contentType: "application/octet-stream", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
-      // i pezzi «Da cantare» prendono titolo, artista e indirizzo vero della pagina da Songsterr
-      // (aggiunti da un link incollato non hanno titolo; quelli dalla ricerca hanno un indirizzo ricostruito)
+      // l'indirizzo vero della pagina (quelli scelti dalla ricerca sono ricostruiti); i pezzi «Da cantare»
+      // prendono anche titolo e artista da Songsterr (aggiunti da un link incollato non li hanno)
       const extra = {};
+      const vero = String(pagina.url || "").replace(/[?#].*$/, "");
+      if (SONGSTERR_RE.test(vero) && vero !== url) { url = vero; extra.songsterrUrl = vero; }
       if (raccolta === "studio") {
-        const vero = String(pagina.url || "").replace(/[?#].*$/, "");
-        if (SONGSTERR_RE.test(vero) && vero !== url) { url = vero; extra.songsterrUrl = vero; }
         if (!c.titolo && meta.title) extra.titolo = meta.title;
         if (!c.artista && meta.artist) extra.artista = meta.artist;
         extra.songId = meta.songId;

@@ -335,26 +335,22 @@ button.ini.on { border-color: transparent; color: #fff; }
 .pg-link .links { gap: 8px; flex-wrap: wrap; align-items: center; }
 .pg-link .links a { width: auto; height: auto; color: var(--inchiostro); }
 .pg-link .ico, .pg-link .ico-sp { width: 18px; height: 18px; }
-.pg-tab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-.pg-tab .btn { min-height: 32px; height: auto; padding: 0 11px; border: 1px solid var(--linea-forte); font-size: 13px; color: var(--inchiostro); text-decoration: none; gap: 7px; }
-.pg-tab .i { width: 18px; height: 18px; }
-/* freccetta accanto a «Tablatura»: scarica di nuovo la tab (ambra con il pallino se manca o se il link è cambiato,
-   rossa e in rotazione mentre la funzione lavora) */
-.tab-agg {
-  position: relative; flex: none;
-  width: 36px; height: 32px; padding: 0; margin-left: -2px;
-  display: inline-grid; place-items: center;
-  background: none; border: none; border-radius: var(--r);
-  color: var(--inchiostro-2); cursor: pointer;
-}
-.tab-agg svg { width: 20px; height: 20px; }
-.tab-agg:active { background: var(--linea); }
-.tab-agg.nuova { color: var(--ambra); }
-.tab-agg.nuova::after { content: ""; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ambra-pieno); }
-.tab-agg.gira { color: var(--accento); cursor: default; }
-.tab-agg.gira svg { animation: tab-gira .9s linear infinite; }
 @keyframes tab-gira { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .tab-agg.gira svg { animation-duration: 2.5s; } }
+/* riga del pezzo (v51): Spotify, Spartito, Canta e la tablatura, o «Aggiungi la tablatura» */
+.pg-riga { align-items: center; }
+.pg-riga .btn, .pg-riga > button, .pg-riga > .tab-scarica {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 32px; height: auto; padding: 0 11px;
+  border: 1px solid var(--linea-forte); border-radius: var(--r); background: none;
+  font: 500 13px var(--ui); color: var(--inchiostro); text-decoration: none; cursor: pointer;
+}
+.pg-riga .i, .pg-riga .ico, .pg-riga .ico-sp { width: 18px; height: 18px; }
+.pg-riga .sola-icona { width: 34px; padding: 0; justify-content: center; }
+.pg-riga > .tab-aggiungi { border-style: dashed; border-color: var(--accento); color: var(--accento); }
+.pg-riga > .tab-scarica { color: var(--accento); border-color: var(--linea); cursor: default; }
+.pg-riga > .tab-scarica svg { animation: tab-gira .9s linear infinite; }
+.pg-riga > button:active, .pg-riga a:active { background: var(--linea); }
+@media (prefers-reduced-motion: reduce) { .pg-riga > .tab-scarica svg { animation-duration: 2.5s; } }
 .pg-link .nostro-tag { color: var(--ambra); border-color: var(--ambra-tinta); background: var(--ambra-tinta); font-size: 10.5px; }
 .bar { position: relative; height: 2px; background: var(--linea); margin: 8px 0 2px; }
 .bar i { position: absolute; left: 0; top: 0; display: block; height: 100%; width: 0; background: var(--accento); transition: width .4s ease; }
@@ -1015,3 +1011,29 @@ html.con-lettore, html.con-lettore body { overflow: hidden; }
 .ris-agg.fatto { background: var(--accento); color: var(--su-accento); }
 .ris:not(:disabled):active .ris-agg { background: var(--accento-tinta); }
 .ris-tag { flex: none; font-size: 11.5px; font-weight: 500; color: var(--inchiostro-2); border: 1px solid var(--linea-forte); border-radius: var(--r); padding: 4px 7px; white-space: nowrap; }
+
+/* foglio «Tablatura» (v51): la tab in uso e il caricamento di un file */
+.foglio-tit { flex: 1; min-width: 0; }
+.foglio-tit h2 { font: 400 26px/1.15 var(--display); margin: 0; }
+.foglio-sub { font-size: 13px; color: var(--inchiostro-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foglio-et { font: 600 11px/1.3 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--inchiostro-2); margin: 2px 0 6px; }
+.tab-uso { border: 1px solid var(--linea-forte); border-radius: var(--r); padding: 12px 12px 10px; margin: 0 0 18px; }
+.tab-uso .t { display: flex; gap: 10px; align-items: flex-start; }
+.tab-uso .t svg { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.tab-uso b { display: block; font: 500 15.5px/1.25 var(--ui); overflow-wrap: anywhere; }
+.tab-uso .t span { font-size: 13px; color: var(--inchiostro-2); }
+.tab-uso .az { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; padding-left: 32px; }
+.tab-uso .az a, .tab-uso .az button {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0;
+  background: none; border: none; font: 500 13.5px var(--ui); color: var(--accento); text-decoration: none; cursor: pointer;
+}
+.tab-uso .az svg { width: 16px; height: 16px; }
+.tab-carica { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); cursor: pointer; }
+.tab-carica .ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border: 1px solid var(--linea-forte); border-radius: var(--r); }
+.tab-carica .ic svg { width: 19px; height: 19px; }
+.tab-carica .tx { display: flex; flex-direction: column; min-width: 0; }
+.tab-carica b { font: 500 15.5px/1.25 var(--ui); }
+.tab-carica .tx span { font-size: 12.5px; color: var(--inchiostro-2); }
+.tab-carica:active .ic { background: var(--linea); }
+.tab-carica + .cerca-campo { margin-top: 12px; }
+.ris-tag.uso { color: var(--accento); border-color: var(--accento); }

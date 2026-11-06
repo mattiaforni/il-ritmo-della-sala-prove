@@ -2,6 +2,17 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "51",
+      "data": "2026-11-06",
+      "titolo": "La tablatura dei pezzi con la ricerca, o caricata da te",
+      "punti": [
+        "Nella pagina del pezzo c'è una riga sola: senza tab, «Aggiungi la tablatura»; con la tab, Spartito, Canta e l'icona della tablatura.",
+        "Il foglio «Tablatura» si apre con la ricerca su Songsterr già fatta su titolo e artista: tocchi il risultato giusto e la tab si scarica. Puoi anche incollare un link.",
+        "Per i pezzi nostri, o per una tab tua, c'è «Carica un file Guitar Pro» (.gp, .gp5, .gpx…).",
+        "Con la tab presente, il foglio mostra quella in uso, con «Apri su Songsterr» e «Scarica di nuovo». Il link Songsterr non sta più in «Modifica»."
+      ]
+    },
+    {
       "versione": "50",
       "data": "2026-11-06",
       "titolo": "Canta: la linea della voce più fluida",
