@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "50",
+      "data": "2026-11-06",
+      "titolo": "Canta: la linea della voce più fluida",
+      "punti": [
+        "La linea della voce in Canta è filtrata: niente più salti a ogni misura, picchi d'ottava o pezzetti staccati, ma vibrato e stonature si vedono ancora.",
+        "A fine nota la linea non precipita più in fondo: resta nell'ottava della nota anche fra una nota e l'altra. Il calo vero della voce si vede come una codina sottile.",
+        "Il pallino scivola invece di saltare, ha il bordo bianco e sfuma quando smetti di cantare. Il punteggio resta quello di prima."
+      ]
+    },
+    {
       "versione": "49",
       "data": "2026-11-06",
       "titolo": "Da cantare, e la tab si aggiorna con una freccetta",
