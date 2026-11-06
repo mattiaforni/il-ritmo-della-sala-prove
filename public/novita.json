@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "47",
+      "data": "2026-11-06",
+      "titolo": "Spartito sopra l'app, passaggi più puliti",
+      "punti": [
+        "Spartito e Canta si aprono sopra la pagina del pezzo, senza cambiare pagina: chiudendo si torna esattamente dove si era, e riaprire lo stesso pezzo è immediato.",
+        "Lo Spartito è la pagina principale: il microfono porta a Canta, l'ingranaggio alle impostazioni, e da lì si torna indietro (anche con il tasto indietro del telefono). La musica non riparte mai da sola.",
+        "Canta parte da capo e aspetta il ▶; nello Spartito c'è il pulsante per ricominciare. Cambiare tonalità non fa partire la musica e sposta anche la tab."
+      ]
+    },
+    {
       "versione": "46",
       "data": "2026-11-06",
       "titolo": "Tonalità vera, testo a versi",
