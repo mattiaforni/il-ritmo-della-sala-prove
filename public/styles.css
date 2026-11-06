@@ -332,15 +332,29 @@ button.ini.on { border-color: transparent; color: #fff; }
   border: 1px solid var(--linea-forte); border-radius: var(--r);
   font-size: 13px; font-weight: 500; color: var(--inchiostro); text-decoration: none;
 }
-.pg-link .links { gap: 8px; flex-wrap: wrap; }
+.pg-link .links { gap: 8px; flex-wrap: wrap; align-items: center; }
 .pg-link .links a { width: auto; height: auto; color: var(--inchiostro); }
 .pg-link .ico, .pg-link .ico-sp { width: 18px; height: 18px; }
 .pg-tab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .pg-tab .btn { min-height: 32px; height: auto; padding: 0 11px; border: 1px solid var(--linea-forte); font-size: 13px; color: var(--inchiostro); text-decoration: none; gap: 7px; }
-.pg-tab .btn.mini { border-color: transparent; color: var(--inchiostro-2); padding: 0 6px; }
 .pg-tab .i { width: 18px; height: 18px; }
-.pg-tab small { font-size: 12px; color: var(--inchiostro-2); }
-.pg-tab .btn.mini.tab-vecchia { color: var(--ambra); border-color: var(--ambra); }
+/* freccetta accanto a «Tablatura»: scarica di nuovo la tab (ambra con il pallino se manca o se il link è cambiato,
+   rossa e in rotazione mentre la funzione lavora) */
+.tab-agg {
+  position: relative; flex: none;
+  width: 36px; height: 32px; padding: 0; margin-left: -2px;
+  display: inline-grid; place-items: center;
+  background: none; border: none; border-radius: var(--r);
+  color: var(--inchiostro-2); cursor: pointer;
+}
+.tab-agg svg { width: 20px; height: 20px; }
+.tab-agg:active { background: var(--linea); }
+.tab-agg.nuova { color: var(--ambra); }
+.tab-agg.nuova::after { content: ""; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ambra-pieno); }
+.tab-agg.gira { color: var(--accento); cursor: default; }
+.tab-agg.gira svg { animation: tab-gira .9s linear infinite; }
+@keyframes tab-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tab-agg.gira svg { animation-duration: 2.5s; } }
 .pg-link .nostro-tag { color: var(--ambra); border-color: var(--ambra-tinta); background: var(--ambra-tinta); font-size: 10.5px; }
 .bar { position: relative; height: 2px; background: var(--linea); margin: 8px 0 2px; }
 .bar i { position: absolute; left: 0; top: 0; display: block; height: 100%; width: 0; background: var(--accento); transition: width .4s ease; }
@@ -958,3 +972,46 @@ html.con-lettore, html.con-lettore body { overflow: hidden; }
 .lt-riga-t b { font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lt-riga-t small { font-size: 12.5px; color: var(--inchiostro-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lt-riga .time { font-size: 12.5px; }
+
+/* ---------- Personale: «Da cantare» (pezzi fuori da scaletta e proposte, v49) ---------- */
+.dc-riga { display: flex; align-items: center; gap: 8px; padding: 11px 0; border-bottom: 1px solid var(--linea); }
+.dc-riga .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dc-riga .t b { font: 500 15.5px/1.25 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-riga .t span { font-size: 13px; color: var(--inchiostro-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-riga .t em { font-style: normal; color: var(--ambra); }
+.dc-riga .t .prep { color: var(--accento); }
+.dc-btn {
+  width: 42px; height: 42px; flex: none; padding: 0;
+  display: grid; place-items: center;
+  background: none; border: 1px solid var(--linea-forte); border-radius: var(--r);
+  color: var(--inchiostro);
+}
+.dc-btn svg { width: 20px; height: 20px; }
+.dc-btn:active { background: var(--linea); }
+.dc-btn:disabled { opacity: .35; }
+.dc-togli { width: 42px; height: 42px; flex: none; padding: 0; display: grid; place-items: center; background: none; border: none; border-radius: var(--r); color: var(--rosso); }
+.dc-togli svg { width: 20px; height: 20px; }
+.da-cantare .addline { margin-top: 2px; }
+
+/* foglio «Aggiungi un pezzo»: ricerca su Songsterr */
+.cerca-campo { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--linea-forte); }
+.cerca-campo:focus-within { border-bottom: 2px solid var(--accento); }
+.cerca-campo svg { width: 20px; height: 20px; flex: none; color: var(--inchiostro-3); }
+.cerca-campo .field, .cerca-campo .field:focus { border: none; padding: 9px 0 8px; font-size: 17px; }
+.cerca-aiuto { font-size: 12.5px; color: var(--inchiostro-2); margin: 8px 0 6px; }
+.cerca-stato { font-size: 14px; color: var(--inchiostro-2); margin: 14px 0; }
+.cerca-fonte { font-size: 11.5px; color: var(--inchiostro-3); margin: 12px 0 0; }
+.ris {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 0; margin: 0; border: none; border-bottom: 1px solid var(--linea);
+  background: none; text-align: left; font: inherit; color: var(--inchiostro); cursor: pointer;
+}
+.ris:disabled { cursor: default; color: var(--inchiostro); }
+.ris .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ris .t b { font: 500 15.5px/1.25 var(--ui); overflow-wrap: anywhere; }
+.ris .t span { font-size: 13px; color: var(--inchiostro-2); overflow-wrap: anywhere; }
+.ris-agg { width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: var(--accento); border: 1px solid var(--accento); border-radius: var(--r); }
+.ris-agg svg { width: 18px; height: 18px; }
+.ris-agg.fatto { background: var(--accento); color: var(--su-accento); }
+.ris:not(:disabled):active .ris-agg { background: var(--accento-tinta); }
+.ris-tag { flex: none; font-size: 11.5px; font-weight: 500; color: var(--inchiostro-2); border: 1px solid var(--linea-forte); border-radius: var(--r); padding: 4px 7px; white-space: nowrap; }

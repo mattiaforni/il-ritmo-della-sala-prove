@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "49",
+      "data": "2026-11-06",
+      "titolo": "Da cantare, e la tab si aggiorna con una freccetta",
+      "punti": [
+        "Nella tua pagina c'è «Da cantare»: pezzi fuori da scaletta e proposte, da leggere nello Spartito o da cantare. «Aggiungi un pezzo» cerca su Songsterr (o accetta il link di una tab) e la tab si scarica da sola.",
+        "Nella pagina del pezzo la riga con «Aggiorna» non c'è più: la tab si scarica di nuovo con la freccetta accanto a «Tablatura», che gira mentre lavora e diventa ambra quando il link è cambiato.",
+        "Un pezzo con il link Songsterr ma senza tab non ha più «Prepara spartito e Canta»: tocchi Spartito o Canta e la tab si scarica e si apre."
+      ]
+    },
+    {
       "versione": "48",
       "data": "2026-11-06",
       "titolo": "Spartito e Canta più semplici",
