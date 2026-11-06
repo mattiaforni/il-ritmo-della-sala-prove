@@ -188,8 +188,9 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-metro" viewBox="0 0 24 24"><path d="M9 3h6l3 18H6zM12 16L17 6"/><path d="M8 13h8"/></symbol>
   <symbol id="i-muto" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9l5 6M21 9l-5 6"/></symbol>
   <symbol id="i-suono" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
-  <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M10.3 3h3.4l.5 2.3 1.9.8 2-1.3 2.4 2.4-1.3 2 .8 1.9 2.3.5v3.4l-2.3.5-.8 1.9 1.3 2-2.4 2.4-2-1.3-1.9.8-.5 2.3h-3.4l-.5-2.3-1.9-.8-2 1.3-2.4-2.4 1.3-2-.8-1.9L3 13.7v-3.4l2.3-.5.8-1.9-1.3-2 2.4-2.4 2 1.3 1.9-.8z"/></symbol>
   <symbol id="i-giu-piccolo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-parti" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12"/><rect x="9.5" y="6" width="5" height="12"/><rect x="16" y="6" width="5" height="12"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
 
@@ -231,7 +232,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="campo"><label>Tolleranza<small>Quanto puoi scostarti dalla nota</small></label><div class="seg" id="st-tol"><button data-v="35">Stretta</button><button data-v="50" class="on">Normale</button><button data-v="75">Larga</button></div></div>
     <div class="fascia">Testo</div>
     <p class="nota" id="st-testo-nota" style="margin:8px 0"></p>
-    <div id="st-testo-tab" class="hidden">
+    <div id="st-testo-tab" class="hidden" style="display:none">
       <textarea id="st-testo-tr" spellcheck="false" style="min-height:200px;font-size:14px;line-height:1.5"></textarea>
       <p class="nota" style="margin-top:6px">Ogni spazio o trattino manda alla nota dopo; <b>due spazi</b> lasciano una nota senza testo; <b>+</b> tiene due parole sulla stessa nota. Una riga «<b>[battuta 25]</b>» fa ripartire il testo da quella battuta.</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="seg" style="padding:8px 14px;font-size:13px" data-az="testo-tr-orig">Com'era</button><button class="seg" style="padding:8px 14px;font-size:13px;background:var(--accento);color:var(--su-accento);border-color:var(--accento)" data-az="testo-tr-salva" id="st-testo-tr-salva">Applica</button></div>
@@ -254,8 +255,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div></div>
   <div class="sp-barra">
-    <button class="tog icona" data-az="tracce" title="Tracce: scegli, silenzia, vista"><svg class="i"><use href="#i-mix"/></svg></button>
-    <button class="tog icona" data-az="sp-loop" id="sp-loop" title="Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito"><svg class="i"><use href="#i-ripeti"/></svg></button>
+    <button class="tog" data-az="parti" id="sp-parti" title="Parti del brano"><svg class="i" style="width:18px;height:18px"><use href="#i-parti"/></svg><span>Parti</span></button>
     <button class="tog icona" data-az="sp-metro" id="sp-metro" title="Metronomo"><svg class="i"><use href="#i-metro"/></svg></button>
     <div class="tempo"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div>
     <div class="sp"></div>
@@ -267,10 +267,16 @@ textarea:focus { outline: none; border-color: var(--accento); }
 <div class="velo basso hidden" id="velo-tracce"><div class="foglio-lista">
   <div class="testa"><h2>Tracce</h2><button class="ico" data-az="tracce-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
   <div class="corpo-l">
-    <div class="campo" id="riga-vista"><label>Vista<small>Vale per tutti i brani; la voce è sempre in pentagramma</small></label><div class="seg" id="st-vista"><button data-v="tab">Tab</button><button data-v="score">Pentagr.</button><button data-v="entrambi" class="on">Entrambi</button></div></div>
+    <div class="campo" id="riga-vista"><label>Vista<small>Vale per tutti i brani; la voce è sempre in pentagramma</small></label><div class="seg" id="st-vista"><button data-v="tab" class="on">Tab</button><button data-v="score" class="on">Pentagramma</button></div></div>
     <p class="nota" style="margin:10px 0 4px">Tocca una traccia per vederla (e cantarla); l'altoparlante la silenzia nella base.</p>
     <div id="lista-tracce"></div>
   </div>
+</div></div>
+
+<!-- Parti del brano (Intro, Verse, Chorus…) -->
+<div class="velo basso hidden" id="velo-parti"><div class="foglio-lista">
+  <div class="testa"><h2>Parti</h2><button class="ico" data-az="parti-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l"><div id="lista-parti"></div></div>
 </div></div>
 
 <!-- Attesa / messaggi (brano dall'app) -->
@@ -289,6 +295,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <div class="comandi">
     <div class="mic"><svg class="i"><use href="#i-mic"/></svg><div class="liv"><div id="liv"></div></div><span id="es-nota">—</span></div>
     <div class="sp"></div>
+    <button class="btn" data-az="parti" id="es-parti" title="Parti del brano"><svg class="i"><use href="#i-parti"/></svg></button>
     <button class="btn" data-az="ricomincia" title="Ricomincia"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="play" title="Play / pausa"><svg class="i"><use id="play-ico" href="#i-play"/></svg></button>
   </div>
@@ -314,7 +321,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
 <script type="module">
 // collegamento a Firebase: lo stesso accesso dell'app (band o fan), condiviso sullo stesso sito
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 if (window.FIREBASE_CONFIG) {
   const app = initializeApp(window.FIREBASE_CONFIG);
@@ -322,8 +329,7 @@ if (window.FIREBASE_CONFIG) {
   window.__auth = auth;
   window.__fb = {
     utente: () => new Promise(ok => { const off = onAuthStateChanged(auth, u => { off(); ok(u); }); }),
-    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
-    salvaTesti: (id, traccia, righe) => updateDoc(doc(db, 'canzoni', id), { ['testiTab.' + traccia]: righe })
+    canzone: async (id) => { const s = await getDoc(doc(db, 'canzoni', id)); return s.exists() ? { id: s.id, ...s.data() } : null; }
   };
 }
 window.dispatchEvent(new Event('fb-pronto'));
@@ -343,10 +349,10 @@ const TPQ = 960; // tick per quarto in alphaTab
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
   tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', daSpartito: false,
-  esec: null, loop: false, sel: null, canzone: null, ruolo: null,
+  esec: null, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
-const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, trasp: state.trasp, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
 
 // ------------------------------------------------------------ archivio (IndexedDB)
 const db = {
@@ -427,6 +433,43 @@ function indovinaTraccia(score) {
   });
   return best;
 }
+// Trasposizione: si spostano le note stesse (tasto e corda), così tab, pentagramma e base cambiano insieme
+// e la batteria resta com'è. Ogni nota ricorda corda e tasto originali: si riparte sempre da lì.
+function trasponiModello(score, n) {
+  for (const t of score.tracks) {
+    if (t.playbackInfo.isPercussion) continue;
+    for (const st of t.staves) {
+      const tun = st.tuning; if (!st.isStringed || !tun || !tun.length) continue;
+      for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) {
+        const occ = new Set();
+        for (const x of b.notes) { if (x.isRest || x.string < 1) continue; if (x._s0 == null) { x._s0 = x.string; x._f0 = x.fret; } }
+        for (const x of b.notes) {
+          if (x._s0 == null) continue;
+          const val = tun[tun.length - x._s0] + x._f0 + n;
+          const cand = [x._s0];
+          for (let d = 1; d < tun.length; d++) { if (x._s0 - d >= 1) cand.push(x._s0 - d); if (x._s0 + d <= tun.length) cand.push(x._s0 + d); }
+          let scelta = null;
+          for (const c of cand) { const f = val - tun[tun.length - c]; if (f >= 0 && f <= 24 && !occ.has(c)) { scelta = [c, f]; break; } }
+          if (!scelta) scelta = [x._s0, Math.max(0, Math.min(24, val - tun[tun.length - x._s0]))];
+          x.string = scelta[0]; x.fret = scelta[1]; occ.add(scelta[0]);
+        }
+      }
+    }
+  }
+  score._trasp = n;
+}
+// base rigenerata senza perdere il punto (e la riproduzione, se suonava)
+function rigeneraBase() {
+  if (!api) return;
+  const pos = api.tickPosition, suonava = api.playerState === 1;
+  let h = null; h = api.midiLoaded.on(() => { if (h) api.midiLoaded.off(h); try { api.tickPosition = pos; if (suonava) api.play(); } catch (e) {} });
+  api.loadMidiForScore();
+}
+function applicaTrasposizione() {
+  if (!state.score || state.score._trasp === state.trasp) return;
+  trasponiModello(state.score, state.trasp);
+  if (api) { rigeneraBase(); if (!$('#spartito').classList.contains('hidden')) disegnaSpartito(); }
+}
 function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) if (b.lyrics && b.lyrics.some(x => x)) n++; return n; }
 function* beatsDi(tr) { for (const bar of tr.staves[0].bars) for (const v of bar.voices) for (const b of v.beats) if (!b.isEmpty) yield b; }
 
@@ -458,8 +501,32 @@ function costruisciModello(score, idx) {
   const sez = sezioni.filter(s => s.note.length);
   const fine = mb.length ? mb[mb.length - 1].start + mb[mb.length - 1].calculateDuration() : (note.length ? note[note.length - 1].tick + note[note.length - 1].dur : 0);
   const haTesto = note.some(n => n.syl);
+  // versi: dalle righe del testo della tab (Songsterr), assegnate alle note come fa Guitar Pro; altrimenti le frasi
+  let versi = null;
+  const testi = state.canzone && state.canzone.tab && state.canzone.tab.testi && state.canzone.tab.testi[idx];
+  if (haTesto && Array.isArray(testi) && testi.length) {
+    versi = [];
+    const perTick = new Map(note.map(n => [n.tick, n]));
+    for (const blocco of testi) {
+      const righe = String(blocco.text || '').split('\n');
+      const da = Math.max(0, (Number(blocco.offset) || 1) - 1);
+      // beat con note dalla battuta di partenza, nell'ordine in cui Guitar Pro assegna le sillabe
+      const beats = []; for (const b of beatsDi(tr)) { if (b.voice.bar.index < da || b.isRest || !b.notes.length) continue; beats.push(b); }
+      let k = 0;
+      for (const riga of righe) {
+        const testo = riga.replace(/\[[^\]]*\]/g, '').trim(); if (!testo) continue;
+        const l = new alphaTab.model.Lyrics(); l.text = riga; l.finish();
+        const miei = beats.slice(k, k + l.chunks.length); k += l.chunks.length;
+        if (!miei.length) break;
+        const noteRiga = []; for (const b of miei) { const n = perTick.get(b.absolutePlaybackStart); if (n && !noteRiga.includes(n)) noteRiga.push(n); }
+        versi.push({ testo: testo.replace(/\s*-\s*/g, '').replace(/\+/g, ' ').replace(/\s+/g, ' '), tick: miei[0].absolutePlaybackStart, note: noteRiga });
+      }
+    }
+    versi.sort((a, b) => a.tick - b.tick);
+  }
+  if (!versi) versi = frasi.map(f => ({ testo: f.testo, tick: f.note[0].tick, note: f.note }));
   const minMidi = Math.min(...note.map(n => n.midi)), maxMidi = Math.max(...note.map(n => n.midi));
-  return { note, frasi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120 };
+  return { note, frasi, versi, sezioni: sez, fine, haTesto, minMidi, maxMidi, tempo: score.tempo || 120 };
 }
 function righeDi(testo) { return (testo || '').split('\n').map(r => r.trim()).filter(Boolean); }
 function testoDi(note) {
@@ -484,7 +551,7 @@ function creaApi() {
   api.playerFinished.on(() => { if (state.esec) fineEsecuzione(); });
   api.playerStateChanged.on(e => { $('#sp-play-ico').setAttribute('href', e.state === 1 ? '#i-pausa' : '#i-play'); if (!state.esec) return; state.esec.suona = e.state === 1; aggiornaPlay(); });
   api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
-  api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; aggiornaSpartito(); });
+  api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; });
   api.playerPositionChanged.on(e => { const x = state.esec; if (!x) return; x.tick = e.currentTick; x.tickAt = performance.now(); x.endTick = e.endTick; x.endTime = e.endTime; x.tempoCorr = e.currentTime > 0 ? e.currentTick / e.currentTime : null; });
   return api;
 }
@@ -534,25 +601,20 @@ function applicaMix() {
   for (const t of tracce) {
     if (t.playbackInfo.isPercussion) continue;
     if (t._prog == null) t._prog = t.playbackInfo.program;
-    const voluto = t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : t._prog;
+    const inCanto = !!state.esec;   // lo strumento della voce guida vale solo mentre si canta
+    const voluto = inCanto && t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : t._prog;
     if (t.playbackInfo.program !== voluto) { t.playbackInfo.program = voluto; rigenera = true; }
     // i file Guitar Pro ripetono lo strumento come automazione sul primo beat: va cambiata anche quella
     for (const st of t.staves) for (const bar of st.bars) for (const v of bar.voices) for (const bt of v.beats) for (const au of bt.automations) {
       if (au.type !== alphaTab.model.AutomationType.Instrument) continue;
       if (au._orig == null) au._orig = au.value;
-      const vv = t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : au._orig;
+      const vv = inCanto && t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : au._orig;
       if (au.value !== vv) { au.value = vv; rigenera = true; }
     }
   }
-  if (rigenera) {
-    // la base rigenerata riparte da zero: si torna al punto in cui era, e se suonava riparte
-    const pos = api.tickPosition, suonava = api.playerState === 1;
-    let h = null; h = api.midiLoaded.on(() => { if (h) api.midiLoaded.off(h); try { api.tickPosition = pos; if (suonava) api.play(); } catch (e) {} });
-    api.loadMidiForScore();
-  }
+  if (rigenera) rigeneraBase();
   const m = muti();
   for (const t of tracce) { api.changeTrackMute([t], m.includes(t.index)); api.changeTrackVolume([t], t.index === state.traccia ? state.guida : 1); }
-  api.changeTrackTranspositionPitch(tracce, state.trasp);
   api.playbackSpeed = state.tempo / 100;
   api.metronomeVolume = state.metro ? 1 : 0;
   api.countInVolume = 1;
@@ -567,7 +629,8 @@ async function apriBrano(id) {
   $('#st-tr-nome').textContent = 'Lettura…'; $('#st-info').textContent = '';
   try { state.score = await caricaScore(b); } catch (e) { toast('Non riesco a leggere il file: ' + (e.message || e), 5000); mostra('brani'); return; }
   state.traccia = b.traccia != null && b.traccia < state.score.tracks.length ? b.traccia : indovinaTraccia(state.score);
-  applicaTestiCorretti();
+  state.trasp = b.trasp || 0;   // la tonalità è del brano
+  applicaTrasposizione();
   aggiornaSetup();
 }
 function aggiornaSetup() {
@@ -578,13 +641,12 @@ function aggiornaSetup() {
   const bb = state.brano;
   if (bb && state.score) {
     const haT = contaTesto(state.score.tracks[state.traccia]) > 0;
-    const corr = testiCorretti(), orig = testiOriginali();
-    $('#st-testo-nota').textContent = haT ? (orig || corr ? `Il testo della traccia${corr ? ' (corretto)' : ''}: se qualche sillaba non va a tempo, sistemalo qui e tocca Applica.` : 'Il file ha già il testo sulla traccia scelta: quello incollato qui non serve.') : 'La traccia scelta non ha il testo. Incollalo qui per averlo mentre canti.';
+    $('#st-testo-nota').textContent = haT ? 'Il testo viene dalla tab, un verso alla volta. Mentre canti, se un verso parte prima o dopo del dovuto, tocca il testo al momento giusto: l\'app ricorda il punto.' : 'La traccia non ha il testo. Incollalo qui, un verso per riga: mentre canti, un tocco sul testo passa al verso dopo e l\'app ricorda il punto.';
     $('#st-testo').classList.toggle('hidden', haT);
     if ($('#st-testo').value !== (bb.testo || '')) $('#st-testo').value = bb.testo || '';
-    const nT = (bb.tempiTesto || []).filter(v => v != null).length; const righe = righeDi(bb.testo);
+    const nT = (bb.tempiTesto || []).filter(v => v != null).length;
     $('#st-tempi-riga').classList.toggle('hidden', !nT);
-    $('#st-tempi-info').textContent = `${nT} su ${righe.length} righe hanno il punto di partenza`;
+    $('#st-tempi-info').textContent = `${nT} ${nT === 1 ? 'verso corretto' : 'versi corretti'} a mano`;
   }
   const gs = $('#st-guida-strum'); if (!gs.options.length) for (const [v, n] of GUIDA_STRUM) { const o = document.createElement('option'); o.value = v; o.textContent = n; gs.appendChild(o); }
   gs.value = state.guidaStrum;
@@ -594,12 +656,9 @@ function aggiornaSetup() {
   if (state.score) {
     const tr = state.score.tracks[state.traccia];
     $('#st-tr-nome').textContent = nomeBreve(tr, state.traccia);
-    const orig = testiOriginali(), corr = testiCorretti();
-    $('#st-testo-tab').classList.toggle('hidden', !orig && !corr);
-    if (orig || corr) { const ta = $('#st-testo-tr'); if (ta.dataset.traccia !== String(state.traccia)) { ta.value = righeATesto(corr || orig); ta.dataset.traccia = String(state.traccia); } }
     const m = costruisciModello(state.score, state.traccia);
     const nome = (x) => ['Do', 'Do♯', 'Re', 'Re♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'][(x % 12 + 12) % 12] + (Math.floor(x / 12) - 1);
-    $('#st-info').textContent = m.note.length ? `${m.note.length} note, da ${nome(m.minMidi + state.trasp)} a ${nome(m.maxMidi + state.trasp)}${m.haTesto ? ', con il testo' : ', senza testo'}` : 'Questa traccia non ha note';
+    $('#st-info').textContent = m.note.length ? `${m.note.length} note, da ${nome(m.minMidi)} a ${nome(m.maxMidi)}${m.haTesto ? ', con il testo' : ', senza testo'}` : 'Questa traccia non ha note';
   }
 }
 
@@ -675,15 +734,22 @@ async function avviaEsecuzione() {
     pxPerTick: pxPerSec / 1000 / (m.tempo * TPQ / 60000),
     traccia: [], // [tick, midiCantato] degli ultimi secondi
     ultimoFrame: 0, raf: 0,
-    minMidi: m.minMidi + state.trasp - 3, maxMidi: m.maxMidi + state.trasp + 3,
-    righe: !m.haTesto ? righeDi(state.brano.testo) : [], riga: -1, tempi: null, tempiCambiati: false,
+    minMidi: m.minMidi - 3, maxMidi: m.maxMidi + 3,
+    righe: [], versi: [], riga: -1, tempi: null, tempiCambiati: false,
   };
-  if (state.esec.righe.length) { const t0 = state.brano.tempiTesto; state.esec.tempi = Array.isArray(t0) && t0.length === state.esec.righe.length ? t0.slice() : new Array(state.esec.righe.length).fill(null); }
-  const manuale = state.esec.righe.length > 0;
-  $('#testo').classList.toggle('manuale', manuale);
-  $('#tx-sugg').classList.toggle('hidden', !manuale); $('#tx-indietro').classList.toggle('hidden', !manuale);
-  $('#tx-sugg').textContent = manuale ? (state.esec.tempi.some(v => v != null) ? 'Le righe avanzano da sole; un tocco corregge il punto' : 'Tocca il testo a ogni riga nuova: l\'app ricorda il punto') : '';
+  {
+    const x = state.esec;
+    if (m.haTesto) { x.versi = m.versi; x.righe = m.versi.map(v => v.testo); x.tempi = m.versi.map(v => v.tick); }
+    else { x.righe = righeDi(state.brano.testo); x.versi = x.righe.map(r => ({ testo: r, tick: null, note: [] })); x.tempi = new Array(x.righe.length).fill(null); }
+    const t0 = state.brano.tempiTesto;   // punti corretti a mano, se ce ne sono
+    if (Array.isArray(t0) && t0.length === x.righe.length) t0.forEach((v, i) => { if (v != null) x.tempi[i] = v; });
+    const manuale = x.righe.length > 0;
+    $('#testo').classList.toggle('manuale', manuale);
+    $('#tx-sugg').classList.toggle('hidden', !manuale); $('#tx-indietro').classList.toggle('hidden', !manuale);
+    $('#tx-sugg').textContent = !manuale ? '' : m.haTesto ? 'Un tocco sul testo passa al verso dopo e corregge il punto' : (x.tempi.some(v => v != null) ? 'I versi avanzano da soli; un tocco corregge il punto' : 'Tocca il testo a ogni verso nuovo: l\'app ricorda il punto');
+  }
   $('#tx-prima').textContent = ''; x_righeDis = -2;
+  $('#es-parti').classList.toggle('hidden', !partiDi().length);
   for (const n of m.note) { n.ok = 0; n.tot = 0; n.inizio = false; }
   ridimensiona();
   $('#tx-msg').textContent = 'Caricamento della base…';
@@ -757,7 +823,7 @@ function valuta(tick, md, ora) {
   const peso = Math.min(100, ora - x.ultimaVal); x.ultimaVal = ora;
   if (tick - n.tick < 70) return; // attacco: non conta
   n.tot += peso;
-  if (Math.abs(scarto(md, n.midi + state.trasp)) <= state.tol) n.ok += peso;
+  if (Math.abs(scarto(md, n.midi)) <= state.tol) n.ok += peso;
 }
 function notaA(tick) { const m = state.esec.m; for (const n of m.note) { if (n.tick > tick) break; if (tick < n.tick + n.dur) return n; } return null; }
 
@@ -776,7 +842,7 @@ function disegna(t) {
   const h = Math.max(8, Math.min(16, rowH * 0.9));
   for (const n of m.note) {
     const xa = toX(n.tick), xb = toX(n.tick + n.dur); if (xb < -4 || xa > W + 4) continue;
-    const y = toY(n.midi + state.trasp) - h / 2; const w = Math.max(3, xb - xa - 2);
+    const y = toY(n.midi) - h / 2; const w = Math.max(3, xb - xa - 2);
     c.fillStyle = '#D3CABD'; c.fillRect(xa, y, w, h);
     // parte già cantata: verde/rosso in proporzione a quanto ok
     if (n.tot > 0) {
@@ -785,14 +851,14 @@ function disegna(t) {
       c.fillStyle = q >= 0.5 ? '#6FA376' : '#C9655A';
       c.fillRect(xa, y, w * cantata, h);
     } else if (t > n.tick + n.dur && n.tot === 0) { c.fillStyle = '#F5E0DC'; c.fillRect(xa, y, w, h); }
-    if (w > 28 && rowH >= 7) { c.fillStyle = t > n.tick ? '#FFFFFF' : '#645A50'; c.font = '11px Instrument Sans, sans-serif'; c.textBaseline = 'middle'; c.fillText(NOMI[(Math.round(n.midi + state.trasp) % 12 + 12) % 12], xa + 4, y + h / 2 + .5); }
+    if (w > 28 && rowH >= 7) { c.fillStyle = t > n.tick ? '#FFFFFF' : '#645A50'; c.font = '11px Instrument Sans, sans-serif'; c.textBaseline = 'middle'; c.fillText(NOMI[(Math.round(n.midi) % 12 + 12) % 12], xa + 4, y + h / 2 + .5); }
   }
   // traccia della voce: spostata nell'ottava della nota attesa
   c.strokeStyle = '#231B15'; c.lineWidth = 2; c.beginPath(); let aperto = false;
   for (const [tk, md] of x.traccia) {
     if (md == null) { aperto = false; continue; }
     const n = notaA(tk); let y;
-    if (n) { const att = n.midi + state.trasp; y = toY(att + scarto(md, att) / 100); } else y = toY(md);
+    if (n) { const att = n.midi; y = toY(att + scarto(md, att) / 100); } else y = toY(md);
     if (y < -20 || y > H + 20) { aperto = false; continue; }
     const xx = toX(tk);
     if (!aperto) { c.moveTo(xx, y); aperto = true; } else c.lineTo(xx, y);
@@ -802,7 +868,7 @@ function disegna(t) {
   c.strokeStyle = '#B4552D'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, 0); c.lineTo(x0, H); c.stroke();
   // pallino della voce
   const ult = x.traccia[x.traccia.length - 1];
-  if (ult && ult[1] != null) { const n = notaA(ult[0]); const att = n ? n.midi + state.trasp : null; const y = n ? toY(att + scarto(ult[1], att) / 100) : toY(ult[1]); c.fillStyle = '#231B15'; c.beginPath(); c.arc(toX(ult[0]), y, 4, 0, 7); c.fill(); }
+  if (ult && ult[1] != null) { const n = notaA(ult[0]); const att = n ? n.midi : null; const y = n ? toY(att + scarto(ult[1], att) / 100) : toY(ult[1]); c.fillStyle = '#231B15'; c.beginPath(); c.arc(toX(ult[0]), y, 4, 0, 7); c.fill(); }
 }
 function disegnaMappa(t) {
   const x = state.esec; const m = x.m; const W = cvm.clientWidth, H = cvm.clientHeight; const c = ctxm;
@@ -814,12 +880,12 @@ function disegnaMappa(t) {
   c.fillStyle = '#ECE7DF'; c.fillRect(0, 0, toX(t), H);
   // sezioni
   c.fillStyle = '#978C80'; c.font = '600 9px Instrument Sans, sans-serif'; c.textBaseline = 'top';
-  for (const sz of m.sezioni) { const xs = toX(state.score.masterBars[sz.da].start); c.fillRect(xs, 0, 1, H); c.fillText(sz.nome.toUpperCase().slice(0, 12), xs + 3, 3); }
+  for (const sz of m.sezioni) { const xs = toX(state.score.masterBars[sz.da].start); c.fillRect(xs, 0, 1, H); const larg = sz.a === Infinity ? W - xs : toX(state.score.masterBars[Math.min(sz.a, state.score.masterBars.length - 1)].start) - xs; if (larg > 44) c.fillText(sz.nome.toUpperCase().slice(0, Math.floor(larg / 6)), xs + 3, 3); }
   // note
   for (const n of m.note) {
     const xa = toX(n.tick), w = Math.max(1.5, toX(n.tick + n.dur) - xa);
     c.fillStyle = n.tot > 0 ? (n.ok / n.tot >= 0.5 ? '#6FA376' : '#C9655A') : (t > n.tick + n.dur ? '#E2B9B0' : '#B8AFA3');
-    c.fillRect(xa, toY(n.midi + state.trasp) - 1, w, 2.5);
+    c.fillRect(xa, toY(n.midi) - 1, w, 2.5);
   }
   // righe del testo sincronizzate
   if (x.tempi) { c.fillStyle = '#D99A2B'; for (const tk of x.tempi) if (tk != null) c.fillRect(toX(tk), H - 5, 1.5, 5); }
@@ -830,10 +896,10 @@ function saltaA(tick) {
   const x = state.esec; if (!x) return;
   tick = Math.max(0, Math.min(x.endTick || x.m.fine, tick));
   for (const n of x.m.note) if (n.tick + n.dur > tick) { n.ok = 0; n.tot = 0; }
-  x.traccia = []; x.fraseDis = -1; x.ultimaVal = 0;
+  x.traccia = []; x.ultimaVal = 0;
   x.tick = tick; x.tickAt = performance.now(); x.contoFine = 0;
   try { api.tickPosition = tick; } catch (e) {}
-  if (x.tempi) { let r = -1; x.tempi.forEach((tk, i) => { if (tk != null && tk <= tick) r = i; }); x.riga = r; }
+  if (x.tempi) { let r = -1; x.tempi.forEach((tk, i) => { if (tk != null && tk <= tick) r = i; }); x.riga = r; x_righeDis = -2; }
   disegnaTesto(tick);
 }
 (() => {
@@ -858,29 +924,23 @@ function salvaTempi() {
   let ult = -1; for (let i = 0; i < x.tempi.length; i++) { if (x.tempi[i] == null) continue; if (x.tempi[i] < ult) x.tempi[i] = null; else ult = x.tempi[i]; }
   state.brano.tempiTesto = x.tempi.slice(); x.tempiCambiati = false; db.metti(state.brano).catch(() => {});
 }
-function disegnaTestoManuale(t) {
-  const x = state.esec;
-  if (x.tempi && x.suona) { let r = x.riga; x.tempi.forEach((tk, i) => { if (tk != null && tk <= t && i > r) r = i; }); if (r !== x.riga) x.riga = r; }
-  if (x_righeDis === x.riga) return; x_righeDis = x.riga;
-  $('#tx-prima').textContent = x.riga > 0 ? x.righe[x.riga - 1] : '';
-  $('#tx-ora').textContent = x.riga >= 0 ? x.righe[x.riga] : '';
-  $('#tx-ora').style.color = '';
-  $('#tx-dopo').textContent = x.riga + 1 < x.righe.length ? x.righe[x.riga + 1] : '';
-}
 function disegnaTesto(t = 0) {
-  if (state.esec && state.esec.righe.length) return disegnaTestoManuale(t);
-  const x = state.esec; const m = x.m; const el = $('#tx-ora'), dopo = $('#tx-dopo');
-  let fi = m.frasi.findIndex(f => t < f.note[f.note.length - 1].tick + f.note[f.note.length - 1].dur);
-  if (fi < 0) fi = m.frasi.length - 1;
-  const f = m.frasi[fi];
-  if (x.fraseDis !== fi) {
-    x.fraseDis = fi; el.innerHTML = '';
-    if (!m.haTesto) { el.innerHTML = `<span style="font-size:18px;color:var(--inchiostro-3)">Senza testo: segui le barre</span>`; dopo.textContent = ''; return; }
-    for (const n of f.note) { if (!n.syl) continue; const s = document.createElement('span'); s.textContent = n.syl.replace(/-$/, ''); n.el = s; el.appendChild(s); if (!n.syl.endsWith('-')) el.appendChild(document.createTextNode(' ')); }
-    const g = m.frasi[fi + 1]; dopo.textContent = g ? g.testo : '';
+  const x = state.esec; if (!x) return;
+  if (!x.righe.length) { if (x_righeDis !== -3) { x_righeDis = -3; $('#tx-ora').innerHTML = `<span style="font-size:18px;color:var(--inchiostro-3)">Senza testo: segui le barre</span>`; $('#tx-dopo').textContent = ''; $('#tx-prima').textContent = ''; } return; }
+  if (x.tempi && x.suona) { let r = x.riga; x.tempi.forEach((tk, i) => { if (tk != null && tk <= t && i > r) r = i; }); if (r !== x.riga) x.riga = r; }
+  if (x_righeDis !== x.riga) {
+    x_righeDis = x.riga;
+    $('#tx-prima').textContent = x.riga > 0 ? x.righe[x.riga - 1] : '';
+    const el = $('#tx-ora'); el.innerHTML = '';
+    const v = x.riga >= 0 ? x.versi[x.riga] : null;
+    if (v && v.note.length && v.note.some(n => n.syl)) {
+      // una sillaba per nota, colorata mentre si canta
+      for (const n of v.note) { if (!n.syl) continue; const sp = document.createElement('span'); sp.textContent = n.syl.replace(/-$/, ''); n.el = sp; el.appendChild(sp); if (!n.syl.endsWith('-')) el.appendChild(document.createTextNode(' ')); }
+    } else el.textContent = v ? v.testo : '';
+    $('#tx-dopo').textContent = x.riga + 1 < x.righe.length ? x.righe[x.riga + 1] : '';
   }
-  if (!m.haTesto) return;
-  for (const n of f.note) { if (!n.el) continue; const cl = t >= n.tick ? (n.tot > 0 ? (n.ok / n.tot >= 0.5 ? 'bene' : 'male') : 'fatto') : ''; if (n.el.className !== cl) n.el.className = cl; }
+  const v = x.riga >= 0 ? x.versi[x.riga] : null;
+  if (v) for (const n of v.note) { if (!n.el) continue; const cl = t >= n.tick ? (n.tot > 0 ? (n.ok / n.tot >= 0.5 ? 'bene' : 'male') : 'fatto') : ''; if (n.el.className !== cl) n.el.className = cl; }
 }
 
 // ---- Spartito: la tablatura a schermo con alphaTab ----
@@ -890,16 +950,46 @@ function apriSpartito() {
   mostra('spartito');
   $('#sp-titolo').textContent = state.brano.titolo;
   disegnaSpartito();
-  api.isLooping = !!state.loop; api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
+  api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
   caricaSuoni().then(() => applicaMix()).catch(() => {});
   aggiornaSpartito();
 }
 function aggiornaSpartito() {
   $('#sp-tempo').textContent = state.tempo + '%';
-  $('#sp-loop').classList.toggle('on', !!state.loop);
   $('#sp-metro').classList.toggle('on', !!state.metro);
-  $('#sp-loop').title = state.loop ? (state.sel ? 'Ripete le battute scelte' : 'Ripete tutto il brano') : 'Ripeti: tutto il brano, o le battute scelte trascinando sullo spartito';
+  $('#sp-parti').classList.toggle('hidden', !partiDi().length);
 }
+// parti del brano dai marker delle battute (Intro, Verse, Chorus…), come le sezioni di Yousician
+function partiDi() {
+  if (!state.score) return [];
+  const mb = state.score.masterBars; const out = [];
+  mb.forEach(m => { if (m.section && (m.section.text || m.section.marker)) out.push({ nome: m.section.text || m.section.marker, da: m.index, tick: m.start }); });
+  out.forEach((p, i) => { p.a = i + 1 < out.length ? out[i + 1].da : mb.length; });
+  return out;
+}
+function apriParti() {
+  const parti = partiDi(); if (!parti.length) { toast('Questa tab non ha le parti segnate'); return; }
+  const l = $('#lista-parti'); l.innerHTML = '';
+  const ora = state.esec ? tickOra() : api ? api.tickPosition : 0;
+  parti.forEach((p, i) => {
+    const r = document.createElement('button'); r.className = 'riga' + (ora >= p.tick && (i + 1 >= parti.length || ora < parti[i + 1].tick) ? ' on' : '');
+    r.dataset.az = 'parte-vai'; r.dataset.tick = p.tick;
+    r.innerHTML = `<div class="num">${i + 1}</div><div class="txt"><div class="t"></div><div class="s">battute ${p.da + 1}–${p.a}</div></div><svg class="i" style="color:var(--inchiostro-3)"><use href="#i-play"/></svg>`;
+    $('.t', r).textContent = p.nome; if (r.classList.contains('on')) $('.t', r).style.color = 'var(--accento)';
+    l.appendChild(r);
+  });
+  $('#velo-parti').classList.remove('hidden');
+}
+$('#velo-parti').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if (!b) { if (e.target === e.currentTarget) $('#velo-parti').classList.add('hidden'); return; }
+  if (b.dataset.az === 'parti-chiudi') $('#velo-parti').classList.add('hidden');
+  else if (b.dataset.az === 'parte-vai') {
+    const tick = +b.dataset.tick; $('#velo-parti').classList.add('hidden');
+    if (state.esec) saltaA(tick);
+    else if (api) { try { api.tickPosition = tick; if (api.playerState !== 1) caricaSuoni().then(() => { applicaMix(); api.play(); }); } catch (e) {} }
+  }
+});
 // la voce (su Songsterr è una traccia "a corde") si mostra solo in pentagramma; il resto in tab + pentagramma
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
@@ -923,7 +1013,7 @@ function fineEsecuzione() {
   const m = x.m;
   const perc = (note) => { let ok = 0, tot = 0; for (const n of note) { if (n.tot === 0) { tot += n.dur; continue; } ok += n.dur * (n.ok / n.tot); tot += n.dur; } return tot ? Math.round(100 * ok / tot) : 0; };
   const tot = perc(m.note);
-  const gruppi = (m.sezioni.length >= 2 ? m.sezioni.map(s => ({ nome: s.nome, testo: testoDi(s.note), p: perc(s.note) })) : m.frasi.map((f, i) => ({ nome: `Frase ${i + 1}`, testo: f.testo, p: perc(f.note) })));
+  const gruppi = m.sezioni.length >= 2 ? m.sezioni.map(s => ({ nome: s.nome, testo: testoDi(s.note), p: perc(s.note) })) : m.versi.filter(v => v.note.length).map((v, i) => ({ nome: `Verso ${i + 1}`, testo: v.testo, p: perc(v.note) }));
   salvaTempi();
   cancelAnimationFrame(x.raf); state.esec = null;
   const b = state.brano; b.ultimo = tot; b.miglior = b.miglior == null ? tot : Math.max(b.miglior, tot); db.metti(b).catch(() => {});
@@ -931,7 +1021,7 @@ function fineEsecuzione() {
   $('#fi-titolo').textContent = b.titolo; $('#fi-sub').textContent = `${state.tempo}%${state.trasp ? ` · ${state.trasp > 0 ? '+' : ''}${state.trasp}` : ''}`;
   $('#fi-pct').textContent = tot;
   $('#fi-desc').textContent = tot >= 85 ? 'Intonazione sicura.' : tot >= 65 ? 'Bene; le frasi in rosso meritano un giro in più.' : tot >= 40 ? 'Prova a rallentare il tempo e a lavorare sulle frasi peggiori.' : 'Molte note mancate: controlla cuffie, microfono e tonalità.';
-  $('#fi-fascia').textContent = m.sezioni.length >= 2 ? 'Per sezione' : 'Per frase';
+  $('#fi-fascia').textContent = m.sezioni.length >= 2 ? 'Per sezione' : 'Per verso';
   const l = $('#fi-lista'); l.innerHTML = '';
   gruppi.forEach((g, i) => {
     const r = document.createElement('div'); r.className = 'riga';
@@ -950,21 +1040,19 @@ document.addEventListener('click', async (e) => {
   else if (az === 'tracce') { if (state.score) apriTracce(); }
   else if (az === 'sp-impostazioni') { state.daSpartito = true; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
   else if (az === 'sp-canta') { try { api.stop(); } catch (e) {} state.daSpartito = true; avviaEsecuzione(); }
-  else if (az === 'testo-tr-salva') salvaTestiTraccia();
-  else if (az === 'testo-tr-orig') { const o = testiOriginali(); if (o) { $('#st-testo-tr').value = righeATesto(o); } }
   else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); aggiornaSpartito(); if (api) api.playbackSpeed = state.tempo / 100; salvaPref(); }
-  else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); aggiornaSetup(); }
+  else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); state.brano.trasp = state.trasp; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); }
   else if (az === 'elimina') { if (confirm(`Togliere «${state.brano.titolo}» da questo dispositivo?`)) { await db.togli(state.brano.id); mostra('brani'); caricaLista(); } }
   else if (az === 'canta') avviaEsecuzione();
   else if (az === 'spartito') apriSpartito();
   else if (az === 'chiudi-spartito') { try { api.stop(); } catch (e) {} state.daSpartito = false; if (ID_APP) { location.href = './'; return; } mostra('setup'); aggiornaSetup(); }
   else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
-  else if (az === 'sp-loop') { state.loop = !state.loop; if (api) api.isLooping = state.loop; aggiornaSpartito(); }
+  else if (az === 'parti') apriParti();
   else if (az === 'sp-metro') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; aggiornaSpartito(); salvaPref(); }
   else if (az === 'azzera-tempi') { state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {}); aggiornaSetup(); toast('Punti di partenza delle righe azzerati'); }
   else if (az === 'chiudi-esec') { fermaEsecuzione(); if (state.daSpartito) { state.daSpartito = false; apriSpartito(); return; } mostra('setup'); aggiornaSetup(); }
   else if (az === 'riprova') { mostra('setup'); avviaEsecuzione(); }
-  else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.fraseDis = -1; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
+  else if (az === 'ricomincia') { const x = state.esec; if (!x) return; for (const n of x.m.note) { n.ok = 0; n.tot = 0; } x.traccia = []; x.riga = -1; x_righeDis = -2; api.stop(); api.tickPosition = 0; disegnaTesto(0); partenza(); }
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); api.playPause(); }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
@@ -984,13 +1072,12 @@ function apriTracce() {
     $('.t', r).textContent = nomeBreve(t, i); $('.s', r).textContent = sottotitolo(t, i);
     l.appendChild(r);
   });
-  for (const b of document.querySelectorAll('#st-vista button')) b.classList.toggle('on', b.dataset.v === state.vista);
+  for (const b of document.querySelectorAll('#st-vista button')) b.classList.toggle('on', state.vista === 'entrambi' || state.vista === b.dataset.v);
   $('#riga-vista').classList.toggle('hidden', $('#spartito').classList.contains('hidden'));
   $('#velo-tracce').classList.remove('hidden');
 }
 function scegliTraccia(i) {
-  state.traccia = i; state.brano.traccia = i; db.metti(state.brano).catch(() => {});
-  applicaTestiCorretti();
+  state.traccia = i; state.brano.traccia = i; state.brano.tempiTesto = null; db.metti(state.brano).catch(() => {});
   aggiornaSetup();
   if (!$('#spartito').classList.contains('hidden')) {
     const pos = api ? api.tickPosition : 0;
@@ -1005,37 +1092,16 @@ $('#velo-tracce').addEventListener('click', (e) => {
   else if (b.dataset.az === 'traccia-scegli') scegliTraccia(+b.dataset.i);
   else if (b.dataset.az === 'traccia-muta') { const i = +b.dataset.i; const m = muti().slice(); const k = m.indexOf(i); if (k >= 0) m.splice(k, 1); else m.push(i); state.brano.muti = m; db.metti(state.brano).catch(() => {}); if (api) applicaMix(); apriTracce(); }
 });
-$('#st-vista').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.vista = b.dataset.v; salvaPref(); for (const x of document.querySelectorAll('#st-vista button')) x.classList.toggle('on', x === b); if (!$('#spartito').classList.contains('hidden')) disegnaSpartito(); });
-
-// ---- testo della traccia: correzione (formato Guitar Pro: righe con battuta di partenza) ----
-function testiOriginali() { const c = state.canzone; return c && c.tab && c.tab.testi && c.tab.testi[state.traccia] ? c.tab.testi[state.traccia] : null; }
-function testiCorretti() { const c = state.canzone; const loc = state.brano && state.brano.testiTab && state.brano.testiTab[state.traccia]; if (loc) return loc; return c && c.testiTab && c.testiTab[state.traccia] ? c.testiTab[state.traccia] : null; }
-function righeATesto(righe) { return righe.map(r => `[battuta ${r.offset}]\n${r.text}`).join('\n\n'); }
-function testoARighe(testo) {
-  const righe = []; let cur = null;
-  for (const l of testo.split('\n')) { const m = l.match(/^\s*\[\s*battuta\s+(\d+)\s*\]\s*$/i); if (m) { cur = { offset: +m[1], text: '' }; righe.push(cur); continue; } if (!cur) { cur = { offset: 1, text: '' }; righe.push(cur); } cur.text += (cur.text ? '\n' : '') + l; }
-  return righe.map(r => ({ offset: r.offset, text: r.text.replace(/\n+$/, '') })).filter(r => r.text.trim());
-}
-function applicaTesti(track, righe) {
-  for (const st of track.staves) for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) b.lyrics = null;
-  track.applyLyrics(righe.map(r => { const x = new alphaTab.model.Lyrics(); x.startBar = Math.max(0, r.offset - 1); x.text = r.text; return x; }));
-}
-function applicaTestiCorretti() {
-  if (!state.score) return;
-  const t = state.score.tracks[state.traccia]; const corr = testiCorretti();
-  if (corr && !t._testiApplicati) { try { applicaTesti(t, corr); t._testiApplicati = true; } catch (e) { console.warn(e); } }
-}
-async function salvaTestiTraccia() {
-  const righe = testoARighe($('#st-testo-tr').value);
-  if (!righe.length) { toast('Testo vuoto'); return; }
-  const t = state.score.tracks[state.traccia];
-  try { applicaTesti(t, righe); t._testiApplicati = true; } catch (e) { toast('Testo non applicato: ' + (e.message || e)); return; }
-  state.brano.testiTab = Object.assign({}, state.brano.testiTab || {}, { [state.traccia]: righe }); db.metti(state.brano).catch(() => {});
-  if (ID_APP && state.ruolo === 'band' && window.__fb && window.__fb.salvaTesti) { try { await window.__fb.salvaTesti(ID_APP, state.traccia, righe); toast('Testo corretto, per tutta la band'); } catch (e) { toast('Salvato solo su questo telefono: ' + (e.message || e)); } }
-  else toast('Testo corretto su questo telefono');
+$('#st-vista').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  // due interruttori, almeno uno acceso
+  const tab = state.vista !== 'score', score = state.vista !== 'tab';
+  const nuovo = b.dataset.v === 'tab' ? (tab && score ? 'score' : tab ? 'entrambi' : 'entrambi') : (tab && score ? 'tab' : score ? 'entrambi' : 'entrambi');
+  state.vista = nuovo; salvaPref();
+  for (const x of document.querySelectorAll('#st-vista button')) x.classList.toggle('on', state.vista === 'entrambi' || state.vista === x.dataset.v);
   if (!$('#spartito').classList.contains('hidden')) disegnaSpartito();
-  aggiornaSetup();
-}
+});
+
 $('#file').addEventListener('change', (e) => { aggiungiFile([...e.target.files]); e.target.value = ''; });
 document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) aggiungiFile([...e.dataTransfer.files]); });
@@ -1085,7 +1151,7 @@ async function caricaDaApp(c) {
   let b = state.brani.find(x => x.id === 'app-' + ID_APP);
   if (!b) b = { id: 'app-' + ID_APP, nome: '', aggiunto: Date.now(), traccia: null, miglior: null };
   Object.assign(b, { titolo: c.titolo || b.titolo, artista: c.artista || '', bytes, nome: `${c.titolo} · Songsterr` });
-  if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; b.testiTab = null; b.muti = null; }
+  if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; b.tempiTesto = null; b.muti = null; }
   await db.metti(b).catch(() => {});
   await caricaLista();
   await apriBrano(b.id);
