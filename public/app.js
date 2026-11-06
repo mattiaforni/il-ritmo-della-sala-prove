@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "46";
+const APP_VERSION = "47";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1312,6 +1312,13 @@ function chiudiCanzone() {
 // tasto indietro del telefono (o freccia nella pagina): si chiude il lettore a schermo intero se è aperto,
 // altrimenti si torna dalla pagina della canzone alla lista
 window.addEventListener("popstate", () => {
+  if (state.spartito) {
+    // dentro lo Spartito l'indietro torna prima alle sue pagine (Impostazioni, Canta); dallo Spartito chiude
+    let gestito = false;
+    try { gestito = !!(spFrame.contentWindow.__indietro && spFrame.contentWindow.__indietro()); } catch (e) { /* pagina non pronta */ }
+    if (gestito) history.pushState({ spartito: true }, ""); else chiudiSpartito(true);
+    return;
+  }
   if (state.lettore) { chiudiLettore(true); return; }
   if (state.songPage) chiudiCanzone();
 });
@@ -1483,8 +1490,8 @@ function tabBlock(c) {
     const voce = tracce.find(x => x.voce);
     const info = `${tracce.length} ${tracce.length === 1 ? "traccia" : "tracce"}${voce ? ` · voce${voce.testo ? " con testo" : ""}` : " · senza traccia voce"}`;
     return `<div class="pg-tab">
-      <a class="btn quiet" href="spartito.html?id=${c.id}&modo=spartito">${IC("nota")}Spartito</a>
-      <a class="btn quiet" href="spartito.html?id=${c.id}&modo=canta">${IC("mic")}Canta</a>
+      <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito">${IC("nota")}Spartito</button>
+      <button class="btn quiet" data-action="apri-spartito" data-id="${c.id}" data-modo="canta">${IC("mic")}Canta</button>
       <small>${esc(info)}</small>${state.fan ? "" : `<button class="btn quiet mini" data-action="tab-prepara" data-id="${c.id}" title="Scarica di nuovo la tab da Songsterr">Aggiorna</button>`}
     </div>`;
   }
@@ -1503,6 +1510,51 @@ async function preparaTab(id) {
     toast(`Tab pronta: ${j.tab.tracce.length} tracce${voce ? (voce.testo ? ", voce con testo" : ", voce senza testo") : ", senza traccia voce"}.`);
   } catch (e) { toast("Tab non preparata: " + (e.message || e)); }
 }
+// Spartito e Canta in sovrimpressione: spartito.html in un iframe sopra l'app, che resta viva sotto
+// (chiudere è immediato e la pagina da cui si è partiti resta com'era). L'iframe resta caricato fra
+// un'apertura e l'altra: riaprire lo stesso pezzo è istantaneo, un altro pezzo passa da __apri.
+const spOv = document.getElementById("spartito-ov");
+let spFrame = null;
+function apriSpartito(id, modo) {
+  const c = state.canzoni.find(x => x.id === id); if (!c || !c.tab || !spOv) return;
+  if (state.playId && riproduzione.vuole) { riproduzione.vuole = false; player.pause(); }
+  const p = { id, modo: modo === "canta" ? "canta" : "spartito", t: c.titolo || "", a: c.artista || "", r: c.tab.revisionId };
+  state.spartito = true;
+  spOv.classList.remove("hidden", "via");
+  spOv.classList.add("entra");
+  document.documentElement.classList.add("con-lettore");
+  history.pushState({ spartito: true }, "");
+  let pronto = false;
+  try { pronto = !!(spFrame && spFrame.contentWindow && spFrame.contentWindow.__apri); } catch (e) { /* in caricamento */ }
+  if (pronto) spFrame.contentWindow.__apri(p);
+  else {
+    if (!spFrame) {
+      spFrame = document.createElement("iframe");
+      spFrame.setAttribute("allow", "microphone; autoplay");
+      spFrame.title = "Spartito";
+      spOv.appendChild(spFrame);
+    }
+    spFrame.src = "spartito.html?" + new URLSearchParams(p);
+  }
+}
+// daStoria: la chiusura arriva dal tasto indietro (la voce nella cronologia è già stata tolta)
+function chiudiSpartito(daStoria = false) {
+  if (!state.spartito) return;
+  if (!daStoria && history.state && history.state.spartito) { history.back(); return; }
+  state.spartito = false;
+  try { spFrame.contentWindow.__chiudi && spFrame.contentWindow.__chiudi(); } catch (e) { /* niente da fermare */ }
+  spOv.classList.remove("entra");
+  spOv.classList.add("via");
+  if (!state.lettore) document.documentElement.classList.remove("con-lettore");
+  setTimeout(() => { if (!state.spartito) { spOv.classList.add("hidden"); spOv.classList.remove("via"); } }, 280);
+}
+// quello che la pagina dello Spartito chiede all'app
+window.__spartitoPonte = {
+  chiudi: () => chiudiSpartito(),
+  canzone: (id) => state.canzoni.find(x => x.id === id) || null,
+  token: () => auth.currentUser.getIdToken(),
+  ruolo: () => (state.fan ? "fan" : "band")
+};
 function linkBlock(c) {
   if (state.linkEdit !== c.id) return "";
   // si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo (niente link da incollare)
@@ -3292,6 +3344,8 @@ async function act(btn) {
       render(); break;
     case "tab-prepara":
       preparaTab(id); break;
+    case "apri-spartito":
+      apriSpartito(id, btn.dataset.modo); break;
     case "link-cancel":
       state.linkEdit = null;
       render(); break;

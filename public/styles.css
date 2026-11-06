@@ -862,6 +862,18 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .conn-banner button, .update-banner button { background: var(--carta); color: var(--inchiostro); border: none; border-radius: var(--r); font: 500 13.5px var(--ui); padding: 8px 12px; }
 .update-banner button { background: var(--accento); color: var(--su-accento); }
 
+/* ---------- Spartito e Canta in sovrimpressione (iframe con spartito.html) ---------- */
+.spartito-ov {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--carta);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  box-shadow: inset 0 env(safe-area-inset-top) 0 var(--testata);
+  transition: transform .26s cubic-bezier(.2, .8, .2, 1);
+}
+.spartito-ov.entra { animation: lt-entra .3s cubic-bezier(.2, .8, .2, 1) both; }
+.spartito-ov.via { transform: translateY(100%); }
+.spartito-ov iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--carta); }
+
 /* ---------- lettore a schermo intero (dalla barra in basso o facendo partire una registrazione) ---------- */
 html.con-lettore, html.con-lettore body { overflow: hidden; }
 .lettore {
