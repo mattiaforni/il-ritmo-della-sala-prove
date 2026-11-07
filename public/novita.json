@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "56",
+      "data": "2026-11-08",
+      "titolo": "Spartito: accordature di chitarre e bassi",
+      "punti": [
+        "L'accordatura di chitarre e bassi è scritta nel foglio Tracce e, se non è quella standard, accanto al nome della traccia (per esempio «Basso · Drop C»).",
+        "Abbassando la tonalità, chitarre e bassi possono spostare i tasti (le note che finirebbero sotto la corda più bassa vanno un'ottava sopra: prima restavano stonate) oppure accordare più basso con la tab originale.",
+        "Nel pentagramma il basso è in chiave di basso e chitarre e bassi sono scritti un'ottava sopra, come in Guitar Pro (solo le tab da Songsterr)."
+      ]
+    },
+    {
       "versione": "55",
       "data": "2026-11-06",
       "titolo": "Canta: attacchi della voce, pausa e ripresa",

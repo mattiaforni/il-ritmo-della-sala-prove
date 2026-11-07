@@ -66,6 +66,8 @@ input[type=range] { accent-color: var(--accento); width: 120px; }
 .seg button:last-child { border-right: 0; }
 .seg button.on { background: var(--accento); color: var(--su-accento); }
 .nota { font-size: 13px; color: var(--inchiostro-2); margin: 10px 0 0; }
+.campo-unito { border-bottom: 0; padding-bottom: 6px; }
+.nota-campo { margin: 0; padding: 0 0 14px; border-bottom: 1px solid var(--linea); }
 .link { color: var(--accento); text-decoration: underline; }
 
 /* ---- esecuzione ---- */
@@ -246,6 +248,10 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="fascia">Esecuzione</div>
     <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
+    <div id="st-scendi" class="hidden">
+      <div class="campo campo-unito"><label>Chitarre e basso<small>Per scendere di tonalità</small></label><div class="seg" id="st-accorda"><button data-v="0" class="on">Sposta i tasti</button><button data-v="1">Accorda più basso</button></div></div>
+      <p class="nota nota-campo" id="st-scendi-nota"></p>
+    </div>
     <div class="campo"><label>Voce guida<small>La melodia suonata dalla base</small></label><div class="seg" id="st-guida"><button data-v="0">Spenta</button><button data-v="0.4">Bassa</button><button data-v="1" class="on">Piena</button></div></div>
     <div class="campo"><label>Strumento della voce guida<small>Con un suono netto la melodia si segue meglio</small></label><select id="st-guida-strum"></select></div>
     <div class="campo"><label>Metronomo</label><div class="seg" id="st-metro"><button data-v="0" class="on">No</button><button data-v="1">Sì</button></div></div>
@@ -437,7 +443,7 @@ async function aggiungiFile(files) {
 // ------------------------------------------------------------ modello del brano
 // Dalla traccia scelta ricava note (tick, durata, altezza, testo) e frasi/sezioni.
 const GM = ['Piano', 'Piano', 'Piano el.', 'Honky-tonk', 'Piano el.', 'Piano el.', 'Clavicembalo', 'Clavinet', 'Celesta', 'Glockenspiel', 'Carillon', 'Vibrafono', 'Marimba', 'Xilofono', 'Campane', 'Dulcimer', 'Organo', 'Organo', 'Organo', 'Organo', 'Organo', 'Fisarmonica', 'Armonica', 'Fisarmonica', 'Chitarra nylon', 'Chitarra acustica', 'Chitarra jazz', 'Chitarra pulita', 'Chitarra muted', 'Chitarra overdrive', 'Chitarra distorta', 'Chitarra armonici', 'Basso acustico', 'Basso', 'Basso pick', 'Basso fretless', 'Basso slap', 'Basso slap', 'Basso synth', 'Basso synth', 'Violino', 'Viola', 'Violoncello', 'Contrabbasso', 'Archi tremolo', 'Archi pizzicato', 'Arpa', 'Timpani', 'Archi', 'Archi', 'Archi synth', 'Archi synth', 'Coro', 'Voce ooh', 'Voce synth', 'Orchestra hit', 'Tromba', 'Trombone', 'Tuba', 'Tromba sordina', 'Corno', 'Ottoni', 'Ottoni synth', 'Ottoni synth', 'Sax soprano', 'Sax contralto', 'Sax tenore', 'Sax baritono', 'Oboe', 'Corno inglese', 'Fagotto', 'Clarinetto', 'Ottavino', 'Flauto', 'Flauto dolce', 'Flauto di Pan', 'Bottiglia', 'Shakuhachi', 'Fischio', 'Ocarina', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead', 'Lead voce', 'Lead', 'Lead', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'Pad', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'FX', 'Sitar', 'Banjo', 'Shamisen', 'Koto', 'Kalimba', 'Cornamusa', 'Fiddle', 'Shanai', 'Campanelli', 'Agogo', 'Steel drum', 'Woodblock', 'Taiko', 'Tom', 'Tom synth', 'Piatto', 'Chitarra fret noise', 'Respiro', 'Mare', 'Uccelli', 'Telefono', 'Elicottero', 'Applausi', 'Sparo'];
-function strumentoDi(tr) { const p = tr._prog != null ? tr._prog : tr.playbackInfo.program; return tr.playbackInfo.isPercussion ? 'Batteria' : (GM[p] || 'Strumento ' + tr.playbackInfo.program); }
+function strumentoDi(tr) { const p = tr._prog != null ? tr._prog : tr.playbackInfo.program; return tr.isPercussion ? 'Batteria' : (GM[p] || 'Strumento ' + tr.playbackInfo.program); }
 // I file fatti con Guitar Pro in russo hanno i nomi in cp1251 letti come Latin-1 («Дорожка» = traccia)
 function nomeTraccia(tr, i) {
   let n = tr.name || '';
@@ -468,7 +474,7 @@ function nomiTracce() {
   const base = sc.tracks.map((t, i) => {
     const parti = nomeTraccia(t, i).split('|').map(x => x.trim()).filter(Boolean);
     const ultima = parti[parti.length - 1] || '';
-    let breve = t.playbackInfo.isPercussion ? (/percussion/i.test(ultima) ? 'Percussioni' : 'Batteria') : ruoloDi(ultima.split(' - ')[0]) || ruoloDi(ultima) || null;
+    let breve = t.isPercussion ? (/percussion/i.test(ultima) ? 'Percussioni' : 'Batteria') : ruoloDi(ultima.split(' - ')[0]) || ruoloDi(ultima) || null;
     const restoParti = breve && ruoloDi(ultima) ? parti.slice(0, -1) : parti;
     if (!breve) breve = strumentoDi(t);
     const sub = restoParti.map(x => x.split(' - ')[0]).filter(x => x && x !== breve).join(' · ');
@@ -480,10 +486,58 @@ function nomiTracce() {
   return (sc._nomi = base);
 }
 function nomeBreve(tr, i) { return (nomiTracce()[i] || {}).breve || nomeTraccia(tr, i); }
-function sottotitolo(tr, i) { const x = nomiTracce()[i] || {}; return [x.sub, contaTesto(tr) ? 'con il testo' : ''].filter(Boolean).join(' · ') || strumentoDi(tr); }
+function sottotitolo(tr, i) {
+  const x = nomiTracce()[i] || {};
+  let base = [x.sub, contaTesto(tr) ? 'con il testo' : ''].filter(Boolean).join(' · ') || strumentoDi(tr);
+  if (base === x.breve) base = '';   // «Batteria / Batteria»
+  return eCorde(tr) ? [base, nomeAccordatura(tr) || 'Standard'].filter(Boolean).join(' · ') : base;
+}
 // volume di ogni traccia nella base: n normale, p più forte, m muta (prima c'era solo «muti»)
 function volDi(i) { const b = state.brano; if (!b) return 'n'; if (b.volumi) return b.volumi[i] || 'n'; return Array.isArray(b.muti) && b.muti.includes(i) ? 'm' : 'n'; }
 const VOL_PIU = 1.6;
+// Chitarre e bassi (programma MIDI originale 24–39, non la voce): per loro contano accordatura, tasti e corde
+function progDi(t) { return t._prog != null ? t._prog : t.playbackInfo.program; }
+function eBasso(t) { const p = progDi(t); return p >= 32 && p <= 39; }
+function eCorde(t) { const p = progDi(t); return !t.isPercussion && p >= 24 && p <= 39 && !eVoce(t) && t.staves[0].tuning.length > 0; }
+// Accordatura in parole, come su Songsterr: «Drop D», «Eb standard», «Standard», altrimenti le note dalla corda più
+// grave; più il numero di corde se non è il solito (6 la chitarra, 4 il basso). Vuota se è quella standard.
+const NOTE_ACC = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+function nomeAccordatura(t, tun) {
+  const lo = [...(tun || t.staves[0].tuning)].reverse();
+  const std = (eBasso(t) ? { 4: [28, 33, 38, 43], 5: [23, 28, 33, 38, 43], 6: [23, 28, 33, 38, 43, 48] } : { 6: [40, 45, 50, 55, 59, 64], 7: [35, 40, 45, 50, 55, 59, 64], 8: [30, 35, 40, 45, 50, 55, 59, 64] })[lo.length];
+  const nota = (v) => NOTE_ACC[((v % 12) + 12) % 12];
+  let nome = lo.map(nota).join(' ');
+  if (std) {
+    const d = lo.map((v, i) => v - std[i]), k = d[1];
+    if (d.slice(1).every(x => x === k)) { if (d[0] === k) nome = k === 0 ? 'Standard' : nota(lo[0]) + ' standard'; else if (d[0] === k - 2) nome = 'Drop ' + nota(lo[0]); }
+  }
+  const solite = eBasso(t) ? 4 : 6;
+  return [nome === 'Standard' ? '' : nome, lo.length !== solite ? lo.length + ' corde' : ''].filter(Boolean).join(' · ');
+}
+// Tab da Songsterr: nel pentagramma chitarre e bassi si scrivono un'ottava sopra (come in Guitar Pro), i bassi in
+// chiave di basso. Prima erano in chiave di violino all'altezza vera: il basso finiva molto sotto il rigo.
+function notazioneStrumenti(score) {
+  for (const t of score.tracks) {
+    if (!eCorde(t)) continue;
+    for (const st of t.staves) { st.displayTranspositionPitch = -12; if (eBasso(t)) for (const b of st.bars) b.clef = alphaTab.model.Clef.F4; }
+  }
+}
+// note di chitarre e bassi che, scendendo di n semitoni, finirebbero sotto la corda più bassa
+function fuoriPortata(score, n) {
+  const r = [];
+  score.tracks.forEach((t, i) => {
+    if (!eCorde(t)) return;
+    const st = t.staves[0], tun = st._tun0 || st.tuning, basso = Math.min(...tun); let k = 0;
+    for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) for (const x of b.notes) {
+      if (x.isTieDestination || x.string < 1) continue;
+      const s0 = x._s0 != null ? x._s0 : x.string, f0 = x._f0 != null ? x._f0 : x.fret;
+      if (tun[tun.length - s0] + f0 + n < basso) k++;
+    }
+    if (k) r.push({ nome: nomeBreve(t, i), k });
+  });
+  return r;
+}
+function elenco(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1]; }
 function eVoce(t) { return /voc|voice|voce|cant|sing|choir|cori/i.test(t.name) || [52, 53, 54, 85].includes(t._prog != null ? t._prog : t.playbackInfo.program); }
 function profiloTraccia(tr) {
   let note = 0, mono = 0, somma = 0;
@@ -493,7 +547,7 @@ function profiloTraccia(tr) {
 function indovinaTraccia(score) {
   const t = score.tracks; let best = 0, bestP = -Infinity;
   t.forEach((tr, i) => {
-    if (tr.playbackInfo.isPercussion) return;
+    if (tr.isPercussion) return;
     const p = profiloTraccia(tr); if (!p.note) return;
     let punti = 0;
     if (/voc|voice|voce|cant|sing|lead|lyric|melod|вокал|голос/i.test(tr.name)) punti += 1000;
@@ -506,19 +560,31 @@ function indovinaTraccia(score) {
   });
   return best;
 }
-// Trasposizione: si spostano le note stesse (tasto e corda), così tab, pentagramma e base cambiano insieme
-// e la batteria resta com'è. Ogni nota ricorda corda e tasto originali: si riparte sempre da lì.
-function trasponiModello(score, n) {
+// Trasposizione: si cambiano le note stesse, così tab, pentagramma e base cambiano insieme e la batteria resta
+// com'è. Ogni nota ricorda corda e tasto originali, ogni rigo l'accordatura originale: si riparte sempre da lì.
+// Chitarre e bassi: si spostano tasti e corde; una nota che finirebbe sotto la corda più bassa va un'ottava sopra
+// (prima restava alla nota vecchia, stonata). Scendendo con «Accorda più basso» invece si abbassa l'accordatura e la
+// tab resta quella originale. Voce e altre tracce (su Songsterr sono «a corde», ma la loro tab non si legge):
+// si sposta l'accordatura, così l'altezza è sempre giusta.
+function trasponiModello(score, n, accorda) {
   for (const t of score.tracks) {
-    if (t.playbackInfo.isPercussion) continue;
+    if (t.isPercussion) continue;
+    const corde = eCorde(t);
     for (const st of t.staves) {
-      const tun = st.tuning; if (!st.isStringed || !tun || !tun.length) continue;
+      if (st.isPercussion || !st.isStringed || !st.tuning || !st.tuning.length) continue;
+      if (!st._tun0) st._tun0 = [...st.stringTuning.tunings];
+      const soloAccordatura = !corde || (accorda && n < 0);
+      st.stringTuning.tunings = soloAccordatura ? st._tun0.map(v => v + n) : [...st._tun0];
+      const tun = st.stringTuning.tunings, basso = Math.min(...tun), alto = Math.max(...tun) + 24;
       for (const bar of st.bars) for (const v of bar.voices) for (const b of v.beats) {
         const occ = new Set();
         for (const x of b.notes) { if (x.isRest || x.string < 1) continue; if (x._s0 == null) { x._s0 = x.string; x._f0 = x.fret; } }
         for (const x of b.notes) {
           if (x._s0 == null) continue;
-          const val = tun[tun.length - x._s0] + x._f0 + n;
+          if (soloAccordatura) { x.string = x._s0; x.fret = x._f0; continue; }
+          let val = st._tun0[tun.length - x._s0] + x._f0 + n;
+          while (val < basso) val += 12;
+          while (val > alto) val -= 12;
           const cand = [x._s0];
           for (let d = 1; d < tun.length; d++) { if (x._s0 - d >= 1) cand.push(x._s0 - d); if (x._s0 + d <= tun.length) cand.push(x._s0 + d); }
           let scelta = null;
@@ -529,7 +595,7 @@ function trasponiModello(score, n) {
       }
     }
   }
-  score._trasp = n;
+  score._trasp = n; score._accorda = !!accorda;
 }
 // La base si rigenera (strumento della voce guida, tonalità) sempre da ferma e non riparte mai da sola:
 // prima restava in attesa un comando che rimetteva un punto vecchio e faceva ripartire la riproduzione.
@@ -543,8 +609,9 @@ function rigeneraBase(pos) {
   api.loadMidiForScore();
 }
 function applicaTrasposizione() {
-  if (!state.score || state.score._trasp === state.trasp) return;
-  trasponiModello(state.score, state.trasp);
+  const accorda = !!(state.brano && state.brano.accorda);
+  if (!state.score || (state.score._trasp === state.trasp && state.score._accorda === accorda)) return;
+  trasponiModello(state.score, state.trasp, accorda);
   if (api) { rigeneraBase(); if (api.score) disegnaSpartito(); }
 }
 function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) if (b.lyrics && b.lyrics.some(x => x)) n++; return n; }
@@ -694,6 +761,7 @@ function caricaScore(brano) {
   if (scoreCaricato === brano.id && api.score) return Promise.resolve(api.score);
   try {
     const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(brano.bytes, api.settings);
+    if (brano.daSongsterr) notazioneStrumenti(score);   // i file caricati restano come sono
     api.renderScore(score, [0]);
     scoreCaricato = brano.id;
     return Promise.resolve(score);
@@ -704,7 +772,7 @@ function applicaMix(pos) {
   const tracce = state.score.tracks;
   let rigenera = false;
   for (const t of tracce) {
-    if (t.playbackInfo.isPercussion) continue;
+    if (t.isPercussion) continue;
     if (t._prog == null) t._prog = t.playbackInfo.program;
     const inCanto = !!state.esec;   // lo strumento della voce guida vale solo mentre si canta
     const voluto = inCanto && t.index === state.traccia && state.guidaStrum >= 0 ? state.guidaStrum : t._prog;
@@ -748,10 +816,36 @@ async function apriBrano(id) {
   aggiornaSetup();
   return true;
 }
+// scendendo di tonalità: spostare i tasti (le note che non ci stanno vanno un'ottava sopra) o accordare più basso
+function aggiornaScendi() {
+  const sc = state.score, n = state.trasp, accorda = !!(state.brano && state.brano.accorda);
+  const corde = sc ? sc.tracks.filter(eCorde) : [];
+  $('#st-scendi').classList.toggle('hidden', !(n < 0 && corde.length));
+  if (!(n < 0 && corde.length)) return;
+  for (const b of document.querySelectorAll('#st-accorda button')) b.classList.toggle('on', (b.dataset.v === '1') === accorda);
+  let msg;
+  if (!accorda) {
+    const f = fuoriPortata(sc, n);
+    msg = f.length ? `Sotto la corda più bassa ci sono ${elenco(f.map((x, i) => (i ? x.k : x.k + ' note') + ' di ' + x.nome))}: le scrivo un'ottava sopra.` : 'Spostando i tasti ci stanno tutte le note.';
+  } else {
+    const gruppi = new Map();
+    for (const t of corde) { const st = t.staves[0], a = nomeAccordatura(t, (st._tun0 || st.tuning).map(v => v + n)) || 'standard'; if (!gruppi.has(a)) gruppi.set(a, []); gruppi.get(a).push(t); }
+    const chit = corde.filter(t => !eBasso(t)).length, bassi = corde.filter(eBasso).length;
+    const pezzi = [...gruppi].map(([a, g]) => {
+      const ch = g.filter(t => !eBasso(t)), ba = g.filter(eBasso), chi = [];
+      if (ch.length) chi.push(ch.length === chit ? (ch.length > 1 ? 'le chitarre' : 'la chitarra') : elenco(ch.map(t => nomeBreve(t, t.index))));
+      if (ba.length) chi.push(ba.length === bassi ? (ba.length > 1 ? 'i bassi' : 'il basso') : elenco(ba.map(t => nomeBreve(t, t.index))));
+      return `${elenco(chi)} in ${a}`;
+    });
+    msg = `Accorda ${elenco(pezzi)}: la tab resta quella originale.`;
+  }
+  $('#st-scendi-nota').textContent = msg;
+}
 function aggiornaSetup() {
   const b = state.brano; if (b) $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
   $('#st-tempo').textContent = state.tempo + '%';
   $('#st-trasp').textContent = (state.trasp > 0 ? '+' : '') + state.trasp;
+  aggiornaScendi();
   $('#st-lat').value = state.lat; $('#st-lat-v').textContent = state.lat + ' ms';
   const bb = state.brano;
   if (bb && state.score) {
@@ -1093,7 +1187,7 @@ function apriSpartito() {
 function aggiornaSpartito() {
   $('#sp-tempo').textContent = $('#sp-tempo-v').textContent = state.tempo + '%';
   const t = state.score && state.score.tracks[state.traccia];
-  const fissa = !!t && (eVoce(t) || t.playbackInfo.isPercussion);   // voce e batteria: solo pentagramma
+  const fissa = !!t && (eVoce(t) || t.isPercussion);   // voce e batteria: solo pentagramma
   $('#vis-tab').classList.toggle('on', !fissa && state.vista !== 'score');
   $('#vis-score').classList.toggle('on', fissa || state.vista !== 'tab');
   $('#vis-tab').disabled = $('#vis-score').disabled = fissa;
@@ -1139,8 +1233,9 @@ function partiDi() {
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
   const voce = /voc|voice|voce|cant|sing/i.test(t.name) || [52, 53, 54, 85].includes(t.playbackInfo.program);
-  const prof = voce || t.playbackInfo.isPercussion ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
-  $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia);
+  const prof = voce || t.isPercussion ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
+  const acc = eCorde(t) ? nomeAccordatura(t) : '';
+  $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia) + (acc ? ' · ' + acc : '');
   if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
   $('#sp-msg').textContent = 'Disegno lo spartito…';
   api.renderTracks([t]);
@@ -1207,6 +1302,7 @@ document.addEventListener('click', async (e) => {
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); if (!x.partito) partenza(); else { if (x.suona) x.tickPausa = tickOra(); api.playPause(); } }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
+$('#st-accorda').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !state.brano) return; state.brano.accorda = b.dataset.v === '1'; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); });
 $('#st-suoni').addEventListener('click', async (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return; } state.suoni = b.dataset.v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); });
 $('#st-sf').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; const bytes = new Uint8Array(await f.arrayBuffer()); await db.mettiSuono('file', bytes); $('#st-sf-nome').textContent = `${f.name} · ${(bytes.length / 1048576).toFixed(0)} MB`; state.suoni = 'file'; suoniCaricati = null; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); e.target.value = ''; });
 let testoT = 0;
@@ -1249,7 +1345,7 @@ $('#velo-tracce').addEventListener('click', (e) => {
 function candidatiCanto() {
   const voci = [], altre = [];
   state.score.tracks.forEach((t, i) => {
-    if (t.playbackInfo.isPercussion) return;
+    if (t.isPercussion) return;
     const p = profiloTraccia(t); if (p.note < 10) return;
     const prog = t._prog != null ? t._prog : t.playbackInfo.program;
     if (eVoce(t) || contaTesto(t) > 0) voci.push(i);
@@ -1349,7 +1445,7 @@ async function caricaDaApp(c, mia) {
   await caricaLista();
   let b = state.brani.find(x => x.id === 'app-' + ID_APP);
   if (!b) b = { id: 'app-' + ID_APP, nome: '', aggiunto: Date.now(), traccia: null, miglior: null };
-  Object.assign(b, { titolo: c.titolo || b.titolo, artista: c.artista || '', bytes, nome: `${c.titolo} · Songsterr` });
+  Object.assign(b, { titolo: c.titolo || b.titolo, artista: c.artista || '', bytes, nome: `${c.titolo} · Songsterr`, daSongsterr: c.tab.fonte !== 'file' });
   if (b.revisionId !== c.tab.revisionId) { b.traccia = null; b.revisionId = c.tab.revisionId; b.tempiTesto = null; b.muti = null; if (scoreCaricato === b.id) scoreCaricato = null; }
   await db.metti(b).catch(() => {});
   state.brani = state.brani.filter(x => x.id !== b.id).concat([b]);
