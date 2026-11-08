@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "57";
+const APP_VERSION = "58";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -573,7 +573,7 @@ function riepilogoPush() {
 let invitoTimer = null;
 function invitoPossibile() {
   if (!state.account || state.push || store.get("prove_invito_push")) return null;
-  if (novitaFanDaMostrare()) return null;   // prima le novità dei fan, poi (eventualmente) l'invito
+  if (novitaTabDaMostrare() || novitaFanDaMostrare()) return null;   // prima le novità, poi (eventualmente) l'invito
   if (state.fan ? !state.fanNome : !state.userId) return null;
   if (IS_IOS && !IN_APP) return "ios";
   if (!PUSH_OK || Notification.permission === "denied") return null;
@@ -609,12 +609,77 @@ function mostraInvito(tipo) {
 }
 const chiudiInvito = () => $("#invito-push")?.classList.add("hidden");
 
+// ---------- novità di Spartito e Canta ----------
+// Una volta per telefono (prove_novita_tab = NOVITA_TAB), a chi suona e ai fan con il nome, appena l'app
+// aggiornata è pronta: due pagine con le schermate. Prima delle novità dei fan e dell'invito alle notifiche.
+const NOVITA_TAB = "58";
+let novitaTabTimer = null, novitaTabPagina = 0;
+const novitaTabDaMostrare = () => !!(state.account && (state.fan ? state.fanNome : state.userId) && store.get("prove_novita_tab") !== NOVITA_TAB);
+function controllaNovitaTab() {
+  if (novitaTabTimer || !novitaTabDaMostrare()) return;
+  novitaTabTimer = setTimeout(() => {
+    novitaTabTimer = null;
+    if (!novitaTabDaMostrare() || document.hidden || state.lettore || document.querySelector(".overlay:not(.hidden)") || !$("#spartito-ov").classList.contains("hidden")) return;
+    store.set("prove_novita_tab", NOVITA_TAB);
+    novitaTabPagina = 0; disegnaNovitaTab();
+    $("#novita-tab").classList.remove("hidden");
+  }, 900);
+}
+function disegnaNovitaTab() {
+  const band = !state.fan;
+  const voce = (ic, tit, testo) => `<div class="nf-voce">${ic}<div><b>${tit}</b><span>${testo}</span></div></div>`;
+  const pagine = [
+    { tit: "Spartito e tablature", sub: "Le tab dei pezzi, da leggere mentre suona la base.", img: "img/novita-spartito.webp", alt: "Lo Spartito con i comandi chiusi e aperti",
+      voci: [
+        voce(CLEF.replace('class="ico"', 'class="i"'), "Dalla pagina del pezzo", band ? "La chiave apre lo Spartito, il microfono Canta. La lente sceglie la tablatura: da Songsterr o un file Guitar Pro vostro." : "La chiave apre lo Spartito, il microfono Canta."),
+        voce(IC("paletta"), "I comandi sono in basso", "Il primo tasto sceglie lo strumento. Tira su la barra per parti, tonalità, metronomo e suoni; tocca lo spartito per richiuderla."),
+        voce(IC("tonalita"), "Accordature", "Accanto allo strumento c'è l'accordatura, per esempio «Drop D». Abbassando la tonalità scegli se spostare i tasti o accordare più basso.")
+      ] },
+    { tit: "Canta", sub: "Esercitati a cantare sui pezzi della band, con la base.", img: "img/novita-canta.webp", alt: "Canta: le note che scorrono e la linea della voce",
+      voci: [
+        voce(IC("mic"), "Canta sulla base", "Le note scorrono verso la riga rossa e la tua voce è la linea nera: se sta sulla nota sei intonato. Un'ottava sotto va bene lo stesso."),
+        voce(IC("cuffie"), "Con le cuffie", "Così il microfono sente solo te. In pausa la base resta dov'è e riparte dopo il conto alla rovescia."),
+        band ? voce(IC("nota"), "Da cantare", "In Personale aggiungi i pezzi che non sono né in scaletta né fra le proposte, per esercitarti.")
+             : voce(IC("stella"), "Il punteggio", "Alla fine vedi quanto sei stato intonato, parte per parte.")
+      ] }
+  ];
+  const p = pagine[novitaTabPagina];
+  const punti = `<span class="nt-punti" aria-hidden="true">${pagine.map((_, i) => `<i class="${i === novitaTabPagina ? "on" : ""}"></i>`).join("")}</span>`;
+  const tasti = novitaTabPagina === 0
+    ? `<button class="btn quiet" data-action="nt-chiudi">Salta</button><button class="btn fill" data-action="nt-avanti">Avanti</button>`
+    : `<button class="btn quiet" data-action="nt-indietro">Indietro</button><button class="btn fill" data-action="nt-chiudi">Ho capito</button>`;
+  $("#novita-tab-card").innerHTML = `
+    <h2 class="overlay-title">${p.tit}</h2>
+    <p class="overlay-sub">${p.sub}</p>
+    <img class="nt-img" src="${p.img}" alt="${p.alt}">
+    <div class="nf-voci">${p.voci.join("")}</div>
+    <div class="fan-azioni">${punti}${tasti}</div>`;
+  $("#novita-tab-card").scrollTop = 0;
+}
+function chiudiNovitaTab() { $("#novita-tab")?.classList.add("hidden"); render(); }
+$("#novita-tab")?.addEventListener("click", e => {
+  if (e.target.id === "novita-tab") { chiudiNovitaTab(); return; }
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
+// scorrere a destra e a sinistra cambia pagina
+(() => {
+  const el = $("#novita-tab"); if (!el) return; let x0 = null;
+  el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", e => {
+    if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) < 50) return;
+    const n = Math.max(0, Math.min(1, novitaTabPagina + (dx < 0 ? 1 : -1)));
+    if (n !== novitaTabPagina) { novitaTabPagina = n; disegnaNovitaTab(); }
+  }, { passive: true });
+})();
+
 // ---------- novità per i fan ----------
 // Una volta per telefono e per novità (prove_novita_fan = NOVITA_FAN), solo ai fan con il nome:
 // cosa possono fare di nuovo nell'app. Compare prima dell'invito alle notifiche.
 const NOVITA_FAN = "43";
 let novitaTimer = null;
-const novitaFanDaMostrare = () => !!(state.fan && state.account && state.fanNome && store.get("prove_novita_fan") !== NOVITA_FAN);
+const novitaFanDaMostrare = () => !!(state.fan && state.account && state.fanNome && store.get("prove_novita_fan") !== NOVITA_FAN && !novitaTabDaMostrare());
 function controllaNovitaFan() {
   if (novitaTimer || !novitaFanDaMostrare()) return;
   novitaTimer = setTimeout(() => {
@@ -1262,6 +1327,7 @@ function render() {
   updateNavMe();
   testata();
   syncPlayer();
+  controllaNovitaTab();
   controllaNovitaFan();
   controllaInvito();
   if (regDaMostrare) setTimeout(() => vaiARegistrazione(regDaMostrare), 0);
@@ -3445,6 +3511,9 @@ async function act(btn) {
     case "push-attiva": attivaNotifiche(); break;
     case "invito-chiudi": chiudiInvito(); break;
     case "novita-chiudi": chiudiNovitaFan(); break;
+    case "nt-avanti": novitaTabPagina = 1; disegnaNovitaTab(); break;
+    case "nt-indietro": novitaTabPagina = 0; disegnaNovitaTab(); break;
+    case "nt-chiudi": chiudiNovitaTab(); break;
     case "novita-proposte": chiudiNovitaFan(); showTab("proposte"); break;
     case "invito-attiva": chiudiInvito(); attivaNotifiche(); break;
     case "push-disattiva": disattivaNotifiche(); break;
