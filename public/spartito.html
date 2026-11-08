@@ -154,6 +154,37 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .topbar .sel-traccia .t { font-weight: 500; font-size: 15px; color: var(--accento); }
 .topbar .sel-traccia .i { color: var(--accento); width: 18px; height: 18px; }
 .topbar .sel-traccia .s { display: none; }
+/* testata dello Spartito: titolo e una riga grigia */
+.sottot { font-size: 13px; color: var(--inchiostro-2); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sp-artista:not(:empty)::after { content: ' · '; }
+/* comandi dello Spartito: barra sempre visibile, il resto si solleva dal basso (come Songsterr) */
+.foglio-cmd { flex: none; background: var(--carta); border-top: 1px solid var(--linea); }
+.foglio-cmd .manico { display: block; width: 100%; height: 18px; }
+.foglio-cmd .manico i { display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--linea-forte); margin: 7px auto 0; }
+.foglio-cmd .sp-parti { border-top: 0; padding-top: 2px; }
+.foglio-cmd .sp-barra { border-top: 0; }
+.foglio-cmd.aperto .sp-barra { padding-bottom: 10px; }
+.vista-ic.tr-btn { color: var(--accento); border-color: var(--accento); background: var(--foglio); }
+.vista-ic.tr-btn .i { width: 26px; height: 26px; }
+.griglia-cmd { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height .2s ease, padding .2s ease; }
+.foglio-cmd.aperto .griglia-cmd { max-height: 170px; padding: 0 16px calc(14px + env(safe-area-inset-bottom)); }
+.cmd { height: 66px; border: 1px solid var(--linea-forte); border-radius: var(--r); background: var(--foglio); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--inchiostro-2); font-size: 11px; }
+.cmd .i { width: 22px; height: 22px; }
+.cmd b { font-weight: 500; font-size: 12px; color: var(--inchiostro); line-height: 1; }
+.cmd b:empty { display: none; }
+.cmd.on { border-color: var(--accento); background: var(--accento-tinta); color: var(--accento); }
+.cmd.on b { color: var(--accento); }
+.cmd:active { background: var(--accento-tinta); }
+.cmd[disabled] { opacity: .35; }
+.cmd-pop { text-align: left; left: 16px; right: 16px; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+.cmd-pop .riga-pop { display: flex; align-items: center; gap: 8px; }
+.cmd-pop .riga-pop .l { flex: 1; font-size: 14px; }
+.cmd-pop .riga-pop .l small { display: block; font-size: 12px; color: var(--inchiostro-2); }
+.cmd-pop .nota { margin: 0; }
+.cmd-pop .seg { display: flex; width: 100%; }
+.cmd-pop .seg button { flex: 1; width: auto; height: 38px; border: 0; border-radius: 0; display: block; color: var(--inchiostro-2); }
+.cmd-pop .seg button + button { border-left: 1px solid var(--linea-forte); }
+.cmd-pop .seg button.on { color: var(--su-accento); }
 /* parti del brano: barra a rettangolini sopra i comandi */
 .sp-parti { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 0; background: var(--carta); border-top: 1px solid var(--linea); }
 .sp-parti b { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accento); min-height: 1.3em; }
@@ -219,6 +250,8 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-penta" viewBox="0 0 24 24"><path d="M3 6h18M3 9.5h18M3 13h18M3 16.5h18M3 20h18" stroke-width="1"/><ellipse cx="11" cy="16.6" rx="2.9" ry="2.1" transform="rotate(-20 11 16.6)" fill="currentColor" stroke="none"/><path d="M13.6 15.9V3.2" stroke-width="1.5"/></symbol>
   <symbol id="i-vol-n" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 9.5a3.5 3.5 0 0 1 0 5"/></symbol>
   <symbol id="i-vol-p" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-paletta" viewBox="0 0 24 24"><path d="M10.3 22v-8.5L8.6 3.2Q12 1.4 15.4 3.2l-1.7 10.3V22"/><path d="M8.9 5.5H6M9.3 8.5H6.4M9.8 11.5H6.9M15.1 5.5H18M14.7 8.5h2.9M14.2 11.5h2.9"/><circle cx="5" cy="5.5" r="1"/><circle cx="5.4" cy="8.5" r="1"/><circle cx="5.9" cy="11.5" r="1"/><circle cx="19" cy="5.5" r="1"/><circle cx="18.6" cy="8.5" r="1"/><circle cx="18.1" cy="11.5" r="1"/></symbol>
+  <symbol id="i-tonalita" viewBox="0 0 24 24"><circle cx="7" cy="17.5" r="2.5"/><path d="M9.5 17.5V6l4-1.5"/><path d="M18 4v16M15.5 6.5 18 4l2.5 2.5M15.5 17.5 18 20l2.5-2.5"/></symbol>
   <symbol id="i-parti" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12"/><rect x="9.5" y="6" width="5" height="12"/><rect x="16" y="6" width="5" height="12"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
@@ -249,7 +282,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <div class="campo"><label>Tempo<small>Più lento per imparare</small></label><div class="stepper"><button data-az="tempo" data-d="-5"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-tempo">100%</div><button data-az="tempo" data-d="5"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div class="campo"><label>Tonalità<small>Semitoni, per la tua estensione</small></label><div class="stepper"><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="val" id="st-trasp">0</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div></div>
     <div id="st-scendi" class="hidden">
-      <div class="campo campo-unito"><label>Chitarre e basso<small>Per scendere di tonalità</small></label><div class="seg" id="st-accorda"><button data-v="0" class="on">Sposta i tasti</button><button data-v="1">Accorda più basso</button></div></div>
+      <div class="campo campo-unito"><label>Chitarre e basso<small>Per scendere di tonalità</small></label><div class="seg" id="st-accorda"><button data-az="accorda" data-v="0" class="on">Sposta i tasti</button><button data-az="accorda" data-v="1">Accorda più basso</button></div></div>
       <p class="nota nota-campo" id="st-scendi-nota"></p>
     </div>
     <div class="campo"><label>Voce guida<small>La melodia suonata dalla base</small></label><div class="seg" id="st-guida"><button data-v="0">Spenta</button><button data-v="0.4">Bassa</button><button data-v="1" class="on">Piena</button></div></div>
@@ -274,13 +307,14 @@ textarea:focus { outline: none; border-color: var(--accento); }
 <section class="schermo hidden" id="spartito">
   <div class="topbar">
     <button class="ico" data-az="chiudi-spartito"><svg class="i"><use href="#i-x"/></svg></button>
-    <div class="tit" data-az="tracce"><h1 id="sp-titolo">—</h1><div class="sel-traccia"><div class="txt"><div class="t" id="sp-tr-nome">—</div></div><svg class="i"><use href="#i-giu-piccolo"/></svg></div></div>
-    <button class="ico piccolo" data-az="sp-canta" title="Canta"><svg class="i"><use href="#i-mic"/></svg></button>
-    <button class="ico piccolo" data-az="sp-impostazioni" title="Impostazioni"><svg class="i"><use href="#i-ingranaggio"/></svg></button>
+    <div class="tit" data-az="tracce"><h1 id="sp-titolo">—</h1><div class="sottot"><span id="sp-artista"></span><span id="sp-tr-nome">—</span></div></div>
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div><div class="sp-stato hidden" id="sp-stato"><div><div class="big" id="sps-titolo"></div><div id="sps-testo"></div><div id="sps-azioni" style="margin-top:12px"></div></div></div></div>
+  <div class="foglio-cmd" id="foglio-cmd">
+  <button class="manico" data-az="comandi" title="Altri comandi"><i></i></button>
   <div class="sp-parti hidden" id="sp-parti"><b id="sp-parte"></b><div class="bar" id="sp-parti-bar"></div></div>
   <div class="sp-barra">
+    <button class="vista-ic tr-btn" data-az="tracce" title="Tracce"><svg class="i"><use href="#i-paletta"/></svg></button>
     <button class="vista-ic" data-az="vista" data-v="tab" id="vis-tab" title="Tablatura"><svg class="i"><use href="#i-tab"/></svg></button>
     <button class="vista-ic" data-az="vista" data-v="score" id="vis-score" title="Pentagramma"><svg class="i"><use href="#i-penta"/></svg></button>
     <button class="tempo-btn" data-az="tempo-pop" id="sp-tempo" title="Tempo">100%</button>
@@ -288,6 +322,16 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <button class="btn" data-az="sp-ricomincia" title="Ricomincia da capo"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="sp-play" title="Play / pausa"><svg class="i"><use id="sp-play-ico" href="#i-play"/></svg></button>
   </div>
+  <div class="griglia-cmd" id="griglia-cmd">
+    <button class="cmd" data-az="parti" id="cmd-parti"><svg class="i"><use href="#i-parti"/></svg><span>Parti</span></button>
+    <button class="cmd" data-az="sp-canta"><svg class="i"><use href="#i-mic"/></svg><span>Canta</span></button>
+    <button class="cmd" data-az="metro-cmd" id="cmd-metro"><svg class="i"><use href="#i-metro"/></svg><b></b><span>Metronomo</span></button>
+    <button class="cmd" data-az="pop-cmd" data-v="trasp" id="cmd-trasp"><svg class="i"><use href="#i-tonalita"/></svg><b></b><span>Tonalità</span></button>
+    <button class="cmd" data-az="pop-cmd" data-v="suoni" id="cmd-suoni"><svg class="i"><use href="#i-mix"/></svg><b></b><span>Suoni</span></button>
+    <button class="cmd" data-az="sp-impostazioni"><svg class="i"><use href="#i-ingranaggio"/></svg><span>Altro</span></button>
+  </div>
+  </div>
+  <div class="tempo-pop cmd-pop hidden" id="cmd-pop"></div>
   <div class="tempo-pop hidden" id="tempo-pop"><button data-az="tempo" data-d="-5" title="Più lento"><svg class="i"><use href="#i-meno"/></svg></button><div class="v" id="sp-tempo-v">100%</div><button data-az="tempo" data-d="5" title="Più veloce"><svg class="i"><use href="#i-piu"/></svg></button></div>
 </section>
 
@@ -298,6 +342,12 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <p class="nota" style="margin:2px 0 4px">Tocca il nome per leggere quella parte. Il tasto a destra cambia il volume nella base: normale, più forte, muta.</p>
     <div id="lista-tracce"></div>
   </div>
+</div></div>
+
+<!-- Parti (Spartito) -->
+<div class="velo basso hidden" id="velo-parti"><div class="foglio-lista">
+  <div class="testa"><h2>Parti</h2><button class="ico" data-az="parti-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l"><div id="lista-parti"></div></div>
 </div></div>
 
 <!-- Cosa canti (solo Canta) -->
@@ -818,11 +868,16 @@ async function apriBrano(id) {
 }
 // scendendo di tonalità: spostare i tasti (le note che non ci stanno vanno un'ottava sopra) o accordare più basso
 function aggiornaScendi() {
+  const x = statoScendi();
+  $('#st-scendi').classList.toggle('hidden', !x);
+  if (!x) return;
+  for (const b of document.querySelectorAll('#st-accorda button')) b.classList.toggle('on', (b.dataset.v === '1') === x.accorda);
+  $('#st-scendi-nota').textContent = x.msg;
+}
+function statoScendi() {
   const sc = state.score, n = state.trasp, accorda = !!(state.brano && state.brano.accorda);
   const corde = sc ? sc.tracks.filter(eCorde) : [];
-  $('#st-scendi').classList.toggle('hidden', !(n < 0 && corde.length));
-  if (!(n < 0 && corde.length)) return;
-  for (const b of document.querySelectorAll('#st-accorda button')) b.classList.toggle('on', (b.dataset.v === '1') === accorda);
+  if (!(n < 0 && corde.length)) return null;
   let msg;
   if (!accorda) {
     const f = fuoriPortata(sc, n);
@@ -839,7 +894,7 @@ function aggiornaScendi() {
     });
     msg = `Accorda ${elenco(pezzi)}: la tab resta quella originale.`;
   }
-  $('#st-scendi-nota').textContent = msg;
+  return { accorda, msg };
 }
 function aggiornaSetup() {
   const b = state.brano; if (b) $('#st-ultimo').textContent = b.miglior != null ? `Migliore ${b.miglior}% · ultimo ${b.ultimo}%` : 'Mai cantato';
@@ -862,7 +917,66 @@ function aggiornaSetup() {
   $('#st-sf-riga').classList.toggle('hidden', state.suoni !== 'file');
   for (const [id, v] of [['#st-guida', state.guida], ['#st-metro', state.metro], ['#st-tol', state.tol]]) for (const b of document.querySelectorAll(id + ' button')) b.classList.toggle('on', +b.dataset.v === +v);
   for (const b of document.querySelectorAll('#st-suoni button')) b.classList.toggle('on', b.dataset.v === state.suoni);
+  aggiornaComandi();
 }
+// ------------------------------------------------------------ comandi dello Spartito (foglio dal basso)
+const NOMI_SUONI = { base: 'Base', migliori: 'Migliori', file: 'File tuo' };
+function aggiornaComandi() {
+  $('#cmd-metro').classList.toggle('on', !!state.metro); $('#cmd-metro b').textContent = state.metro ? 'Sì' : 'No';
+  $('#cmd-trasp b').textContent = (state.trasp > 0 ? '+' : '') + state.trasp; $('#cmd-trasp').classList.toggle('on', !!state.trasp);
+  $('#cmd-suoni b').textContent = NOMI_SUONI[state.suoni] || '';
+  $('#cmd-parti').disabled = !(state.parti && state.parti.length > 1);
+  const pop = $('#cmd-pop'); if (!pop.classList.contains('hidden')) disegnaPop(pop.dataset.v);
+}
+function apriComandi(si) {
+  const f = $('#foglio-cmd'); const ap = si == null ? !f.classList.contains('aperto') : si;
+  f.classList.toggle('aperto', ap); if (!ap) $('#cmd-pop').classList.add('hidden');
+  if (ap) aggiornaComandi();
+}
+function disegnaPop(v) {
+  const pop = $('#cmd-pop'); pop.dataset.v = v;
+  if (v === 'trasp') {
+    const x = statoScendi();
+    pop.innerHTML = `<div class="riga-pop"><div class="l">Tonalità<small>Semitoni, per la tua estensione</small></div><button data-az="trasp" data-d="-1"><svg class="i"><use href="#i-meno"/></svg></button><div class="v">${(state.trasp > 0 ? '+' : '') + state.trasp}</div><button data-az="trasp" data-d="1"><svg class="i"><use href="#i-piu"/></svg></button></div>`
+      + (x ? `<div class="l" style="font-size:14px">Chitarre e basso</div><div class="seg"><button data-az="accorda" data-v="0" class="${x.accorda ? '' : 'on'}">Sposta i tasti</button><button data-az="accorda" data-v="1" class="${x.accorda ? 'on' : ''}">Accorda più basso</button></div><p class="nota"></p>` : '');
+    if (x) $('.nota', pop).textContent = x.msg;
+  } else if (v === 'suoni') {
+    pop.innerHTML = `<div class="l" style="font-size:14px">Qualità della base</div><div class="seg">${Object.entries(NOMI_SUONI).map(([k, n]) => `<button data-az="suoni" data-v="${k}" class="${state.suoni === k ? 'on' : ''}">${n}</button>`).join('')}</div><p class="nota"></p>`;
+    $('.nota', pop).textContent = $('#st-suoni-msg').textContent;
+  }
+}
+function apriPop(v) {
+  const pop = $('#cmd-pop');
+  if (!pop.classList.contains('hidden') && pop.dataset.v === v) { pop.classList.add('hidden'); return; }
+  disegnaPop(v);
+  const sp = $('#spartito'), f = $('#foglio-cmd');
+  pop.style.bottom = (sp.getBoundingClientRect().bottom - f.getBoundingClientRect().top + 8) + 'px';
+  pop.classList.remove('hidden');
+}
+document.addEventListener('click', (e) => { const pop = $('#cmd-pop'); if (!pop.classList.contains('hidden') && !e.target.closest('#cmd-pop, [data-az=pop-cmd]')) pop.classList.add('hidden'); }, true);
+// trascinare la barra in su apre, in giù chiude; toccare lo spartito chiude
+(() => {
+  const f = $('#foglio-cmd'); let y0 = null;
+  f.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
+  f.addEventListener('touchend', (e) => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null; if (dy < -25) apriComandi(true); else if (dy > 25) apriComandi(false); }, { passive: true });
+  $('#at-scroll').addEventListener('pointerdown', () => apriComandi(false));
+})();
+function apriParti() {
+  const l = $('#lista-parti'); l.innerHTML = '';
+  state.parti.forEach((p, i) => {
+    const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.parteOra ? ' on' : '');
+    r.innerHTML = `<button class="scegli" data-az="parte-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button>`;
+    $('.t', r).textContent = p.nome; $('.s', r).textContent = p.a - p.da > 1 ? `battute ${p.da + 1}–${p.a}` : `battuta ${p.da + 1}`;
+    l.appendChild(r);
+  });
+  $('#velo-parti').classList.remove('hidden');
+}
+$('#velo-parti').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if (!b) { if (e.target === e.currentTarget) $('#velo-parti').classList.add('hidden'); return; }
+  if (b.dataset.az === 'parte-scegli') { const p = state.parti[+b.dataset.i]; if (p && api) { try { api.tickPosition = p.tick; } catch (er) {} aggiornaParte(p.tick); } }
+  $('#velo-parti').classList.add('hidden');
+});
 
 // ------------------------------------------------------------ microfono e intonazione
 const mic = { ctx: null, an: null, buf: null, stream: null, src: null, attivo: false };
@@ -1182,6 +1296,7 @@ function apriSpartito() {
   api.playbackSpeed = state.tempo / 100; api.metronomeVolume = state.metro ? 1 : 0; api.countInVolume = 1;
   caricaSuoni().then(() => applicaMix()).catch(() => {});
   $('#sp-stato').classList.add('hidden');
+  apriComandi(false);
   aggiornaSpartito();
 }
 function aggiornaSpartito() {
@@ -1199,6 +1314,7 @@ function disegnaParti() {
   $('#sp-parti').classList.toggle('hidden', state.parti.length < 2);
   state.parti.forEach((p, i) => { const r = document.createElement('i'); r.style.flex = String(p.a - p.da); r.dataset.i = i; r.title = p.nome; bar.appendChild(r); });
   aggiornaParte(api ? api.tickPosition : 0);
+  aggiornaComandi();
 }
 function aggiornaParte(tick) {
   const pp = state.parti; if (!pp.length) return;
@@ -1236,6 +1352,7 @@ function disegnaSpartito() {
   const prof = voce || t.isPercussion ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
   const acc = eCorde(t) ? nomeAccordatura(t) : '';
   $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia) + (acc ? ' · ' + acc : '');
+  $('#sp-artista').textContent = (state.brano && state.brano.artista) || '';
   if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
   $('#sp-msg').textContent = 'Disegno lo spartito…';
   api.renderTracks([t]);
@@ -1277,11 +1394,17 @@ document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-az]'); if (!b) return;
   const az = b.dataset.az;
   if (az === 'apri') { if (await apriBrano(b.dataset.id)) apriSpartito(); }
-  else if (az === 'tracce') { if (state.score) apriTracce(); }
-  else if (az === 'sp-impostazioni') { state.origine = 'spartito'; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
+  else if (az === 'tracce') { if (state.score) { apriComandi(false); apriTracce(); } }
+  else if (az === 'comandi') apriComandi();
+  else if (az === 'parti') { if (state.parti && state.parti.length > 1) { apriComandi(false); apriParti(); } }
+  else if (az === 'pop-cmd') apriPop(b.dataset.v);
+  else if (az === 'metro-cmd') { state.metro = state.metro ? 0 : 1; if (api) api.metronomeVolume = state.metro ? 1 : 0; salvaPref(); aggiornaSetup(); }
+  else if (az === 'accorda') { if (!state.brano) return; state.brano.accorda = b.dataset.v === '1'; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); }
+  else if (az === 'suoni') scegliSuoni(b.dataset.v).then(ok => { if (!ok) { apriComandi(false); state.origine = 'spartito'; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); } });
+  else if (az === 'sp-impostazioni') { apriComandi(false); state.origine = 'spartito'; try { api.pause(); } catch (e) {} mostra('setup'); aggiornaSetup(); }
   else if (az === 'es-impostazioni') { state.origine = 'canta'; fermaEsecuzione(); mostra('setup'); aggiornaSetup(); }
   else if (az === 'setup-indietro') { if (state.origine === 'canta') avviaEsecuzione(); else apriSpartito(); }
-  else if (az === 'sp-canta') { state.cantaDaSpartito = true; avviaEsecuzione(); }
+  else if (az === 'sp-canta') { apriComandi(false); state.cantaDaSpartito = true; avviaEsecuzione(); }
   else if (az === 'sp-ricomincia') { creaApi(); caricaSuoni().then(() => { fermaBase(); try { api.tickPosition = 0; } catch (e) {} api.play(); }); }
   else if (az === 'tempo') { state.tempo = Math.max(40, Math.min(120, state.tempo + +b.dataset.d)); aggiornaSetup(); aggiornaSpartito(); if (api) api.playbackSpeed = state.tempo / 100; salvaPref(); }
   else if (az === 'trasp') { state.trasp = Math.max(-12, Math.min(12, state.trasp + +b.dataset.d)); state.brano.trasp = state.trasp; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); }
@@ -1302,8 +1425,9 @@ document.addEventListener('click', async (e) => {
   else if (az === 'play') { const x = state.esec; if (!x) return; if (mic.ctx && mic.ctx.state !== 'running') mic.ctx.resume(); if (!x.partito) partenza(); else { if (x.suona) x.tickPausa = tickOra(); api.playPause(); } }
 });
 for (const [id, k] of [['#st-guida', 'guida'], ['#st-metro', 'metro'], ['#st-tol', 'tol']]) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[k] = +b.dataset.v; aggiornaSetup(); });
-$('#st-accorda').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !state.brano) return; state.brano.accorda = b.dataset.v === '1'; db.metti(state.brano).catch(() => {}); applicaTrasposizione(); aggiornaSetup(); });
-$('#st-suoni').addEventListener('click', async (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return; } state.suoni = b.dataset.v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); });
+
+async function scegliSuoni(v) { if (v === 'file' && !(await db.suono('file').catch(() => null))) { state.suoni = 'file'; aggiornaSetup(); toast('Scegli un file .sf2 o .sf3'); return false; } state.suoni = v; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); return true; }
+$('#st-suoni').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) scegliSuoni(b.dataset.v); });
 $('#st-sf').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; const bytes = new Uint8Array(await f.arrayBuffer()); await db.mettiSuono('file', bytes); $('#st-sf-nome').textContent = `${f.name} · ${(bytes.length / 1048576).toFixed(0)} MB`; state.suoni = 'file'; suoniCaricati = null; aggiornaSetup(); salvaPref(); if (api) caricaSuoni(); e.target.value = ''; });
 let testoT = 0;
 $('#st-testo').addEventListener('input', (e) => { const b = state.brano; if (!b) return; const v = e.target.value; clearTimeout(testoT); testoT = setTimeout(() => { if (righeDi(v).join('\n') !== righeDi(b.testo).join('\n')) b.tempiTesto = null; b.testo = v; db.metti(b).catch(() => {}); aggiornaSetup(); }, 400); });
@@ -1466,6 +1590,8 @@ function chiudiTutto() {
 }
 // tasto indietro del telefono (lo gestisce l'app e chiede qui): true se è servito a tornare a una pagina interna
 window.__indietro = () => {
+  if (!$('#cmd-pop').classList.contains('hidden')) { $('#cmd-pop').classList.add('hidden'); return true; }
+  if ($('#foglio-cmd').classList.contains('aperto') && !$('#spartito').classList.contains('hidden')) { apriComandi(false); return true; }
   const aperto = [...document.querySelectorAll('.velo')].find(v => !v.classList.contains('hidden'));
   if (aperto) { aperto.classList.add('hidden'); return true; }
   const vis = [...document.querySelectorAll('.schermo')].find(x => !x.classList.contains('hidden'));

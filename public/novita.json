@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "57",
+      "data": "2026-11-08",
+      "titolo": "Spartito: comandi dal basso",
+      "punti": [
+        "In alto restano solo titolo, artista e traccia: microfono e impostazioni sono passati in basso.",
+        "Il primo tasto della barra in basso (la paletta) sceglie la traccia, come su Songsterr.",
+        "Tirando su la barra (o toccando la maniglia) compaiono Parti, Canta, Metronomo, Tonalità, Suoni e Altro; toccando lo spartito si richiude."
+      ]
+    },
+    {
       "versione": "56",
       "data": "2026-11-08",
       "titolo": "Spartito: accordature di chitarre e bassi",
