@@ -741,6 +741,13 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .nf-voce b { display: block; font-weight: 500; font-size: 15px; }
 .nf-voce span { display: block; font-size: 13.5px; color: var(--inchiostro-2); line-height: 1.45; margin-top: 2px; }
 .novita-fan .fan-azioni { margin-top: 20px; }
+/* novità di Spartito e Canta: due pagine con le schermate */
+.nt-img { display: block; width: 100%; height: auto; max-height: 32vh; object-fit: contain; margin: 6px 0 4px; }
+.novita-tab .nf-voce:last-child { border-bottom: 0; }
+.novita-tab .fan-azioni { align-items: center; margin-top: 6px; position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); background: var(--foglio); padding: 12px 0 calc(20px + env(safe-area-inset-bottom)); margin-bottom: calc(-20px - env(safe-area-inset-bottom)); border-top: 1px solid var(--linea); }
+.nt-punti { display: flex; gap: 6px; margin-right: auto; }
+.nt-punti i { width: 7px; height: 7px; border-radius: 50%; background: var(--linea-forte); }
+.nt-punti i.on { background: var(--accento); }
 .novita-fan .fan-azioni .btn { min-height: 46px; padding: 0 20px; }
 /* proposte e voti dei fan (v43) */
 .etic-fan { font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--ambra-pieno); vertical-align: 2px; }

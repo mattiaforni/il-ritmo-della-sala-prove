@@ -2,6 +2,14 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "58",
+      "data": "2026-11-08",
+      "titolo": "Presentazione di Spartito e Canta",
+      "punti": [
+        "Alla prima apertura dopo l'aggiornamento, due pagine con le schermate spiegano Spartito, tablature e Canta (una volta per telefono)."
+      ]
+    },
+    {
       "versione": "57",
       "data": "2026-11-08",
       "titolo": "Spartito: comandi dal basso",
