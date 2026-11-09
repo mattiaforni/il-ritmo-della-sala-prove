@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "58";
+const APP_VERSION = "59";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -371,10 +371,15 @@ function linksHtml(c, conTesto) {
   const ls = linkSpotify(c);
   const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
   const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
-  const tab = c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`;
+  // la chiave apre lo Spartito dell'app se la tab c'è (o, per la band, si può scaricare da Songsterr);
+  // altrimenti, come prima, la pagina o la ricerca su Songsterr
+  const inApp = !state.tabInCorso.has(c.id) && (tabPronta(c) || (!state.fan && scaricabile(c)));
+  const tab = inApp
+    ? `<button type="button" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito" title="Spartito" aria-label="Spartito"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Spartito</span>" : ""}</button>`
+    : `<a ${appLink(c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>`;
   return `<div class="links">
     <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}">${SP_ICO}${conTesto ? "<span>Spotify</span>" : ""}</a>
-    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>
+    ${tab}
   </div>`;
 }
 // icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego

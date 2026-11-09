@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "59",
+      "data": "2026-11-09",
+      "titolo": "Scaletta: la chiave apre lo Spartito",
+      "punti": [
+        "Nella lista della scaletta la chiave di basso apre lo Spartito dell'app quando il pezzo ha la tab (prima portava sempre a Songsterr).",
+        "Senza tab resta come prima: apre o cerca la tablatura su Songsterr."
+      ]
+    },
+    {
       "versione": "58",
       "data": "2026-11-08",
       "titolo": "Presentazione di Spartito e Canta",
