@@ -2,6 +2,25 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "60",
+      "data": "2026-11-09",
+      "titolo": "Accordi dei pezzi",
+      "punti": [
+        "Nella pagina di un pezzo, accanto alla chiave e al microfono, la griglia d'accordo apre gli accordi con il testo: la band li incolla da «+ Accordi» (formato con gli accordi sopra le parole, come su Ultimate Guitar).",
+        "Nella pagina degli accordi si cambia tonalità con − e + (i nomi si trasformano, le colonne restano), si ingrandisce il testo e si fa scorrere da solo mentre si suona.",
+        "I fan li leggono; la band li cambia o li toglie da «Modifica»."
+      ]
+    },
+    {
+      "versione": "59",
+      "data": "2026-11-09",
+      "titolo": "Scaletta: la chiave apre lo Spartito",
+      "punti": [
+        "Nella lista della scaletta la chiave di basso apre lo Spartito dell'app quando il pezzo ha la tab (prima portava sempre a Songsterr).",
+        "Senza tab resta come prima: apre o cerca la tablatura su Songsterr."
+      ]
+    },
+    {
       "versione": "58",
       "data": "2026-11-08",
       "titolo": "Presentazione di Spartito e Canta",

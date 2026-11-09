@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "58";
+const APP_VERSION = "60";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -164,6 +164,8 @@ const state = {
   ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false, bacheca: false, studio: false },
   studioNegato: false,        // le regole del database non includono ancora "studio"
   studioModifica: false,      // «Da cantare» con i cestini al posto di Spartito e Canta
+  accordi: null,              // pagina Accordi aperta: { id, trasp, scorri, vel }
+  accFoglio: null,            // id del pezzo nel foglio «Accordi» (band: incolla o cambia il testo)
   cerca: null,                // foglio «Aggiungi un pezzo»: { q, stato: "" | "cerco" | "errore", errore, risultati }
   tabInCorso: new Set(),      // pezzi di cui la funzione sta scaricando la tab (la freccetta gira)
   subscribed: false,
@@ -371,10 +373,15 @@ function linksHtml(c, conTesto) {
   const ls = linkSpotify(c);
   const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
   const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
-  const tab = c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`;
+  // la chiave apre lo Spartito dell'app se la tab c'è (o, per la band, si può scaricare da Songsterr);
+  // altrimenti, come prima, la pagina o la ricerca su Songsterr
+  const inApp = !state.tabInCorso.has(c.id) && (tabPronta(c) || (!state.fan && scaricabile(c)));
+  const tab = inApp
+    ? `<button type="button" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito" title="Spartito" aria-label="Spartito"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Spartito</span>" : ""}</button>`
+    : `<a ${appLink(c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>`;
   return `<div class="links">
     <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}">${SP_ICO}${conTesto ? "<span>Spotify</span>" : ""}</a>
-    <a ${appLink(tab, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>
+    ${tab}
   </div>`;
 }
 // icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
@@ -1327,6 +1334,7 @@ function render() {
   updateNavMe();
   testata();
   syncPlayer();
+  if (state.accordi) renderAccordi();
   controllaNovitaTab();
   controllaNovitaFan();
   controllaInvito();
@@ -1402,6 +1410,8 @@ window.addEventListener("popstate", () => {
     return;
   }
   if (state.lettore) { chiudiLettore(true); return; }
+  if (state.accFoglio) { chiudiAccordiFoglio(true); return; }
+  if (state.accordi) { chiudiAccordi(true); return; }
   if (state.cerca) { chiudiCerca(true); return; }
   if (state.songPage) chiudiCanzone();
 });
@@ -1590,7 +1600,225 @@ function rigaPezzo(c) {
     if (!state.fan) tab += `<button class="sola-icona" data-action="tab-foglio" data-id="${c.id}" title="Cambia la tablatura" aria-label="Cambia la tablatura">${IC("cerca")}</button>`;
   } else if (!state.fan) tab = `<button class="tab-aggiungi" data-action="tab-foglio" data-id="${c.id}">${IC("piu")}Aggiungi la tablatura</button>`;
   else if (!nostro) tab = `<a ${appLink(c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${encodeURIComponent(songQuery(c))}`, "com.songsterr")} data-link title="Tablatura su Songsterr">${CLEF}<span>Tablatura</span></a>`;
+  // accordi (v60): la griglia apre la pagina degli accordi; per la band, senza accordi, «+ Accordi»
+  let acc = "";
+  if (haAccordi(c)) acc = `<button class="sola-icona" data-action="apri-accordi" data-id="${c.id}" title="Accordi" aria-label="Accordi">${IC("accordi")}</button>`;
+  else if (!state.fan) acc = `<button class="tab-aggiungi acc-aggiungi" data-action="accordi-foglio" data-id="${c.id}">${IC("piu")}Accordi</button>`;
+  // con la tab la lente (cambia la tablatura) resta in fondo alla riga
+  const lente = conTab && !state.fan ? tab.lastIndexOf("<button") : -1;
+  if (lente > 0) tab = tab.slice(0, lente) + acc + tab.slice(lente); else tab += acc;
   return `<div class="pg-link pg-riga">${sp}${tab}</div>`;
+}
+
+// ---------- Accordi (v60): testo con gli accordi sopra le parole, incollato dalla band ----------
+// Campo `accordi` sulla canzone: { testo, da, il }. Nessuna regola da cambiare. Band scrive, fan legge.
+// Pagina a schermo intero (#accordi-ov) con trasposizione (nomi anglosassoni, ricordata per pezzo sul telefono),
+// dimensione del testo e scorrimento automatico; foglio «Accordi» per incollare o cambiare il testo.
+const ACC_MAX = 20000;
+const haAccordi = (c) => !!(c && c.accordi && typeof c.accordi.testo === "string" && c.accordi.testo.trim());
+const NOTE_DIESIS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NOTE_BEMOLLE = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const ACC_RE = /^([A-G])([#b]?)((?:maj|min|dim|aug|sus|add|mi|m|M|°|ø|\+|-|[0-9]|b|#|\(|\))*)(?:\/([A-G])([#b]?))?$/;
+const ACC_RIEMPI = /^(\||-|–|x\d+|\(|\)|N\.C\.|NC|%|\/|\.|,|:)+$/i;
+const ACC_SEZ_RE = /^\s*\[([^\]]{1,40})\]\s*$|^\s*((?:intro|strofa|verse|ritornello|chorus|pre-?chorus|pre-?ritornello|bridge|ponte|solo|assolo|outro|coda|finale|interludio|inciso|riff)(?:\s+\d+|\s+[a-z])?)\s*:?\s*$/i;
+const indiceNota = (n) => { const i = NOTE_DIESIS.indexOf(n); return i >= 0 ? i : NOTE_BEMOLLE.indexOf(n); };
+// una riga è di accordi se ha almeno un accordo e nient'altro che accordi e segni di riempimento
+function eRigaAccordi(riga) {
+  const tok = riga.trim().split(/\s+/).filter(Boolean);
+  if (!tok.length) return false;
+  let n = 0;
+  for (const t of tok) { if (ACC_RE.test(t)) n++; else if (!ACC_RIEMPI.test(t)) return false; }
+  return n > 0;
+}
+function traspAccordo(t, n, bemolli) {
+  const m = t.match(ACC_RE); if (!m || !n) return t;
+  const scala = bemolli ? NOTE_BEMOLLE : NOTE_DIESIS;
+  const sposta = (nota) => scala[(((indiceNota(nota) + n) % 12) + 12) % 12];
+  return sposta(m[1] + m[2]) + (m[3] || "") + (m[4] ? "/" + sposta(m[4] + m[5]) : "");
+}
+// trasposizione di una riga di accordi tenendo le colonne: se il nome si accorcia si aggiungono spazi,
+// se si allunga si tolgono dagli spazi che seguono (almeno uno resta)
+function traspRiga(riga, n, bemolli) {
+  const parti = riga.split(/(\s+)/);   // token e spazi alternati
+  let out = "", debito = 0;
+  for (let i = 0; i < parti.length; i++) {
+    let p = parti[i];
+    if (!p) continue;
+    if (/^\s+$/.test(p)) {
+      if (debito > 0) { const tolgo = Math.min(debito, p.length - 1); p = p.slice(tolgo); debito -= tolgo; }
+      out += p; continue;
+    }
+    const nuovo = ACC_RE.test(p) ? traspAccordo(p, n, bemolli) : p;
+    const diff = nuovo.length - p.length;
+    out += `<span class="ch">${esc(nuovo)}</span>`;
+    if (diff < 0) out += " ".repeat(-diff); else debito += diff;
+  }
+  return out;
+}
+// bemolli se il testo originale ne usa più dei diesis (o la tonalità scende e non ci sono diesis)
+function preferisciBemolli(testo, n) {
+  const acc = testo.split(/\s+/).filter(t => ACC_RE.test(t));
+  const b = acc.filter(t => /^[A-G]b/.test(t) || /\/[A-G]b/.test(t)).length;
+  const d = acc.filter(t => /^[A-G]#/.test(t) || /\/[A-G]#/.test(t)).length;
+  if (b !== d) return b > d;
+  return n < 0;
+}
+function accordiHtml(testo, n) {
+  const bemolli = preferisciBemolli(testo, n);
+  return testo.replace(/\r\n?/g, "\n").replace(/\t/g, "    ").split("\n").map(r => {
+    const sez = r.match(ACC_SEZ_RE);
+    if (sez) return `<span class="acc-sez">${esc((sez[1] || sez[2]).trim())}</span>`;
+    if (eRigaAccordi(r)) return traspRiga(r, n, bemolli);
+    return esc(r);
+  }).join("\n");
+}
+const accOv = document.getElementById("accordi-ov");
+const ACC_SIZES = [12, 13.5, 15, 17, 19.5];
+const accTraspSalvate = () => { try { return JSON.parse(store.get("prove_acc_trasp") || "{}") || {}; } catch { return {}; } };
+function apriAccordi(id) {
+  const c = trovaPezzo(id); if (!c || !accOv || !haAccordi(c)) return;
+  const t = accTraspSalvate()[id];
+  state.accordi = { id, trasp: Number.isInteger(t) ? t : 0, scorri: false, vel: Number(store.get("prove_acc_vel")) || 20, size: Number(store.get("prove_acc_size")) };
+  if (!ACC_SIZES.includes(state.accordi.size)) state.accordi.size = 13.5;
+  accOv.classList.remove("hidden", "via");
+  accOv.classList.add("entra");
+  document.documentElement.classList.add("con-lettore");
+  history.pushState({ accordi: true }, "");
+  accOv.dataset.chiave = "";
+  renderAccordi();
+  const corpo = accOv.querySelector(".acc-corpo"); if (corpo) corpo.scrollTop = 0;
+}
+function chiudiAccordi(daStoria = false) {
+  if (!state.accordi) return;
+  if (!daStoria && history.state && history.state.accordi) { history.back(); return; }
+  fermaScorrimento();
+  state.accordi = null;
+  accOv.classList.remove("entra"); accOv.classList.add("via");
+  if (!state.lettore && !state.spartito) document.documentElement.classList.remove("con-lettore");
+  setTimeout(() => { if (!state.accordi) { accOv.classList.add("hidden"); accOv.classList.remove("via"); } }, 280);
+}
+function renderAccordi() {
+  const a = state.accordi; if (!a || !accOv) return;
+  const c = trovaPezzo(a.id);
+  if (!c || !haAccordi(c)) { chiudiAccordi(); return; }
+  const chiave = [a.id, a.trasp, a.scorri ? 1 : 0, a.vel, a.size, c.accordi.testo.length, c.accordi.da || "", c.titolo, state.fan ? 1 : 0].join("|");
+  if (accOv.dataset.chiave === chiave) return;
+  accOv.dataset.chiave = chiave;
+  const corpo = accOv.querySelector(".acc-corpo");
+  const scroll = corpo ? corpo.scrollTop : 0;
+  const sotto = [isNostro(c) ? "pezzo nostro" : c.artista, c.accordi.da ? `accordi di ${c.accordi.da}` : ""].filter(Boolean).join(" · ");
+  const ton = a.trasp === 0 ? "orig." : (a.trasp > 0 ? "+" : "−") + Math.abs(a.trasp);
+  accOv.innerHTML = `
+    <div class="acc-top">
+      <button class="x" data-action="acc-chiudi" aria-label="Chiudi">${IC("chiudi-giu")}</button>
+      <div class="acc-tit"><h2>${esc(c.titolo || "")}</h2>${sotto ? `<p>${esc(sotto)}</p>` : ""}</div>
+      <div class="acc-ton" role="group" aria-label="Tonalità">
+        <button type="button" data-action="acc-trasp" data-d="-1" aria-label="Un semitono sotto">−</button>
+        <button type="button" class="ton${a.trasp ? "" : " zero"}" data-action="acc-trasp" data-d="0" title="${a.trasp ? "Torna alla tonalità originale" : "Tonalità originale"}" aria-label="${a.trasp ? `Tonalità ${ton}, torna all'originale` : "Tonalità originale"}">${ton}</button>
+        <button type="button" data-action="acc-trasp" data-d="1" aria-label="Un semitono sopra">+</button>
+      </div>
+    </div>
+    <div class="acc-corpo"><pre class="acc-sheet" style="--acc-size:${a.size}px">${accordiHtml(c.accordi.testo, a.trasp)}</pre></div>
+    <div class="acc-piede">
+      <button type="button" class="btn quiet acc-aa" data-action="acc-size" data-d="-1" aria-label="Testo più piccolo" ${a.size <= ACC_SIZES[0] ? "disabled" : ""}>A</button>
+      <button type="button" class="btn quiet acc-aa" data-action="acc-size" data-d="1" aria-label="Testo più grande" ${a.size >= ACC_SIZES[ACC_SIZES.length - 1] ? "disabled" : ""}><b>A</b></button>
+      <button type="button" class="btn quiet${a.scorri ? " on" : ""}" data-action="acc-scorri" aria-pressed="${a.scorri}">${a.scorri ? "Fermo" : "Scorri"}</button>
+      ${a.scorri ? `<span class="acc-vel"><button type="button" class="btn quiet" data-action="acc-vel" data-d="-1" aria-label="Più lento" ${a.vel <= 6 ? "disabled" : ""}>${IC("sotto")}</button><button type="button" class="btn quiet" data-action="acc-vel" data-d="1" aria-label="Più veloce" ${a.vel >= 90 ? "disabled" : ""}>${IC("sopra")}</button></span>` : ""}
+      <span class="sp"></span>
+      ${state.fan ? "" : `<button type="button" class="btn quiet" data-action="accordi-foglio" data-id="${c.id}">${IC("matita")}Modifica</button>`}
+    </div>`;
+  const corpo2 = accOv.querySelector(".acc-corpo"); if (corpo2) corpo2.scrollTop = scroll;
+}
+let accScorriRaf = 0, accScorriT = 0, accScorriResto = 0;
+function avviaScorrimento() {
+  fermaScorrimento();
+  accScorriT = 0; accScorriResto = 0;
+  const passo = (ts) => {
+    const a = state.accordi; if (!a || !a.scorri) return;
+    const corpo = accOv.querySelector(".acc-corpo");
+    if (corpo && accScorriT) {
+      accScorriResto += (ts - accScorriT) / 1000 * a.vel;
+      const px = Math.floor(accScorriResto); accScorriResto -= px;
+      if (px) corpo.scrollTop += px;
+      if (corpo.scrollTop + corpo.clientHeight >= corpo.scrollHeight - 1) { a.scorri = false; renderAccordi(); return; }
+    }
+    accScorriT = ts;
+    accScorriRaf = requestAnimationFrame(passo);
+  };
+  accScorriRaf = requestAnimationFrame(passo);
+}
+function fermaScorrimento() { if (accScorriRaf) cancelAnimationFrame(accScorriRaf); accScorriRaf = 0; }
+function salvaTraspAccordi(id, n) {
+  const t = accTraspSalvate();
+  if (n) t[id] = n; else delete t[id];
+  store.set("prove_acc_trasp", JSON.stringify(t));
+}
+if (accOv) accOv.addEventListener("click", e => {
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
+// foglio «Accordi» (band): il testo si incolla com'è; Salva in basso a destra, Elimina a sinistra se c'è già
+function accordiBox() {
+  let b = document.getElementById("accordi-box");
+  if (!b) { b = document.createElement("div"); b.id = "accordi-box"; document.querySelector("main").appendChild(b); }
+  return b;
+}
+function apriAccordiFoglio(id) {
+  const c = trovaPezzo(id); if (!c || state.fan) return;
+  state.accFoglio = id;
+  const testo = haAccordi(c) ? c.accordi.testo : "";
+  const sotto = [c.titolo, isNostro(c) ? "pezzo nostro" : c.artista].filter(Boolean).join(" · ");
+  accordiBox().innerHTML = `
+    <form class="foglio acc-foglio" data-form="accordi" data-song="${c.id}">
+      <div class="foglio-testa"><div class="foglio-tit"><h2>Accordi</h2><div class="foglio-sub">${esc(sotto)}</div></div><button type="button" class="x" data-action="accordi-chiudi" aria-label="Chiudi">${IC("x")}</button></div>
+      <div class="foglio-corpo"><div>
+        <p class="cerca-aiuto">Incolla il testo con gli accordi sopra le parole (come su Ultimate Guitar). Una riga fra parentesi quadre, tipo [Ritornello], diventa un titolo.</p>
+        <textarea class="field" name="testo" maxlength="${ACC_MAX}" placeholder="[Intro]&#10;Am   F   C   G&#10;&#10;Am              F&#10;La prima riga del testo…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Testo con gli accordi">${esc(testo)}</textarea>
+      </div></div>
+      <div class="foglio-barra">
+        ${testo ? `<button type="button" class="btn quiet" data-action="accordi-elimina" data-id="${c.id}">Elimina</button>` : ""}
+        <span class="sp" style="flex:1"></span>
+        <button type="submit" class="btn fill">Salva</button>
+      </div>
+    </form>`;
+  history.pushState({ accFoglio: true }, "");
+  const ta = accordiBox().querySelector("textarea");
+  if (ta && !testo) setTimeout(() => ta.focus(), 50);
+}
+function chiudiAccordiFoglio(daStoria = false) {
+  if (!state.accFoglio) return;
+  if (!daStoria && history.state && history.state.accFoglio) { history.back(); return; }
+  state.accFoglio = null;
+  accordiBox().innerHTML = "";
+}
+async function salvaAccordi(form) {
+  const id = form.dataset.song;
+  const testo = form.testo.value.replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, ACC_MAX);
+  const c = trovaPezzo(id); if (!c) return;
+  if (!testo.trim()) {
+    if (haAccordi(c)) await eliminaAccordi(id, false);
+    else chiudiAccordiFoglio();
+    return;
+  }
+  const btn = form.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
+  const ok = await scrivi(updateDoc(doc(db, "canzoni", id), { accordi: { testo, da: state.user || "", il: serverTimestamp() } }).then(() => true));
+  if (btn) btn.disabled = false;
+  if (!ok) return;
+  c.accordi = { testo, da: state.user || "" };   // intanto, prima che arrivi dal database
+  chiudiAccordiFoglio();
+  render();
+  if (state.accordi && state.accordi.id === id) { accOv.dataset.chiave = ""; renderAccordi(); }
+  else apriAccordi(id);
+}
+async function eliminaAccordi(id, chiedi = true) {
+  const c = trovaPezzo(id); if (!c) return;
+  if (chiedi && !confirm(`Togliere gli accordi di «${c.titolo || "questo pezzo"}»?`)) return;
+  const ok = await scrivi(updateDoc(doc(db, "canzoni", id), { accordi: deleteField() }).then(() => true));
+  if (!ok) return;
+  delete c.accordi;
+  chiudiAccordiFoglio();
+  if (state.accordi && state.accordi.id === id) chiudiAccordi();
+  render();
 }
 // un pezzo della scaletta o delle proposte, o uno «Da cantare»
 const trovaPezzo = (id) => state.canzoni.find(x => x.id === id) || state.studio.find(x => x.id === id) || null;
@@ -3252,7 +3480,8 @@ const SCRITTURE = new Set([
   "del-task", "del-song", "up", "down", "react-up", "react-down", "promote", "del-rec", "pref", "del-commento",
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara",
-  "studio-modifica", "studio-togli", "studio-aggiungi", "cerca-apri", "tab-foglio", "tab-scegli"
+  "studio-modifica", "studio-togli", "studio-aggiungi", "cerca-apri", "tab-foglio", "tab-scegli",
+  "accordi-foglio", "accordi-elimina"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
@@ -3672,6 +3901,41 @@ async function act(btn) {
       preparaTab(id); break;
     case "tab-foglio":
       apriCerca("tab", id); break;
+    case "apri-accordi":
+      apriAccordi(id); break;
+    case "acc-chiudi":
+      chiudiAccordi(); break;
+    case "acc-trasp": {
+      const a = state.accordi; if (!a) break;
+      const d = Number(btn.dataset.d);
+      a.trasp = d === 0 ? 0 : Math.max(-11, Math.min(11, a.trasp + d));
+      salvaTraspAccordi(a.id, a.trasp);
+      renderAccordi(); break;
+    }
+    case "acc-size": {
+      const a = state.accordi; if (!a) break;
+      const i = Math.max(0, Math.min(ACC_SIZES.length - 1, ACC_SIZES.indexOf(a.size) + Number(btn.dataset.d)));
+      a.size = ACC_SIZES[i]; store.set("prove_acc_size", String(a.size));
+      renderAccordi(); break;
+    }
+    case "acc-scorri": {
+      const a = state.accordi; if (!a) break;
+      a.scorri = !a.scorri;
+      if (a.scorri) avviaScorrimento(); else fermaScorrimento();
+      renderAccordi(); break;
+    }
+    case "acc-vel": {
+      const a = state.accordi; if (!a) break;
+      a.vel = Math.max(6, Math.min(90, Math.round(a.vel * (Number(btn.dataset.d) > 0 ? 1.4 : 1 / 1.4))));
+      store.set("prove_acc_vel", String(a.vel));
+      renderAccordi(); break;
+    }
+    case "accordi-foglio":
+      apriAccordiFoglio(id); break;
+    case "accordi-chiudi":
+      chiudiAccordiFoglio(); break;
+    case "accordi-elimina":
+      eliminaAccordi(id); break;
     case "tab-scegli":
       scegliTab(btn.dataset.i); break;
     case "studio-modifica":
@@ -3824,6 +4088,7 @@ mainEl.addEventListener("submit", async e => {
 
   if (kind === "reg-commento") { await inviaCommentoReg(form); return; }
   if (kind === "cerca") { programmaRicerca(form.q.value, true); form.q.blur(); return; }
+  if (kind === "accordi") { await salvaAccordi(form); return; }
 
   if (kind === "bacheca" || kind === "bacheca-commento") {
     const campo = form.testo;

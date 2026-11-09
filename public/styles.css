@@ -286,11 +286,12 @@ button.ini.on { border-color: transparent; color: #fff; }
   mask: url(icons/spotify.png) center / contain no-repeat;
 }
 .links { display: flex; gap: 4px; align-items: center; }
-.links a {
+.links a, .links button {
   display: grid; place-items: center; width: 32px; height: 32px;
   color: var(--inchiostro-3); border-radius: var(--r);
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
 }
-.links a:active { background: var(--linea); }
+.links a:active, .links button:active { background: var(--linea); }
 .links .ico { width: 22px; height: 22px; }
 
 .brano {
@@ -1046,3 +1047,35 @@ html.con-lettore, html.con-lettore body { overflow: hidden; }
 .tab-carica:active .ic { background: var(--linea); }
 .tab-carica + .cerca-campo { margin-top: 12px; }
 .ris-tag.uso { color: var(--accento); border-color: var(--accento); }
+
+/* ---------- Accordi (v60): testo con gli accordi sopra le parole, a schermo intero ---------- */
+.pg-riga > .tab-aggiungi.acc-aggiungi { border-style: dashed; }
+.accordi { position: fixed; inset: 0; z-index: 44; background: var(--carta); color: var(--inchiostro); display: flex; flex-direction: column; transition: transform .26s cubic-bezier(.2, .8, .2, 1); }
+.accordi.entra { animation: lt-entra .3s cubic-bezier(.2, .8, .2, 1) both; }
+.accordi.via { transform: translateY(100%); }
+.acc-top { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px 8px; background: var(--testata); border-bottom: 1px solid var(--linea); }
+.acc-top .x { flex: none; }
+.acc-tit { flex: 1; min-width: 0; }
+.acc-tit h2 { font: 400 22px/1.1 var(--display); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-tit p { margin: 2px 0 0; font-size: 12.5px; color: var(--inchiostro-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-ton { display: inline-flex; align-items: stretch; border: 1px solid var(--linea-forte); border-radius: var(--r); height: 34px; flex: none; }
+.acc-ton button { width: 36px; border: 0; background: none; font: 500 19px var(--ui); color: var(--inchiostro-2); cursor: pointer; }
+.acc-ton button:active { background: var(--linea); }
+.acc-ton .ton { min-width: 44px; display: grid; place-items: center; font: 500 13px var(--ui); color: var(--accento); border-left: 1px solid var(--linea); border-right: 1px solid var(--linea); font-variant-numeric: tabular-nums; }
+.acc-ton .ton.zero { color: var(--inchiostro-3); }
+.acc-corpo { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 14px 16px 40vh; overscroll-behavior: contain; }
+.acc-sheet { margin: 0; font: 400 var(--acc-size, 14px)/1.55 ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; white-space: pre; color: var(--inchiostro); tab-size: 4; }
+.acc-sheet .ch { color: var(--accento); font-weight: 600; }
+.acc-sheet .acc-sez { display: block; margin: 18px 0 2px; font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-2); }
+.acc-sheet .acc-sez:first-child { margin-top: 0; }
+.acc-piede { display: flex; align-items: center; gap: 4px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--linea); background: var(--testata); }
+.acc-piede .btn.quiet { padding: 0 10px; min-width: 40px; justify-content: center; }
+.acc-piede .btn.quiet.on { color: var(--accento); border-color: var(--accento); }
+.acc-piede .btn.quiet svg { width: 16px; height: 16px; }
+.acc-piede .sp { flex: 1; }
+.acc-piede .acc-vel { display: inline-flex; gap: 2px; }
+.acc-aa { font: 500 13px var(--ui); }
+.acc-aa b { font-weight: 500; font-size: 17px; }
+.acc-foglio .cerca-aiuto { margin-bottom: 10px; }
+.acc-foglio textarea.field { width: 100%; min-height: 50vh; font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; white-space: pre; overflow-wrap: normal; overflow-x: auto; resize: none; }
+.acc-foglio .foglio-sub { font-size: 13px; color: var(--inchiostro-2); margin-top: 2px; }
