@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "61",
+      "data": "2026-11-10",
+      "titolo": "Cambio di brano con l'app non in primo piano",
+      "punti": [
+        "In macchina, passando al brano dopo dai comandi dell'auto (o dallo schermo bloccato), a volte la registrazione nuova non partiva finché non si riapriva l'app: ora parte.",
+        "Mentre il brano nuovo si carica quello di prima continua piano per un attimo, poi lascia il posto."
+      ]
+    },
+    {
       "versione": "60",
       "data": "2026-11-09",
       "titolo": "Accordi dei pezzi",
