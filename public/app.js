@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "60";
+const APP_VERSION = "61";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1864,7 +1864,7 @@ function apriSpartito(id, modo) {
     preparaTab(id, raccoltaDi(id), modo);
     return;
   }
-  if (state.playId && riproduzione.vuole) { riproduzione.vuole = false; player.pause(); }
+  if (state.playId && riproduzione.vuole) { riproduzione.vuole = false; player.pause(); zitto(); }
   // rc: da quale raccolta viene il pezzo (la pagina la passa alla funzione per scaricare il file)
   const p = { id, modo, t: c.titolo || "", a: c.artista || "", r: c.tab.revisionId, rc: raccoltaDi(id) };
   state.spartito = true;
@@ -2182,18 +2182,61 @@ function caricaIn(el, url) {
 }
 function svuotaLettore(el) {
   el.pause();
+  el.volume = 1;
   el.removeAttribute("src");
   try { el.load(); } catch (e) { /* niente */ }
 }
+// Sostegno in secondo piano. Con l'app non in primo piano (schermo spento, navigatore davanti, autoradio)
+// Android lascia la rete a Chrome solo finché la pagina sta suonando: se al cambio di brano c'è un momento
+// in cui non suona niente, il file nuovo non si scarica (errore immediato, "rete ok") e resta fermo finché
+// non si riapre l'app. Per questo, mentre un brano si carica o si riprova, suona in loop un file di
+// silenzio già in memoria (lo stesso trucco della diretta): la pagina resta "in riproduzione" e la rete c'è.
+const sostegno = new Audio();
+sostegno.loop = true;
+sostegno.preload = "auto";
+let sostegnoAttivo = false;
+let sostegnoChiesto = false;
+// il file va tenuto in memoria (blob): al momento di usarlo la rete potrebbe già non esserci
+function preparaSostegno() {
+  if (sostegnoChiesto) return;
+  sostegnoChiesto = true;
+  fetch("silenzio.wav").then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+    .then(b => { sostegno.src = URL.createObjectURL(b); })
+    .catch(() => { sostegno.src = "silenzio.wav"; });
+}
+function tieniSveglio() {
+  if (!document.hidden || sostegnoAttivo) return;
+  preparaSostegno();
+  if (!sostegno.getAttribute("src")) return;
+  sostegnoAttivo = true;
+  diag("sostegno in secondo piano");
+  const p = sostegno.play();
+  if (p) p.catch(e => { sostegnoAttivo = false; diag("sostegno rifiutato", e && e.name); });
+}
+function lasciaSveglio() {
+  if (!sostegnoAttivo && sostegno.paused) return;
+  sostegnoAttivo = false;
+  sostegno.pause();
+}
+// pausa voluta (tocco, autoradio, telefono): tace anche il brano precedente rimasto a volume basso
+function zitto() {
+  lasciaSveglio();
+  const el = riproduzione.uscente;
+  if (el && el !== player && !el.paused) el.pause();
+}
 function suona() {
   riproduzione.vuole = true;
+  // finché il brano non suona davvero (vedi "playing") la pagina non deve restare in silenzio
+  if (player.paused || player.readyState < 3 || player.error) tieniSveglio();
   statoSessione();
   return player.play().catch(e => {
     diag("avvio rifiutato", e && e.name);
     // in secondo piano il telefono può rifiutare: ci riprova il controllo periodico e il ritorno sull'app
     if (e && e.name === "NotAllowedError") return;
     if (e && e.name === "AbortError") return;
-    toast("Impossibile riprodurre questo file.");
+    // file non caricato (rete, o telefono che la nega in secondo piano): l'errore del lettore fa riprovare
+    // da solo. Il messaggio arriva solo se i tentativi non bastano (vedi programmaRipresa).
+    if (!state.playId) toast("Impossibile riprodurre questo file.");
   });
 }
 // play dopo un errore di rete: si ricarica dal punto in cui era, altrimenti si riprende normalmente
@@ -2231,11 +2274,17 @@ function metti(r) {
     diag("carico", riproduzione.pronto === r.id ? "precarico non utilizzabile" : "non precaricata");
   }
   riproduzione.srcCambiato = Date.now();
+  player.volume = 1;
   // il lettore di prima resta finché il nuovo non suona (evento "playing"); se il passaggio è a mano si
-  // mette in pausa (la sua pausa non conta: non è più il lettore in uso)
+  // mette in pausa (la sua pausa non conta: non è più il lettore in uso). In secondo piano no: una pausa
+  // toglierebbe la rete proprio mentre serve per il brano nuovo (vedi tieniSveglio). Lì il precedente
+  // continua a volume basso, così si sente che il comando è arrivato, e si chiude quando il nuovo suona.
   if (prima.getAttribute("src")) {
     riproduzione.uscente = prima;
-    if (!riproduzione.senzaPausa && !prima.paused) prima.pause();
+    if (document.hidden) {
+      tieniSveglio();
+      if (!riproduzione.senzaPausa && !prima.paused) prima.volume = 0.25;
+    } else if (!riproduzione.senzaPausa && !prima.paused) prima.pause();
   }
   riproduzione.pronto = null;
   riproduzione.riprendiDa = null;
@@ -2250,12 +2299,13 @@ function playToggle(id, coda) {
   const r = state.registrazioni.find(x => x.id === id);
   if (!r) return;
   if (state.playId === id) {
-    if (player.paused) { diag("play (tocco)"); riparti(); } else { diag("pausa (tocco)"); riproduzione.vuole = false; player.pause(); }
+    if (player.paused) { diag("play (tocco)"); riparti(); } else { diag("pausa (tocco)"); riproduzione.vuole = false; player.pause(); zitto(); }
     return;
   }
   if (coda) state.coda = coda;
   if (!state.coda || !state.coda.includes(id)) state.coda = [id];
   state.playId = id;
+  preparaSostegno();
   annullaRipresa();
   metti(r);
   diag("avvio", `${posizioneInCoda() || "sola"}`);
@@ -2272,7 +2322,9 @@ function fermaRiproduzione() {
   clearTimeout(riproduzione.anticipoTimer);
   riproduzione.anticipoTimer = null;
   riproduzione.uscente = null;
+  lasciaSveglio();
   player.pause();
+  player.volume = 1;
   try { player.currentTime = 0; } catch (e) { /* file non ancora caricato */ }
   svuotaLettore(altroLettore());
   riproduzione.pronto = null;
@@ -2369,6 +2421,7 @@ function programmaRipresa(motivo) {
   if (riproduzione.errori >= ATTESE_RIPRESA.length) { diag("ripresa abbandonata", motivo); toast("Registrazione interrotta: niente rete."); return; }
   const attesa = ATTESE_RIPRESA[riproduzione.errori++] * 1000;
   diag("ripresa fra " + attesa / 1000 + " s", motivo);
+  if (riproduzione.errori === 3) toast("La registrazione non si carica: riprovo…");
   riproduzione.timer = setTimeout(riprendi, attesa);
 }
 function riprendi() {
@@ -2381,6 +2434,7 @@ function riprendi() {
   const pos = riproduzione.posUrl === r.url ? riproduzione.pos : 0;
   if (!riproduzione.riprendiDa || riproduzione.riprendiDa.url !== r.url) riproduzione.riprendiDa = { url: r.url, pos };
   diag("ripresa", `da ${Math.round(riproduzione.riprendiDa.pos)} s`);
+  tieniSveglio();
   caricaIn(player, r.url);
   suona();
 }
@@ -2389,7 +2443,8 @@ window.addEventListener("online", () => { diag("rete tornata"); if (riproduzione
 document.addEventListener("visibilitychange", () => {
   diag(document.visibilityState === "visible" ? "app in primo piano" : "app in secondo piano");
   if (document.visibilityState !== "visible") return;
-  if (state.playId && riproduzione.vuole && player.paused && !riproduzione.timer && !player.error) suona();
+  if (state.playId && riproduzione.vuole && riproduzione.timer) riprendi();
+  else if (state.playId && riproduzione.vuole && player.paused && !player.error) suona();
   syncPlayer();
 });
 // Controllo periodico: copre quello che gli eventi non segnalano. Se dovrebbe suonare ma il lettore è in
@@ -2398,6 +2453,7 @@ document.addEventListener("visibilitychange", () => {
 // secondi, fine brano mai segnalata) ricarica dal punto in cui era, o passa al brano dopo se era alla fine.
 const FERMO_MS = 12000, MAX_RIPARTENZE = 3;
 function controlloRiproduzione() {
+  if (!state.playId || !riproduzione.vuole) zitto();
   if (!state.playId || !riproduzione.vuole || riproduzione.timer) return;
   const t = player.currentTime || 0;
   if (player.paused && !player.ended && !player.error) {
@@ -2465,7 +2521,7 @@ function comandiRegistrazioni() {
   prova("play", () => { diag("play (comando esterno)"); riparti(); });
   // una pausa che arriva dall'autoradio subito dopo un cambio automatico di brano non è di chi ascolta
   const appenaCambiato = () => Date.now() - riproduzione.cambio < 2500;
-  prova("pause", () => { if (appenaCambiato()) { diag("pausa (comando esterno) ignorata", "subito dopo il cambio"); return; } diag("pausa (comando esterno)"); riproduzione.vuole = false; player.pause(); statoSessione(); });
+  prova("pause", () => { if (appenaCambiato()) { diag("pausa (comando esterno) ignorata", "subito dopo il cambio"); return; } diag("pausa (comando esterno)"); riproduzione.vuole = false; player.pause(); zitto(); statoSessione(); });
   prova("stop", () => { if (appenaCambiato()) { diag("stop (comando esterno) ignorato", "subito dopo il cambio"); return; } diag("stop (comando esterno)"); fermaRiproduzione(); });
   // niente −10/+10 s sullo schermo bloccato (restano nell'app): come su Spotify, precedente, play/pausa,
   // successivo e stop. Il pulsante "preferita" di Spotify non si può avere: le pagine web hanno solo le
@@ -2775,6 +2831,7 @@ lettori.forEach(el => {
   el.addEventListener("playing", delPlayer(() => {
     const cambio = !!riproduzione.uscente;
     congedaUscente();
+    lasciaSveglio();
     diag("suona", cambio ? "cambio senza buco" : "");
   }));
   el.addEventListener("waiting", delPlayer(() => diag("in attesa di dati", `stato ${player.readyState}`)));
@@ -2789,6 +2846,7 @@ lettori.forEach(el => {
     if (Date.now() - riproduzione.srcCambiato < 20000) { diag("pausa (sistema) ignorata", "subito dopo il cambio"); return; }
     diag("pausa (sistema)");
     riproduzione.vuole = false;
+    zitto();
     statoSessione();
   }));
   el.addEventListener("seeked", delPlayer(statoSessione));
@@ -2797,7 +2855,7 @@ lettori.forEach(el => {
   // errore di rete mentre si ascolta: si riprova dallo stesso punto
   el.addEventListener("error", (e) => {
     if (e.target === player) {
-      diag("errore", `codice ${player.error && player.error.code}, rete ${navigator.onLine ? "ok" : "assente"}`);
+      diag("errore", `codice ${player.error && player.error.code}, rete ${navigator.onLine ? "ok" : "assente"}, ${document.hidden ? "secondo piano" : "primo piano"}${player.error && player.error.message ? ", " + String(player.error.message).slice(0, 60) : ""}`);
       if (state.playId && riproduzione.vuole) programmaRipresa("errore");
       return;
     }
