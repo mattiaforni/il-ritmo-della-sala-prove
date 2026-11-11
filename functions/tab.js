@@ -42,15 +42,55 @@ const INTESTAZIONI = {
   "Accept-Language": "it-IT,it;q=0.9,en;q=0.8"
 };
 
-async function prendi(url, cosa, ms = 20000, conUrl = false) {
+const aspetta = (ms) => new Promise(r => setTimeout(r, ms));
+// 429 (troppe richieste): un secondo tentativo dopo l'attesa che chiede Songsterr (al massimo 5 s)
+async function prendi(url, cosa, ms = 20000, conUrl = false, tentativo = 0) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
+  let r;
   try {
-    const r = await fetch(url, { headers: { ...INTESTAZIONI, Accept: cosa === "json" ? "application/json" : "text/html" }, signal: ctl.signal });
-    if (!r.ok) { const e = new Error(`${cosa} ${r.status}`); e.status = r.status; throw e; }
-    const corpo = cosa === "json" ? await r.json() : await r.text();
-    return conUrl ? { corpo, url: r.url || url } : corpo;
+    r = await fetch(url, { headers: { ...INTESTAZIONI, Accept: cosa === "json" ? "application/json" : "text/html" }, signal: ctl.signal });
+    if (r.ok) {
+      const corpo = cosa === "json" ? await r.json() : await r.text();
+      return conUrl ? { corpo, url: r.url || url } : corpo;
+    }
   } finally { clearTimeout(t); }
+  if (r.status === 429 && tentativo === 0) {
+    const ra = Number(r.headers.get("retry-after"));
+    await aspetta(Math.min(5000, Math.max(1500, (ra > 0 ? ra : 2) * 1000)));
+    return prendi(url, cosa, ms, conUrl, 1);
+  }
+  const e = new Error(`${cosa} ${r.status}`); e.status = r.status; throw e;
+}
+
+// i dati della tab dall'API del sito (quella che usa la pagina stessa), senza scaricare la pagina:
+// dalla v62, perché la pagina HTML risponde 429 alle richieste delle funzioni
+const songIdDi = (url) => { const m = String(url || "").match(/-s(\d+)(?:t\d+)?$/); return m ? Number(m[1]) : null; };
+async function metaDaApi(songId) {
+  const j = await prendi(`${SITO}/api/meta/${songId}`, "json", 15000);
+  const c = (j && j.current) || j;
+  if (!c || !c.revisionId || !c.image) throw new Error("Dati della tab incompleti dall'API di Songsterr");
+  const tracks = (Array.isArray(c.tracks) ? c.tracks : [])
+    .map((t, i) => ({ ...t, partId: typeof t.partId === "number" ? t.partId : i }));
+  return { songId: Number(c.songId) || songId, revisionId: c.revisionId, image: c.image, title: c.title || "", artist: c.artist || "", tracks };
+}
+// prima l'API, poi la pagina; un errore leggibile se rifiutano entrambe
+async function datiTab(url, songIdNoto) {
+  const songId = songIdDi(url) || Number(songIdNoto) || null;
+  let errApi = null;
+  if (songId) {
+    try { const meta = await metaDaApi(songId); if (meta.tracks.length) return { meta, url: null }; }
+    catch (e) { errApi = e; console.warn("tab: api/meta", songId, e.message); }
+  }
+  try {
+    const pagina = await paginaTab(url);
+    return { meta: statoDaHtml(pagina.corpo), url: pagina.url };
+  } catch (e) {
+    if (e.status === 429 || (errApi && errApi.status === 429)) {
+      const x = new Error("Songsterr sta rifiutando le richieste (troppi accessi): riprova fra qualche minuto"); x.status = 429; throw x;
+    }
+    throw e;
+  }
 }
 
 // pagina della tab; se il link non risponde (es. un indirizzo costruito dai risultati della ricerca con un
@@ -236,8 +276,8 @@ function crea({ cors, ruolo, REGIONE }) {
       const c = snap.data();
       let url = String(c.songsterrUrl || "").replace(/[?#].*$/, "");
       if (!SONGSTERR_RE.test(url)) { res.status(400).json({ error: "La canzone non ha il link Songsterr della pagina della tab" }); return; }
-      const pagina = await paginaTab(url);
-      const meta = statoDaHtml(pagina.corpo);
+      const { meta, url: urlVero } = await datiTab(url, c.songId || (c.tab && c.tab.songId));
+      const pagina = { url: urlVero };
       const tracce = await tracceDi(meta);
       if (!tracce.length) { res.status(502).json({ error: "Nessuna traccia scaricata da Songsterr" }); return; }
       const { bytes, info, testi } = costruisciGp(meta, tracce);
@@ -264,4 +304,4 @@ function crea({ cors, ruolo, REGIONE }) {
   return { tab };
 }
 
-module.exports = { crea, statoDaHtml, costruisciGp, cercaSongsterr, urlTab, slug };
+module.exports = { crea, statoDaHtml, metaDaApi, datiTab, songIdDi, costruisciGp, cercaSongsterr, urlTab, slug };
