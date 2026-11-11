@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "61";
+const APP_VERSION = "62";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -646,7 +646,7 @@ function disegnaNovitaTab() {
       voci: [
         voce(IC("mic"), "Canta sulla base", "Le note scorrono verso la riga rossa e la tua voce è la linea nera: se sta sulla nota sei intonato. Un'ottava sotto va bene lo stesso."),
         voce(IC("cuffie"), "Con le cuffie", "Così il microfono sente solo te. In pausa la base resta dov'è e riparte dopo il conto alla rovescia."),
-        band ? voce(IC("nota"), "Da cantare", "In Personale aggiungi i pezzi che non sono né in scaletta né fra le proposte, per esercitarti.")
+        band ? voce(IC("nota"), "Da provare", "In Personale aggiungi i pezzi che non sono né in scaletta né fra le proposte, per esercitarti.")
              : voce(IC("stella"), "Il punteggio", "Alla fine vedi quanto sei stato intonato, parte per parte.")
       ] }
   ];
@@ -3336,9 +3336,9 @@ function daCantareCard() {
   const corpo = state.studioNegato
     ? `<p class="empty">La lista non è ancora disponibile: riprova fra qualche minuto.</p>`
     : miei.length ? miei.map(rigaStudio).join("")
-      : `<p class="empty">Pezzi fuori da scaletta e proposte, da leggere nello Spartito o da cantare.</p>`;
+      : `<p class="empty">Pezzi fuori da scaletta e proposte, da provare con lo Spartito o con Canta.</p>`;
   return `<article class="card da-cantare">
-      <h3 class="sec-title">Da cantare ${miei.length ? `<small>${miei.length}</small>` : ""}${miei.length ? `<button data-action="studio-modifica">${state.studioModifica ? "Fatto" : "Modifica"}</button>` : ""}</h3>
+      <h3 class="sec-title">Da provare ${miei.length ? `<small>${miei.length}</small>` : ""}${miei.length ? `<button data-action="studio-modifica">${state.studioModifica ? "Fatto" : "Modifica"}</button>` : ""}</h3>
       ${corpo}
       ${state.studioNegato ? "" : `<button class="addline" data-action="cerca-apri"><span class="plus">${IC("piu")}</span>Aggiungi un pezzo</button>`}
     </article>`;
@@ -3513,7 +3513,7 @@ async function caricaTab(id, f) {
 }
 async function togliStudio(id) {
   const s = state.studio.find(x => x.id === id);
-  if (!s || !confirm(`Togliere «${s.titolo || "questo pezzo"}» da Da cantare?`)) return;
+  if (!s || !confirm(`Togliere «${s.titolo || "questo pezzo"}» da Da provare?`)) return;
   const ok = await scrivi(deleteDoc(doc(db, "studio", id)).then(() => true));
   // il file della tab lo toglie la funzione (non serve aspettarla)
   if (ok) chiamaTabFn("togli", { canzoneId: id, raccolta: "studio" }).catch(e => console.warn("[studio] file non tolto", e));

@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "62",
+      "data": "2026-11-11",
+      "titolo": "Tab che si scaricano di nuovo, e «Da provare»",
+      "punti": [
+        "Songsterr aveva cominciato a rifiutare le richieste dell'app (errore 429): ora la tab si prende in un altro modo e, se Songsterr rifiuta ancora, l'app dice di riprovare fra qualche minuto.",
+        "In Personale la lista «Da cantare» si chiama «Da provare»: i pezzi si leggono nello Spartito o si cantano, come prima."
+      ]
+    },
+    {
       "versione": "61",
       "data": "2026-11-10",
       "titolo": "Cambio di brano con l'app non in primo piano",
