@@ -197,7 +197,25 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .vista-ic.on { background: var(--accento-tinta); border-color: var(--accento); color: var(--accento); }
 .vista-ic[disabled] { opacity: .35; cursor: default; }
 .vista-ic .i { width: 24px; height: 24px; }
-.tempo-btn { height: 44px; padding: 0 10px; border: 1px solid var(--linea-forte); border-radius: var(--r); font: 400 20px/1 var(--display); color: var(--inchiostro); margin-left: 6px; flex: none; }
+.tempo-btn { height: 44px; padding: 0 7px; border: 1px solid var(--linea-forte); border-radius: var(--r); font: 400 20px/1 var(--display); color: var(--inchiostro); flex: none; }
+/* tonalità nella barra, accanto al tempo: icona e semitoni */
+.trasp-btn { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 4px; }
+.trasp-btn .i { width: 17px; height: 17px; color: var(--inchiostro-2); }
+.trasp-btn span { min-width: 1.1em; text-align: center; }
+.trasp-btn.on { border-color: var(--accento); background: var(--accento-tinta); color: var(--accento); }
+.trasp-btn.on .i { color: var(--accento); }
+/* barra dello Spartito più stretta, per farci stare anche la tonalità su un telefono da 360 px */
+#spartito .foglio-cmd .sp-barra { gap: 5px; }
+#spartito .foglio-cmd .sp-barra > * { flex: none; }
+#spartito .foglio-cmd .sp-barra > .sp { flex: 1; }
+#spartito .foglio-cmd .sp-barra .vista-ic { width: 40px; }
+#spartito .foglio-cmd .sp-barra .btn:not(.play) { width: 40px; padding: 0; }
+#spartito .foglio-cmd .sp-barra .play { width: 52px; height: 52px; }
+@media (max-width: 399px) {
+  #spartito .foglio-cmd .sp-barra .vista-ic { width: 36px; }
+  #spartito .foglio-cmd .sp-barra .tempo-btn { padding: 0 5px; }
+}
+@media (max-width: 379px) { .trasp-btn .i { display: none; } .trasp-btn { font-size: 18px; } }
 .tempo-pop { position: absolute; z-index: 20; display: flex; align-items: center; gap: 4px; background: var(--foglio); border: 1px solid var(--linea-forte); border-radius: var(--r); padding: 6px; box-shadow: 0 10px 28px -14px rgba(35,27,21,.45); }
 .tempo-pop button { width: 42px; height: 42px; border: 1px solid var(--linea-forte); border-radius: var(--r); display: grid; place-items: center; color: var(--inchiostro-2); }
 .tempo-pop .v { min-width: 60px; text-align: center; font: 400 22px/1 var(--display); }
@@ -318,6 +336,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <button class="vista-ic" data-az="vista" data-v="tab" id="vis-tab" title="Tablatura"><svg class="i"><use href="#i-tab"/></svg></button>
     <button class="vista-ic" data-az="vista" data-v="score" id="vis-score" title="Pentagramma"><svg class="i"><use href="#i-penta"/></svg></button>
     <button class="tempo-btn" data-az="tempo-pop" id="sp-tempo" title="Tempo">100%</button>
+    <button class="tempo-btn trasp-btn" data-az="pop-cmd" data-v="trasp" id="sp-trasp" title="Tonalità"><svg class="i"><use href="#i-tonalita"/></svg><span>0</span></button>
     <div class="sp"></div>
     <button class="btn" data-az="sp-ricomincia" title="Ricomincia da capo"><svg class="i"><use href="#i-ripeti"/></svg></button>
     <button class="btn play" data-az="sp-play" title="Play / pausa"><svg class="i"><use id="sp-play-ico" href="#i-play"/></svg></button>
@@ -924,6 +943,7 @@ const NOMI_SUONI = { base: 'Base', migliori: 'Migliori', file: 'File tuo' };
 function aggiornaComandi() {
   $('#cmd-metro').classList.toggle('on', !!state.metro); $('#cmd-metro b').textContent = state.metro ? 'Sì' : 'No';
   $('#cmd-trasp b').textContent = (state.trasp > 0 ? '+' : '') + state.trasp; $('#cmd-trasp').classList.toggle('on', !!state.trasp);
+  $('#sp-trasp span').textContent = state.trasp > 0 ? '+' + state.trasp : state.trasp < 0 ? '\u2212' + (-state.trasp) : '0'; $('#sp-trasp').classList.toggle('on', !!state.trasp);
   $('#cmd-suoni b').textContent = NOMI_SUONI[state.suoni] || '';
   $('#cmd-parti').disabled = !(state.parti && state.parti.length > 1);
   const pop = $('#cmd-pop'); if (!pop.classList.contains('hidden')) disegnaPop(pop.dataset.v);
