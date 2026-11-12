@@ -1,0 +1,25 @@
+# Prova il codice prima del merge: test delle funzioni (bot Telegram, conversione delle tab,
+# doppioni e notifiche) e controllo dei numeri di versione dell'app.
+# Gira su ogni pull request e su ogni push su main; si avvia anche a mano da GitHub → Actions → "Test".
+# In locale: cd functions && npm ci && npm test
+name: Test
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Dipendenze delle funzioni
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+      - name: Test
+        working-directory: functions
+        run: npm test

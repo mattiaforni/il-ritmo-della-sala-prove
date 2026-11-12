@@ -120,6 +120,23 @@ Le app aperte sui telefoni controllano `version.json` quando tornano in primo pi
 
 Se una modifica richiede di ripulire dati salvati sui telefoni (chiavi di `localStorage`, accessi vecchi), aumentare `DATA_VERSION` in `public/app.js` e aggiungere la pulizia corrispondente in `MIGRAZIONI`: viene eseguita una volta sola su ogni telefono.
 
+## Test
+
+Nella cartella `functions/test/` ci sono i test, con il test runner di Node (nessuna libreria in più):
+
+- `telegram-testi.test.js`: registro delle modifiche e testi del bot (novità, scaletta, proposte, task, cassa, aggiornamenti);
+- `tab.test.js`: lettura dei dati di Songsterr e conversione in Guitar Pro, con una tab finta scritta a mano (nessuna chiamata di rete);
+- `accesso-notifiche.test.js`: doppioni nelle proposte dei fan ed eventi delle notifiche;
+- `versione.test.js`: `APP_VERSION`, `version.json`, `CACHE` del service worker e la prima voce di `novita.json` devono avere lo stesso numero, e i file elencati nel service worker devono esistere.
+
+Girano da soli su ogni pull request e su `main` (workflow `test.yml`, «Test» in GitHub → Actions). In locale:
+
+```bash
+cd functions && npm ci && npm test
+```
+
+I test non vengono pubblicati con le funzioni (`ignore` in `firebase.json`).
+
 ## Diretta dalla sala
 
 In cima alla sezione **Audio**. Il computer della sala trasmette quello che entra dal mixer (lo stesso ingresso USB da cui registra GarageBand: macOS lo fa leggere a più app insieme); i telefoni ascoltano.

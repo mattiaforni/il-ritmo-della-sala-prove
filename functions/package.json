@@ -2,6 +2,9 @@
   "name": "functions",
   "private": true,
   "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
   "engines": {
     "node": "22"
   },
