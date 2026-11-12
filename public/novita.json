@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "63",
+      "data": "2026-11-12",
+      "titolo": "I segni della batteria nello Spartito",
+      "punti": [
+        "Leggendo la batteria nello Spartito, la «i» in alto a destra (o accanto alla traccia nel foglio Tracce) apre la legenda: dove sta ogni pezzo sul pentagramma, con la sua testa di nota.",
+        "Prima i pezzi suonati nella canzone, con quante volte compaiono; sotto gli altri segni possibili."
+      ]
+    },
+    {
       "versione": "62",
       "data": "2026-11-11",
       "titolo": "Tab che si scaricano di nuovo, e «Da provare»",

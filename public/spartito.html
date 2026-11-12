@@ -205,6 +205,18 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .riga-tr .vol .i { width: 20px; height: 20px; }
 .riga-tr .vol.m { background: var(--rosso-tinta); border-color: var(--rosso); color: var(--rosso); }
 .riga-tr .vol.p { background: var(--accento-tinta); border-color: var(--accento); color: var(--accento); }
+.riga-tr .vol.info { border-color: transparent; color: var(--inchiostro-3); }
+.riga-bt { display: flex; align-items: center; gap: 14px; padding: 2px 0; border-bottom: 1px solid var(--linea); }
+.riga-bt svg { flex: none; width: 76px; height: 62px; overflow: visible; }
+.riga-bt svg line { stroke: var(--linea-forte); stroke-width: 1; }
+.riga-bt svg line.tg { stroke: var(--inchiostro-2); }
+.riga-bt svg text { font-family: 'alphaTab', 'Bravura'; fill: var(--inchiostro); }
+.riga-bt .txt { flex: 1; min-width: 0; }
+.riga-bt .t { font-weight: 500; }
+.riga-bt .s { font-size: 12.5px; color: var(--inchiostro-2); }
+.riga-bt .n { font: 400 18px/1 var(--display); color: var(--inchiostro-3); flex: none; }
+.riga-bt.altro svg text { fill: var(--inchiostro-3); }
+.riga-bt.altro .t { color: var(--inchiostro-2); font-weight: 400; }
 .sez-t { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-2); margin: 14px 0 0; }
 .foglio-lista { background: var(--foglio); border-radius: var(--r-g) var(--r-g) 0 0; width: 100%; max-height: 80vh; display: flex; flex-direction: column; align-self: end; }
 .velo.basso { align-items: end; padding: 0; grid-template-columns: minmax(0, 1fr); }
@@ -230,6 +242,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.6v.2" stroke-width="2"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-indietro" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
   <symbol id="i-piu" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -308,6 +321,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <div class="topbar">
     <button class="ico" data-az="chiudi-spartito"><svg class="i"><use href="#i-x"/></svg></button>
     <div class="tit" data-az="tracce"><h1 id="sp-titolo">—</h1><div class="sottot"><span id="sp-artista"></span><span id="sp-tr-nome">—</span></div></div>
+    <button class="ico hidden" id="sp-info" data-az="batteria-info" title="Segni della batteria"><svg class="i"><use href="#i-info"/></svg></button>
   </div>
   <div class="at-scroll" id="at-scroll"><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div><div class="sp-stato hidden" id="sp-stato"><div><div class="big" id="sps-titolo"></div><div id="sps-testo"></div><div id="sps-azioni" style="margin-top:12px"></div></div></div></div>
   <div class="foglio-cmd" id="foglio-cmd">
@@ -342,6 +356,12 @@ textarea:focus { outline: none; border-color: var(--accento); }
     <p class="nota" style="margin:2px 0 4px">Tocca il nome per leggere quella parte. Il tasto a destra cambia il volume nella base: normale, più forte, muta.</p>
     <div id="lista-tracce"></div>
   </div>
+</div></div>
+
+<!-- Segni della batteria (legenda delle tracce di batteria) -->
+<div class="velo basso hidden" id="velo-batteria"><div class="foglio-lista">
+  <div class="testa"><h2>Segni della batteria</h2><button class="ico" data-az="batteria-chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="corpo-l"><div id="lista-batteria"></div></div>
 </div></div>
 
 <!-- Parti (Spartito) -->
@@ -1353,6 +1373,7 @@ function disegnaSpartito() {
   const acc = eCorde(t) ? nomeAccordatura(t) : '';
   $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia) + (acc ? ' · ' + acc : '');
   $('#sp-artista').textContent = (state.brano && state.brano.artista) || '';
+  $('#sp-info').classList.toggle('hidden', !t.isPercussion);
   if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
   $('#sp-msg').textContent = 'Disegno lo spartito…';
   api.renderTracks([t]);
@@ -1395,6 +1416,7 @@ document.addEventListener('click', async (e) => {
   const az = b.dataset.az;
   if (az === 'apri') { if (await apriBrano(b.dataset.id)) apriSpartito(); }
   else if (az === 'tracce') { if (state.score) { apriComandi(false); apriTracce(); } }
+  else if (az === 'batteria-info') { if (state.score) { apriComandi(false); apriBatteria(state.traccia); } }
   else if (az === 'comandi') apriComandi();
   else if (az === 'parti') { if (state.parti && state.parti.length > 1) { apriComandi(false); apriParti(); } }
   else if (az === 'pop-cmd') apriPop(b.dataset.v);
@@ -1441,6 +1463,7 @@ function apriTracce() {
     const v = volDi(i);
     const r = document.createElement('div'); r.className = 'riga-tr' + (i === state.tracciaSp ? ' on' : '');
     r.innerHTML = `<button class="scegli" data-az="traccia-scegli" data-i="${i}"><div class="t"></div><div class="s"></div></button><button class="vol ${v}" data-az="traccia-vol" data-i="${i}" title="${TITOLO_VOL[v]}"><svg class="i"><use href="${ICONA_VOL[v]}"/></svg></button>`;
+    if (t.isPercussion) r.querySelector('.vol').insertAdjacentHTML('beforebegin', `<button class="vol info" data-az="traccia-info" data-i="${i}" title="Segni della batteria"><svg class="i"><use href="#i-info"/></svg></button>`);
     $('.t', r).textContent = nomeBreve(t, i); $('.s', r).textContent = sottotitolo(t, i);
     l.appendChild(r);
   });
@@ -1464,6 +1487,74 @@ $('#velo-tracce').addEventListener('click', (e) => {
   if (b.dataset.az === 'tracce-chiudi') $('#velo-tracce').classList.add('hidden');
   else if (b.dataset.az === 'traccia-scegli') scegliTraccia(+b.dataset.i);
   else if (b.dataset.az === 'traccia-vol') cambiaVolume(+b.dataset.i);
+  else if (b.dataset.az === 'traccia-info') { $('#velo-tracce').classList.add('hidden'); apriBatteria(+b.dataset.i); }
+});
+// ---- Segni della batteria: dove sta ogni pezzo sul pentagramma e con che testa (v63) ----
+// Stessi dati di alphaTab (PercussionMapper, tabella GP7): id, riga (0 = linea in alto, ogni passo mezzo spazio
+// verso il basso), suono MIDI, testa (glifo SMuFL), simbolo sopra (es. «stoppato»). I file GP7 portano la loro tabella
+// (track.percussionArticulations); i GP5 usano gli id qui sotto, che coincidono con il numero MIDI.
+const KIT = [
+  [49, -2, 49, 57592, 'Crash'], [97, -2, 49, 57592, 'Crash stoppato', 58530], [55, -2, 55, 57513, 'Splash'], [95, -2, 55, 57513, 'Splash stoppato', 58530],
+  [52, -3, 52, 57593, 'China'], [96, -3, 52, 57593, 'China'], [57, -1, 57, 57592, 'Crash 2'], [98, -1, 57, 57592, 'Crash 2 stoppato', 58530],
+  [42, -1, 42, 57513, 'Charleston chiuso'], [92, -1, 46, 57591, 'Charleston semiaperto'], [46, -1, 46, 57523, 'Charleston aperto'], [44, 9, 44, 57513, 'Charleston col pedale'],
+  [51, 0, 51, 57513, 'Ride'], [93, 0, 51, 57513, 'Ride · bordo', 59177], [53, 0, 53, 57565, 'Ride · campana'], [94, 0, 51, 57513, 'Ride stoppato', 58530],
+  [50, 1, 50, 57508, 'Tom molto acuto'], [48, 2, 48, 57508, 'Tom alto'], [38, 3, 38, 57508, 'Rullante'], [37, 3, 37, 57513, 'Rullante · cerchio (side stick)'], [91, 3, 38, 57565, 'Rullante · rimshot'],
+  [47, 4, 47, 57508, 'Tom medio'], [45, 5, 45, 57508, 'Tom basso'], [43, 6, 43, 57508, 'Timpano (floor tom)'], [36, 7, 36, 57508, 'Cassa'], [35, 8, 35, 57508, 'Cassa 2'],
+  [56, 0, 56, 57534, 'Campanaccio'], [54, 3, 54, 57534, 'Tamburello']
+].map(([id, riga, midi, testa, nome, sopra]) => ({ id, riga, midi, testa, nome, sopra: sopra || -1 }));
+const KIT_ID = new Map(KIT.map(k => [k.id, k]));
+const NOME_MIDI = { 35: 'Cassa 2', 36: 'Cassa', 37: 'Rullante · cerchio (side stick)', 38: 'Rullante', 39: 'Battimani', 40: 'Rullante elettronico', 41: 'Timpano basso', 42: 'Charleston chiuso', 43: 'Timpano (floor tom)', 44: 'Charleston col pedale', 45: 'Tom basso', 46: 'Charleston aperto', 47: 'Tom medio', 48: 'Tom alto', 49: 'Crash', 50: 'Tom molto acuto', 51: 'Ride', 52: 'China', 53: 'Ride · campana', 54: 'Tamburello', 55: 'Splash', 56: 'Campanaccio', 57: 'Crash 2', 59: 'Ride 2' };
+function segnoDi(n, tr) {
+  const i = n.percussionArticulation; if (!(i >= 0)) return null;
+  const a = i < tr.percussionArticulations.length ? tr.percussionArticulations[i] : null;
+  if (!a) { const k = KIT_ID.get(i); return k ? { ...k } : null; }
+  const k = KIT_ID.get(a.id);
+  const nome = k && k.midi === a.outputMidiNumber && k.riga === a.staffLine ? k.nome : (NOME_MIDI[a.outputMidiNumber] || a.elementType || 'Percussione');
+  return { riga: a.staffLine, midi: a.outputMidiNumber, testa: a.noteHeadDefault, nome, sopra: a.techniqueSymbol };
+}
+function dovesta(r) {
+  if (r < -2) return r % 2 ? 'sopra il taglio in alto' : 'secondo taglio in alto';
+  if (r === -2) return 'taglio in alto, sopra il pentagramma';
+  if (r === -1) return 'sopra il pentagramma';
+  if (r === 9) return 'sotto il pentagramma';
+  if (r > 9) return r % 2 ? 'sotto il taglio in basso' : 'taglio in basso, sotto il pentagramma';
+  return r % 2 ? `${4 - (r - 1) / 2}° spazio` : `${5 - r / 2}ª linea`;
+}
+// un pezzetto di pentagramma con la sola nota (spazio fra le linee 7 px; il glifo SMuFL è alto 4 spazi)
+function pentaSegno(g) {
+  const SP = 6.5, Y0 = 22, y = r => Y0 + r * SP / 2;
+  let l = '';
+  for (let r = 0; r <= 8; r += 2) l += `<line x1="0" x2="76" y1="${y(r)}" y2="${y(r)}"/>`;
+  for (let r = -2; r >= g.riga; r -= 2) l += `<line class="tg" x1="28" x2="50" y1="${y(r)}" y2="${y(r)}"/>`;
+  for (let r = 10; r <= g.riga; r += 2) l += `<line class="tg" x1="28" x2="50" y1="${y(r)}" y2="${y(r)}"/>`;
+  const t = g.testa > 0 ? `<text x="33" y="${y(g.riga)}" font-size="${4 * SP}">${String.fromCodePoint(g.testa)}</text>` : '';
+  const s = g.sopra > 0 ? `<text x="35" y="${y(Math.min(g.riga, 0) - 3)}" font-size="${4 * SP}">${String.fromCodePoint(g.sopra)}</text>` : '';
+  return `<svg viewBox="0 0 76 62">${l}${t}${s}</svg>`;
+}
+function apriBatteria(i) {
+  const tr = state.score && state.score.tracks[i]; if (!tr) return;
+  const usati = new Map();
+  for (const st of tr.staves) for (const bar of st.bars) for (const v of bar.voices) for (const be of v.beats) for (const n of be.notes) {
+    const g = segnoDi(n, tr); if (!g) continue;
+    const k = `${g.riga}|${g.testa}|${g.sopra}|${g.nome}`;
+    if (usati.has(k)) usati.get(k).volte++; else usati.set(k, { ...g, volte: 1 });
+  }
+  const ordina = (a, b) => a.riga - b.riga || a.nome.localeCompare(b.nome);
+  const nel = [...usati.values()].sort(ordina);
+  const presi = new Set(nel.map(g => `${g.riga}|${g.testa}|${g.sopra}`)), visti = new Set();
+  const altri = KIT.filter(k => { const c = `${k.riga}|${k.testa}|${k.sopra}`; if (presi.has(c) || visti.has(c)) return false; visti.add(c); return true; }).sort(ordina);
+  const riga = (g, altro) => `<div class="riga-bt${altro ? ' altro' : ''}">${pentaSegno(g)}<div class="txt"><div class="t"></div><div class="s">${dovesta(g.riga)}</div></div>${altro ? '' : `<div class="n" title="colpi nel pezzo">${g.volte}</div>`}</div>`;
+  const l = $('#lista-batteria');
+  l.innerHTML = `<p class="nota" style="margin:2px 0 4px"><span class="nome-tr"></span>: dall'alto in basso come stanno sul pentagramma. A destra quante volte si suonano nel pezzo.</p>`
+    + (nel.length ? '<div class="sez-t">In questo pezzo</div>' + nel.map(g => riga(g)).join('') : '')
+    + (altri.length ? '<div class="sez-t">Gli altri segni</div>' + altri.map(g => riga(g, true)).join('') : '');
+  $('.nome-tr', l).textContent = nomeBreve(tr, i);
+  const nomi = [...nel, ...altri]; l.querySelectorAll('.riga-bt .t').forEach((el, k) => { el.textContent = nomi[k].nome; });
+  $('#velo-batteria').classList.remove('hidden');
+}
+$('#velo-batteria').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-az]');
+  if ((!b && e.target === e.currentTarget) || (b && b.dataset.az === 'batteria-chiudi')) $('#velo-batteria').classList.add('hidden');
 });
 // ---- «Cosa canti»: solo per Canta; prima le voci, poi le altre melodie (niente batteria, basso, accordi) ----
 function candidatiCanto() {
