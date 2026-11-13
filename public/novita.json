@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "65",
+      "data": "2026-11-13",
+      "titolo": "Accordi anche per i pezzi Da provare",
+      "punti": [
+        "In Personale, nei pezzi Da provare, accanto a Spartito e Canta c'è la griglia degli accordi: si apre la stessa pagina della scaletta, con trasposizione e scorrimento.",
+        "Se un pezzo non ha ancora gli accordi la griglia è tratteggiata con il +: si tocca e si incolla il testo con gli accordi sopra le parole."
+      ]
+    },
+    {
       "versione": "64",
       "data": "2026-11-12",
       "titolo": "I segni della batteria nello Spartito",
