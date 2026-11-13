@@ -237,6 +237,9 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .chiave-bt .col.on .nm { color: var(--accento); font-weight: 600; }
 .bt-tocco { position: sticky; top: 8px; z-index: 5; margin: 0 auto; width: max-content; max-width: calc(100% - 32px); height: 0; overflow: visible; }
 .bt-tocco span { display: inline-block; background: var(--inchiostro); color: var(--carta); padding: 6px 10px; border-radius: var(--r); font-size: 14px; }
+.bt-tocco span b { font-weight: 600; font-size: 16px; }
+.bt-tocco span small { font-size: 12px; opacity: .7; margin-left: 3px; }
+.bt-tocco span i { font-style: normal; opacity: .45; margin: 0 7px; }
 .sez-t { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-2); margin: 14px 0 0; }
 .foglio-lista { background: var(--foglio); border-radius: var(--r-g) var(--r-g) 0 0; width: 100%; max-height: 80vh; display: flex; flex-direction: column; align-self: end; }
 .velo.basso { align-items: end; padding: 0; grid-template-columns: minmax(0, 1fr); }
@@ -280,6 +283,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-ingranaggio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M10.3 3h3.4l.5 2.3 1.9.8 2-1.3 2.4 2.4-1.3 2 .8 1.9 2.3.5v3.4l-2.3.5-.8 1.9 1.3 2-2.4 2.4-2-1.3-1.9.8-.5 2.3h-3.4l-.5-2.3-1.9-.8-2 1.3-2.4-2.4 1.3-2-.8-1.9L3 13.7v-3.4l2.3-.5.8-1.9-1.3-2 2.4-2.4 2 1.3 1.9-.8z"/></symbol>
   <symbol id="i-giu-piccolo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
   <symbol id="i-tab" viewBox="0 0 24 24"><g fill="currentColor" stroke="none" font-family="Instrument Sans, sans-serif" font-weight="600" font-size="9" text-anchor="middle"><text x="12" y="8.6">T</text><text x="12" y="15.9">A</text><text x="12" y="23.2">B</text></g></symbol>
+  <symbol id="i-nomi" viewBox="0 0 24 24"><text x="12" y="16.5" fill="currentColor" stroke="none" font-family="Instrument Sans, sans-serif" font-weight="600" font-size="11" text-anchor="middle">Do</text></symbol>
   <symbol id="i-penta" viewBox="0 0 24 24"><path d="M3 6h18M3 9.5h18M3 13h18M3 16.5h18M3 20h18" stroke-width="1"/><ellipse cx="11" cy="16.6" rx="2.9" ry="2.1" transform="rotate(-20 11 16.6)" fill="currentColor" stroke="none"/><path d="M13.6 15.9V3.2" stroke-width="1.5"/></symbol>
   <symbol id="i-vol-n" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 9.5a3.5 3.5 0 0 1 0 5"/></symbol>
   <symbol id="i-vol-p" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
@@ -474,14 +478,14 @@ const TPQ = 960; // tick per quarto in alphaTab
 // ------------------------------------------------------------ stato
 const state = {
   brani: [], brano: null, score: null, traccia: 0,
-  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', origine: 'spartito', tracciaSp: 0, tracciaCanto: 0, cantaDaSpartito: false, parti: [], parteOra: -1,
+  tempo: 100, trasp: 0, guida: 1, metro: 0, lat: 120, tol: 50, suoni: 'migliori', guidaStrum: -1, vista: 'entrambi', nomi: true, origine: 'spartito', tracciaSp: 0, tracciaCanto: 0, cantaDaSpartito: false, parti: [], parteOra: -1,
   esec: null, sel: null, canzone: null, ruolo: null,
 };
 try { Object.assign(state, JSON.parse(localStorage.canto_pref || '{}')); } catch (e) {}
 // v54: tornati alla linea della voce della v49. Le v50–v53 salvavano «latAuto» e un ritardo imparato da sole:
 // se era automatico si torna ai 120 ms di partenza (se l'avevi fissato a mano, resta il tuo)
 try { const p = JSON.parse(localStorage.canto_pref || '{}'); if ('latAuto' in p) { if (p.latAuto !== false) state.lat = 120; delete state.latAuto; delete p.latAuto; p.lat = state.lat; localStorage.canto_pref = JSON.stringify(p); } } catch (e) {}
-const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista }); } catch (e) {} };
+const salvaPref = () => { try { localStorage.canto_pref = JSON.stringify({ tempo: state.tempo, guida: state.guida, metro: state.metro, lat: state.lat, tol: state.tol, suoni: state.suoni, guidaStrum: state.guidaStrum, vista: state.vista, nomi: state.nomi }); } catch (e) {} };
 
 // ------------------------------------------------------------ archivio (IndexedDB)
 const db = {
@@ -700,7 +704,34 @@ function applicaTrasposizione() {
   trasponiModello(state.score, state.trasp, accorda);
   if (api) { rigeneraBase(); if (api.score) disegnaSpartito(); }
 }
-function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) if (b.lyrics && b.lyrics.some(x => x)) n++; return n; }
+function contaTesto(tr) { let n = 0; for (const b of beatsDi(tr)) { const l = testoBeat(b); if (l && l.some(x => x)) n++; } return n; }
+// il testo vero del beat: sulle tracce di piano i nomi delle note occupano beat.lyrics (v66), l'originale resta in _lyrOrig
+function testoBeat(b) { return b._lyrOrig !== undefined ? b._lyrOrig : b.lyrics; }
+
+// ---- piano e tastiere (v66): sotto il pentagramma il nome di ogni nota al posto della tab; tocco = nome della nota ----
+const NOMI_D = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+const NOMI_B = ['Do', 'Reb', 'Re', 'Mib', 'Mi', 'Fa', 'Solb', 'Sol', 'Lab', 'La', 'Sib', 'Si'];
+const EN_D = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const EN_B = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+function eTastiera(t) {
+  if (!t || t.isPercussion || eVoce(t)) return false;
+  const p = progDi(t);
+  return p <= 7 || (p >= 16 && p <= 23) || /piano|keys|keyboard|tastier|organ|rhodes|wurli|clavi/i.test(t.name);
+}
+const bemolliIn = (b) => b.voice.bar.keySignature < 0;   // tonalità con i bemolli: Sib, non La#
+function nomeIt(midi, bemolli) { return (bemolli ? NOMI_B : NOMI_D)[((midi % 12) + 12) % 12]; }
+function nomeEn(midi, bemolli) { return (bemolli ? EN_B : EN_D)[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1); }
+// note del beat dalla più alta alla più bassa (come stanno sul pentagramma); le note legate non si ripetono
+const noteDi = (b) => b.notes.filter(n => !n.isTieDestination).sort((a, c) => c.realValue - a.realValue);
+function mettiNomi(tr, on) {
+  for (const b of beatsDi(tr)) {
+    if (on) {
+      if (b._lyrOrig === undefined) b._lyrOrig = b.lyrics;
+      const ns = b.isRest ? [] : noteDi(b);
+      b.lyrics = ns.length ? ns.map(n => nomeIt(n.realValue, bemolliIn(b))) : null;
+    } else if (b._lyrOrig !== undefined) { b.lyrics = b._lyrOrig; delete b._lyrOrig; }
+  }
+}
 function* beatsDi(tr) { for (const bar of tr.staves[0].bars) for (const v of bar.voices) for (const b of v.beats) if (!b.isEmpty) yield b; }
 
 function costruisciModello(score, idx) {
@@ -710,8 +741,8 @@ function costruisciModello(score, idx) {
     if (b.isRest || !b.notes.length) continue;
     // melodia: nota più alta dell'accordo
     const n = b.notes.reduce((a, x) => (x.realValue > a.realValue ? x : a), b.notes[0]);
-    if (n.isTieDestination && note.length) { const p = note[note.length - 1]; p.dur += b.playbackDuration; const sy = (b.lyrics && b.lyrics.find(x => x)) || ''; if (sy) p.syl = p.syl ? (p.syl.endsWith('-') ? p.syl + sy : p.syl + ' ' + sy) : sy; continue; }
-    const syl = (b.lyrics && b.lyrics.find(x => x)) || '';
+    if (n.isTieDestination && note.length) { const p = note[note.length - 1]; p.dur += b.playbackDuration; const sy = (testoBeat(b) && testoBeat(b).find(x => x)) || ''; if (sy) p.syl = p.syl ? (p.syl.endsWith('-') ? p.syl + sy : p.syl + ' ' + sy) : sy; continue; }
+    const syl = (testoBeat(b) && testoBeat(b).find(x => x)) || '';
     note.push({ tick: b.absolutePlaybackStart, dur: b.playbackDuration, midi: n.realValue, syl, bar: b.voice.bar.index });
   }
   // frasi: nuova frase a una pausa >= 2 quarti, o quando il testo sillabato lo suggerisce
@@ -1341,9 +1372,13 @@ function aggiornaSpartito() {
   $('#sp-tempo').textContent = $('#sp-tempo-v').textContent = state.tempo + '%';
   const t = state.score && state.score.tracks[state.traccia];
   const fissa = !!t && (eVoce(t) || t.isPercussion);   // voce e batteria: solo pentagramma
-  $('#vis-tab').classList.toggle('on', !fissa && state.vista !== 'score');
-  $('#vis-score').classList.toggle('on', fissa || state.vista !== 'tab');
-  $('#vis-tab').disabled = $('#vis-score').disabled = fissa;
+  const tast = eTastiera(t);   // piano: pentagramma sempre, e al posto della tab i nomi delle note
+  $('#vis-tab').querySelector('use').setAttribute('href', tast ? '#i-nomi' : '#i-tab');
+  $('#vis-tab').title = tast ? 'Nomi delle note' : 'Tablatura';
+  $('#vis-tab').classList.toggle('on', tast ? state.nomi !== false : !fissa && state.vista !== 'score');
+  $('#vis-score').classList.toggle('on', fissa || tast || state.vista !== 'tab');
+  $('#vis-tab').disabled = fissa;
+  $('#vis-score').disabled = fissa || tast;
 }
 // barra delle parti: un rettangolo per parte, largo quanto le sue battute; il tocco porta lì
 function disegnaParti() {
@@ -1387,7 +1422,10 @@ function partiDi() {
 function disegnaSpartito() {
   const t = state.score.tracks[state.traccia];
   const voce = /voc|voice|voce|cant|sing/i.test(t.name) || [52, 53, 54, 85].includes(t.playbackInfo.program);
-  const prof = voce || t.isPercussion ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
+  const tast = eTastiera(t);
+  const prof = voce || t.isPercussion || tast ? 'Score' : ({ tab: 'Tab', score: 'Score', entrambi: 'ScoreTab' }[state.vista] || 'ScoreTab');
+  if (tast) mettiNomi(t, state.nomi !== false); else if (t._nomiFatti) mettiNomi(t, false);
+  t._nomiFatti = tast && state.nomi !== false;
   const acc = eCorde(t) ? nomeAccordatura(t) : '';
   $('#sp-tr-nome').textContent = nomeBreve(t, state.traccia) + (acc ? ' · ' + acc : '');
   $('#sp-artista').textContent = (state.brano && state.brano.artista) || '';
@@ -1454,6 +1492,9 @@ document.addEventListener('click', async (e) => {
   else if (az === 'sp-play') { creaApi(); caricaSuoni().then(() => { applicaMix(); api.playPause(); }); }
   else if (az === 'tempo-pop') apriTempo();
   else if (az === 'tracce-canto') { if (state.score) apriCanto(); }
+  else if (az === 'vista' && b.dataset.v === 'tab' && eTastiera(state.score && state.score.tracks[state.traccia])) {
+    state.nomi = state.nomi === false; salvaPref(); aggiornaSpartito(); disegnaSpartito();
+  }
   else if (az === 'vista') {
     const tab = state.vista !== 'score', sc = state.vista !== 'tab';
     let nt = tab, ns = sc; if (b.dataset.v === 'tab') nt = !tab; else ns = !sc;
@@ -1568,7 +1609,9 @@ function disegnaChiave() {
 // tocco su una nota della batteria: il nome di quello che si suona in quel punto, e la colonna accesa nella striscia
 let toccoBtT = 0;
 function toccoBatteria(beat) {
-  const tr = state.score && state.score.tracks[state.traccia]; if (!tr || !tr.isPercussion || !beat || state.esec) return;
+  const tr = state.score && state.score.tracks[state.traccia]; if (!tr || !beat || state.esec) return;
+  if (eTastiera(tr)) { toccoTastiera(beat); return; }
+  if (!tr.isPercussion) return;
   const segni = [], viste = new Set();
   for (const n of beat.notes) { const g = segnoDi(n, tr); if (g && !viste.has(chiaveSegno(g))) { viste.add(chiaveSegno(g)); segni.push(g); } }
   if (!segni.length) return;
@@ -1580,6 +1623,21 @@ function toccoBatteria(beat) {
   if (prima) prima.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   clearTimeout(toccoBtT);
   toccoBtT = setTimeout(() => { c.classList.add('hidden'); cols.forEach(col => col.classList.remove('on')); }, 2600);
+}
+// tocco su una nota del piano: i nomi delle note di quel punto, dalla più alta, con la nota anglosassone e l'ottava (Do centrale = C4)
+function toccoTastiera(beat) {
+  const ns = beat.isRest ? [] : beat.notes.slice().sort((a, c) => c.realValue - a.realValue);
+  if (!ns.length) return;
+  const bem = bemolliIn(beat);
+  const c = $('#bt-tocco'); const sp = document.createElement('span');
+  ns.forEach((n, i) => {
+    if (i) { const s = document.createElement('i'); s.textContent = '·'; sp.appendChild(s); }
+    const b = document.createElement('b'); b.textContent = nomeIt(n.realValue, bem); sp.appendChild(b);
+    const sm = document.createElement('small'); sm.textContent = nomeEn(n.realValue, bem); sp.appendChild(sm);
+  });
+  c.innerHTML = ''; c.appendChild(sp); c.classList.remove('hidden');
+  clearTimeout(toccoBtT);
+  toccoBtT = setTimeout(() => c.classList.add('hidden'), 2600);
 }
 // ---- «Cosa canti»: solo per Canta; prima le voci, poi le altre melodie (niente batteria, basso, accordi) ----
 function candidatiCanto() {
