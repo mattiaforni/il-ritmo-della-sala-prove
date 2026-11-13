@@ -1675,7 +1675,7 @@ function accordiHtml(testo, n) {
 const accOv = document.getElementById("accordi-ov");
 const ACC_SIZES = [12, 13.5, 15, 17, 19.5];
 const accTraspSalvate = () => { try { return JSON.parse(store.get("prove_acc_trasp") || "{}") || {}; } catch { return {}; } };
-function apriAccordi(id) {
+function apriAccordi(id, alPostoDelFoglio = false) {
   const c = trovaPezzo(id); if (!c || !accOv || !haAccordi(c)) return;
   const t = accTraspSalvate()[id];
   state.accordi = { id, trasp: Number.isInteger(t) ? t : 0, scorri: false, vel: Number(store.get("prove_acc_vel")) || 20, size: Number(store.get("prove_acc_size")) };
@@ -1683,7 +1683,9 @@ function apriAccordi(id) {
   accOv.classList.remove("hidden", "via");
   accOv.classList.add("entra");
   document.documentElement.classList.add("con-lettore");
-  history.pushState({ accordi: true }, "");
+  // dopo il primo salvataggio la pagina prende il posto del foglio nella cronologia (un history.back() in volo
+  // seguito da pushState toglieva la voce della pagina: l'indietro successivo usciva dall'app)
+  if (alPostoDelFoglio) history.replaceState({ accordi: true }, ""); else history.pushState({ accordi: true }, "");
   accOv.dataset.chiave = "";
   renderAccordi();
   const corpo = accOv.querySelector(".acc-corpo"); if (corpo) corpo.scrollTop = 0;
@@ -1805,6 +1807,10 @@ async function salvaAccordi(form) {
   if (btn) btn.disabled = false;
   if (!ok) return;
   c.accordi = { testo, da: state.user || "" };   // intanto, prima che arrivi dal database
+  if (!state.accordi && history.state && history.state.accFoglio) {
+    state.accFoglio = null; accordiBox().innerHTML = "";
+    render(); apriAccordi(id, true); return;
+  }
   chiudiAccordiFoglio();
   render();
   if (state.accordi && state.accordi.id === id) { accOv.dataset.chiave = ""; renderAccordi(); }
