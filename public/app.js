@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "64";
+const APP_VERSION = "65";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1675,7 +1675,7 @@ function accordiHtml(testo, n) {
 const accOv = document.getElementById("accordi-ov");
 const ACC_SIZES = [12, 13.5, 15, 17, 19.5];
 const accTraspSalvate = () => { try { return JSON.parse(store.get("prove_acc_trasp") || "{}") || {}; } catch { return {}; } };
-function apriAccordi(id) {
+function apriAccordi(id, alPostoDelFoglio = false) {
   const c = trovaPezzo(id); if (!c || !accOv || !haAccordi(c)) return;
   const t = accTraspSalvate()[id];
   state.accordi = { id, trasp: Number.isInteger(t) ? t : 0, scorri: false, vel: Number(store.get("prove_acc_vel")) || 20, size: Number(store.get("prove_acc_size")) };
@@ -1683,7 +1683,9 @@ function apriAccordi(id) {
   accOv.classList.remove("hidden", "via");
   accOv.classList.add("entra");
   document.documentElement.classList.add("con-lettore");
-  history.pushState({ accordi: true }, "");
+  // dopo il primo salvataggio la pagina prende il posto del foglio nella cronologia (un history.back() in volo
+  // seguito da pushState toglieva la voce della pagina: l'indietro successivo usciva dall'app)
+  if (alPostoDelFoglio) history.replaceState({ accordi: true }, ""); else history.pushState({ accordi: true }, "");
   accOv.dataset.chiave = "";
   renderAccordi();
   const corpo = accOv.querySelector(".acc-corpo"); if (corpo) corpo.scrollTop = 0;
@@ -1801,10 +1803,14 @@ async function salvaAccordi(form) {
     return;
   }
   const btn = form.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
-  const ok = await scrivi(updateDoc(doc(db, "canzoni", id), { accordi: { testo, da: state.user || "", il: serverTimestamp() } }).then(() => true));
+  const ok = await scrivi(updateDoc(doc(db, raccoltaDi(id), id), { accordi: { testo, da: state.user || "", il: serverTimestamp() } }).then(() => true));
   if (btn) btn.disabled = false;
   if (!ok) return;
   c.accordi = { testo, da: state.user || "" };   // intanto, prima che arrivi dal database
+  if (!state.accordi && history.state && history.state.accFoglio) {
+    state.accFoglio = null; accordiBox().innerHTML = "";
+    render(); apriAccordi(id, true); return;
+  }
   chiudiAccordiFoglio();
   render();
   if (state.accordi && state.accordi.id === id) { accOv.dataset.chiave = ""; renderAccordi(); }
@@ -1813,7 +1819,7 @@ async function salvaAccordi(form) {
 async function eliminaAccordi(id, chiedi = true) {
   const c = trovaPezzo(id); if (!c) return;
   if (chiedi && !confirm(`Togliere gli accordi di «${c.titolo || "questo pezzo"}»?`)) return;
-  const ok = await scrivi(updateDoc(doc(db, "canzoni", id), { accordi: deleteField() }).then(() => true));
+  const ok = await scrivi(updateDoc(doc(db, raccoltaDi(id), id), { accordi: deleteField() }).then(() => true));
   if (!ok) return;
   delete c.accordi;
   chiudiAccordiFoglio();
@@ -3327,7 +3333,11 @@ function rigaStudio(s) {
     : `<span>${esc(s.artista || "")}${tabPronta(s) ? "" : `${s.artista ? " · " : ""}<em>tab da scaricare</em>`}</span>`;
   const destra = state.studioModifica
     ? `<button class="dc-togli" data-action="studio-togli" data-id="${s.id}" title="Togli dalla lista" aria-label="Togli ${esc(titolo)}">${IC("cestino")}</button>`
-    : ["spartito", "canta"].map(m => `<button class="dc-btn" data-action="apri-spartito" data-id="${s.id}" data-modo="${m}" title="${m === "canta" ? "Canta" : "Spartito"}" aria-label="${m === "canta" ? "Canta" : "Spartito di"} ${esc(titolo)}"${gira ? " disabled" : ""}>${IC(m === "canta" ? "mic" : "nota")}</button>`).join("");
+    : ["spartito", "canta"].map(m => `<button class="dc-btn" data-action="apri-spartito" data-id="${s.id}" data-modo="${m}" title="${m === "canta" ? "Canta" : "Spartito"}" aria-label="${m === "canta" ? "Canta" : "Spartito di"} ${esc(titolo)}"${gira ? " disabled" : ""}>${IC(m === "canta" ? "mic" : "nota")}</button>`).join("")
+      // accordi (v65): la griglia apre la pagina degli accordi; senza, la stessa griglia tratteggiata con il + apre il foglio per incollarli
+      + (haAccordi(s)
+        ? `<button class="dc-btn" data-action="apri-accordi" data-id="${s.id}" title="Accordi" aria-label="Accordi di ${esc(titolo)}">${IC("accordi")}</button>`
+        : `<button class="dc-btn dc-vuoto" data-action="accordi-foglio" data-id="${s.id}" title="Aggiungi gli accordi" aria-label="Aggiungi gli accordi di ${esc(titolo)}">${IC("accordi")}${IC("piu", "i dc-piu")}</button>`);
   return `<div class="dc-riga"><span class="t"><b>${esc(titolo)}</b>${sotto}</span>${destra}</div>`;
 }
 function daCantareCard() {
@@ -3336,7 +3346,7 @@ function daCantareCard() {
   const corpo = state.studioNegato
     ? `<p class="empty">La lista non è ancora disponibile: riprova fra qualche minuto.</p>`
     : miei.length ? miei.map(rigaStudio).join("")
-      : `<p class="empty">Pezzi fuori da scaletta e proposte, da provare con lo Spartito o con Canta.</p>`;
+      : `<p class="empty">Pezzi fuori da scaletta e proposte, da provare con lo Spartito, con Canta o con gli accordi.</p>`;
   return `<article class="card da-cantare">
       <h3 class="sec-title">Da provare ${miei.length ? `<small>${miei.length}</small>` : ""}${miei.length ? `<button data-action="studio-modifica">${state.studioModifica ? "Fatto" : "Modifica"}</button>` : ""}</h3>
       ${corpo}
