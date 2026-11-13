@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "66",
+      "data": "2026-11-13",
+      "titolo": "I nomi delle note per il piano",
+      "punti": [
+        "Nello Spartito, sulle tracce di piano e tastiere, sotto ogni nota c'è il suo nome (Do, Re, Mi…) al posto della tablatura; il tasto «Do» in basso li accende e li spegne.",
+        "Toccando una nota del piano compare il nome di quello che si suona, con la nota inglese e l'ottava (il Do centrale è C4)."
+      ]
+    },
+    {
       "versione": "65",
       "data": "2026-11-13",
       "titolo": "Accordi anche per i pezzi Da provare",
