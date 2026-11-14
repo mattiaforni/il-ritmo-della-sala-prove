@@ -308,6 +308,17 @@ button.ini.on { border-color: transparent; color: #fff; }
 .brano-lato { display: flex; align-items: center; gap: 6px; }
 .cnt { font-size: 12.5px; color: var(--inchiostro-3); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 30px; text-align: right; }
 .cnt.ok { color: var(--verde); font-weight: 500; }
+/* nella scaletta i task fatti stanno sotto le icone, appena sopra il filetto dell'avanzamento */
+.brano > .cnt { position: absolute; right: 0; bottom: 6px; font-size: 11.5px; line-height: 1; min-width: 0; }
+.brano-lato { margin-bottom: 8px; }
+.brano-lato .reg-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+  color: var(--inchiostro-3); border-radius: var(--r); background: none; border: 0; padding: 0; cursor: pointer;
+}
+.brano-lato .reg-btn:active { background: var(--linea); }
+.brano-lato .reg-btn.on { color: var(--accento); }
+.brano-lato .reg-btn .ico { width: 22px; height: 22px; }
+.reg-vuota { width: 32px; height: 32px; flex: none; }
 /* il filetto sotto ogni pezzo è anche il suo avanzamento */
 .brano-linea { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--linea); }
 .brano-linea i { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accento); transition: width .4s ease; }

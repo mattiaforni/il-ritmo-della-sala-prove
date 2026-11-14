@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "68";
+const APP_VERSION = "69";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -338,6 +338,13 @@ function preferite() {
   return state.registrazioni.filter(r => r.preferita).sort((a, b) => pos(a) - pos(b) || perData(a, b));
 }
 const codaPreferite = () => preferite().map(r => r.id);
+// la nostra registrazione di un pezzo: la preferita se c'è, altrimenti la più recente
+function regDelPezzo(c) {
+  const rs = recsOf(c.id);
+  return rs.find(r => r.preferita) || rs.slice().sort(perData)[0] || null;
+}
+// la «scaletta suonata da noi»: per ogni pezzo in scaletta la sua registrazione (i pezzi senza si saltano)
+const codaScaletta = () => scaletta().map(regDelPezzo).filter(Boolean).map(r => r.id);
 // la coda da cui parte una registrazione dipende da dove la si tocca: blocco delle preferite, pagina della canzone o giorno
 function codaDi(btn, id) {
   const r = state.registrazioni.find(x => x.id === id);
@@ -1376,6 +1383,12 @@ function songCard(c, n) {
   const gen = isGenerale(c);
   const { ts, done, pronta, p } = statoTask(c);
   const count = pronta ? `<span class="cnt ok">pronta</span>` : `<span class="cnt" aria-label="${done} task fatti su ${ts.length}">${done}/${ts.length}</span>`;
+  // prima di Spotify: la nostra registrazione del pezzo (preferita o ultima); il tocco fa partire la scaletta da qui
+  const reg = gen ? null : regDelPezzo(c);
+  const inAscolto = reg && state.playId === reg.id;
+  const regBtn = gen ? "" : reg
+    ? `<button type="button" class="reg-btn${inAscolto ? " on" : ""}" data-action="play-pezzo" data-id="${c.id}" data-reg="${reg.id}" title="Ascolta la nostra registrazione${reg.preferita ? " preferita" : ""}" aria-label="Ascolta la nostra registrazione">${IC("audio", "ico")}</button>`
+    : `<span class="reg-vuota" aria-hidden="true"></span>`;
   return `
   <article class="brano${gen ? " generale" : ""}${pronta ? " pronta" : ""}" data-action="open-song" data-id="${c.id}" role="button" tabindex="0">
     <span class="num" aria-hidden="true">${gen ? IC("pin") : n}</span>
@@ -1383,7 +1396,8 @@ function songCard(c, n) {
       <h2 class="song-title">${gen ? "Generale" : esc(c.titolo)}</h2>
       <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
     </div>
-    <div class="brano-lato">${gen ? "" : linksHtml(c)}${count}</div>
+    <div class="brano-lato">${regBtn}${gen ? "" : linksHtml(c)}</div>
+    ${count}
     <span class="brano-linea" aria-hidden="true"><i style="width:${p}%"></i></span>
   </article>`;
 }
@@ -2843,6 +2857,7 @@ function syncPlayer() {
     if (b.dataset.stato !== (p ? "pausa" : "play")) { b.dataset.stato = p ? "pausa" : "play"; b.innerHTML = IC(p ? "pausa" : "play"); }
     b.setAttribute("aria-label", p ? "Pausa" : "Riproduci");
   });
+  document.querySelectorAll(".reg-btn").forEach(b => b.classList.toggle("on", !!cur && b.dataset.reg === cur));
   document.querySelectorAll("[data-prog]").forEach(i => {
     if (state.ltTrascina && i.closest(".lt-barra")) return;
     i.style.width = (i.dataset.prog === cur && isFinite(dur) && dur > 0) ? `${player.currentTime / dur * 100}%` : "0%";
@@ -3799,6 +3814,18 @@ async function act(btn) {
       // una registrazione fatta partire dalla sua riga apre il lettore a schermo intero
       state.codaFonte = fonteDi(btn, id);
       playToggle(id, codaDi(btn, id));
+      apriLettore();
+      break;
+    }
+    case "play-pezzo": {
+      // dalla riga della scaletta: la registrazione del pezzo e poi quelle dei pezzi che seguono
+      const c = state.canzoni.find(x => x.id === id);
+      const r = c && regDelPezzo(c);
+      if (!r) break;
+      if (state.playId === r.id) { apriLettore(); break; }
+      if (state.playId) fermaRiproduzione();
+      state.codaFonte = "Scaletta";
+      playToggle(r.id, codaScaletta());
       apriLettore();
       break;
     }
