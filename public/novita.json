@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "69",
+      "data": "2026-11-14",
+      "titolo": "La scaletta suonata da noi",
+      "punti": [
+        "Nella Scaletta, prima di Spotify, c'è l'icona delle nostre registrazioni: fa partire la preferita del pezzo o, se non c'è, l'ultima.",
+        "Dopo quel pezzo continua con i successivi della scaletta, ognuno con la sua registrazione (i pezzi senza registrazioni si saltano).",
+        "I task fatti («2/3», «pronta») ora stanno sotto le icone, sopra la linea."
+      ]
+    },
+    {
       "versione": "68",
       "data": "2026-11-14",
       "titolo": "I tuoi appunti sui pezzi",
