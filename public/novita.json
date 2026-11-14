@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "67",
+      "data": "2026-11-14",
+      "titolo": "I task del pezzo anche nel lettore",
+      "punti": [
+        "Nel lettore a schermo intero, sotto «Pagina del pezzo», ci sono i task del pezzo che si sta ascoltando: si spuntano come nella sua pagina.",
+        "Con «Nuovo task» se ne aggiunge uno mentre si ascolta, scegliendo a chi assegnarlo, senza fermare la registrazione."
+      ]
+    },
+    {
       "versione": "66",
       "data": "2026-11-13",
       "titolo": "I nomi delle note per il piano",

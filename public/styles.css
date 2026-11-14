@@ -763,7 +763,8 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .rcmts { margin: 4px 0 2px 2px; padding: 0 0 0 14px; border-left: 1px solid var(--linea-forte); }
 .rcmts.vuoti { border-left: none; padding-left: 0; margin-left: 0; }
 .rcmt-nota { font-size: 13px; color: var(--inchiostro-3); margin: 6px 0; line-height: 1.45; }
-.lt-commenti { max-width: 460px; margin: 14px auto 0; padding: 0 24px; }
+.lt-commenti, .lt-task { max-width: 460px; margin: 14px auto 0; padding: 0 24px; }
+.lt-task .fascia { margin-top: 10px; }
 .lt-commenti .fascia { margin-top: 10px; }
 .lt-commenti .rcmts { margin-top: 2px; }
 .invito-push .fan-azioni { margin-top: 22px; }

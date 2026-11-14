@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "66";
+const APP_VERSION = "67";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -174,7 +174,8 @@ const state = {
   viewPerson: null,           // di chi si guarda la pagina personale (null = la propria)
   songPage: null,             // id della canzone aperta nella sua pagina (dentro Scaletta)
   listScroll: 0,              // dove era la lista della scaletta prima di aprire una canzone
-  addTaskOpen: null,          // id della canzone con il modulo "nuovo task" aperto
+  addTaskOpen: null,
+  ltTaskOpen: null,           // id della canzone con "nuovo task" aperto nel lettore          // id della canzone con il modulo "nuovo task" aperto
   partePicker: null,          // id della canzone con l'elenco delle parti da aggiungere aperto
   parteAltro: false,          // nell'elenco: campo per una parte con nome libero
   editSetup: null,            // { song, key } riga di setup in modifica
@@ -1416,24 +1417,33 @@ window.addEventListener("popstate", () => {
   if (state.songPage) chiudiCanzone();
 });
 
-function songPage(c) {
-  const gen = isGenerale(c);
-  const { ts, done, pronta, p } = statoTask(c);
-  const lista = scaletta();
-  const idx = lista.findIndex(x => x.id === c.id);
+// "Nuovo task" di un pezzo: nella sua pagina (dove = "pg") e nel lettore a schermo intero (dove = "lt").
+// Le sigle scelte (state.drafts) sono le stesse nei due posti.
+function formNuovoTask(c, dove) {
+  if (state.fan) return "";
+  const lt = dove === "lt";
+  const aperto = lt ? state.ltTaskOpen === c.id : state.addTaskOpen === c.id;
+  if (!aperto) return `<button class="addline" data-action="${lt ? "lt-task-open" : "addtask-open"}" data-id="${c.id}"><span class="plus">${IC("piu")}</span>Nuovo task</button>`;
   const sel = state.drafts[c.id] || new Set();
   const picks = state.membri.map(m => {
     const on = sel.has(m.nome), col = colorOf(m.nome);
     return `<button type="button" class="ini${on ? " on" : ""}${on && LIGHT_BG.has(col) ? " light" : ""}" data-action="pick" data-song="${c.id}" data-nome="${esc(m.nome)}" title="${esc(m.nome)}" aria-pressed="${on}" style="${on ? `background:${col}` : ""}">${esc(siglaOf(m.nome))}</button>`;
   }).join("");
-  const nuovoTask = state.fan ? "" : state.addTaskOpen === c.id ? `
+  return `
       <form class="newtask" data-form="add-task" data-song="${c.id}">
         <div class="inrow">
-          <input class="field" name="titolo" data-keep="task-${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
+          <input class="field" name="titolo" data-keep="task-${lt ? "lt-" : ""}${c.id}" placeholder="Nuovo task" maxlength="120" autocomplete="off" required>
           <button class="btn fill" type="submit">Aggiungi</button>
         </div>
         <div class="picks">${picks}</div>
-      </form>` : `<button class="addline" data-action="addtask-open" data-id="${c.id}"><span class="plus">${IC("piu")}</span>Nuovo task</button>`;
+      </form>`;
+}
+function songPage(c) {
+  const gen = isGenerale(c);
+  const { ts, done, pronta, p } = statoTask(c);
+  const lista = scaletta();
+  const idx = lista.findIndex(x => x.id === c.id);
+  const nuovoTask = formNuovoTask(c, "pg");
   return `
   <div class="pagina">
     <div class="pg-top">
@@ -2593,6 +2603,16 @@ function codaDopo() {
   const i = c.indexOf(state.playId);
   return i < 0 ? [] : c.slice(i + 1).map(id => state.registrazioni.find(r => r.id === id));
 }
+// task del pezzo in ascolto, dentro il lettore: si spuntano e se ne aggiungono senza lasciare l'ascolto
+const firmaTask = (c) => c ? tasksOf(c.id).map(t => [t.id, t.titolo, t.fatto ? 1 : 0, fattiDi(t).join("+"), assegnati(t).join("+")].join(":")).join(",") + "|" + state.membri.map(m => m.nome).join(",") : "";
+function ltTask(c) {
+  const { ts, done, pronta } = statoTask(c);
+  return `<section class="lt-task">
+      <h3 class="fascia">Task${ts.length ? ` <small${pronta ? ` class="ok"` : ""}>${pronta ? "pronta" : `${done} di ${ts.length}`}</small>` : ""}</h3>
+      ${ts.map(taskRow).join("")}
+      ${formNuovoTask(c, "lt")}
+    </section>`;
+}
 function renderLettore() {
   if (!lettoreEl || !state.lettore) return;
   const r = state.playId && state.registrazioni.find(x => x.id === state.playId);
@@ -2602,12 +2622,11 @@ function renderLettore() {
   const pos = posizioneInCoda();
   const dopo = codaDopo();
   const chiave = [r.id, info.titolo, info.sotto, pos, r.preferita ? 1 : 0, state.codaFonte, state.fan ? 1 : 0,
-    dopo.map(x => x.id + ":" + (x.durata || 0)).join(","), firmaCommenti(r.id)].join("|");
+    dopo.map(x => x.id + ":" + (x.durata || 0)).join(","), firmaCommenti(r.id), firmaTask(song), state.ltTaskOpen].join("|");
   if (lettoreEl.dataset.chiave === chiave) return;
   lettoreEl.dataset.chiave = chiave;
-  // il commento che si sta scrivendo sopravvive al ridisegno (arriva un commento di un altro, un mi piace)
-  const campo = lettoreEl.querySelector('[data-keep^="rcmt-lt-"]');
-  const scritto = campo ? { k: campo.dataset.keep, v: campo.value, fuoco: document.activeElement === campo } : null;
+  // il commento o il task che si sta scrivendo sopravvive al ridisegno (arriva un commento di un altro, un mi piace, un task spuntato)
+  const scritti = [...lettoreEl.querySelectorAll("[data-keep]")].map(el => ({ k: el.dataset.keep, v: el.value, fuoco: document.activeElement === el }));
   const nCom = commentiReg(r.id).length;
   const sotto = [song && r.etichetta ? r.etichetta : (song ? "" : "senza canzone"), fmtGiorno(r.data)].filter(Boolean).join(" · ");
   const stella = state.fan
@@ -2645,6 +2664,7 @@ function renderLettore() {
         <button data-action="lt-audio" data-id="${r.id}">In Audio ${IC("freccia")}</button>
       </div>
     </div>
+    ${paginaOk && !state.fan ? ltTask(song) : ""}
     <section class="lt-commenti">
       <h3 class="fascia">Commenti${nCom ? ` <small>${nCom}</small>` : ""}</h3>
       ${commentiRegHtml(r, "lt")}
@@ -2660,10 +2680,10 @@ function renderLettore() {
         </button>`;
       }).join("")}
     </section>` : ""}`;
-  if (scritto) {
+  scritti.forEach(scritto => {
     const nuovo = lettoreEl.querySelector(`[data-keep="${CSS.escape(scritto.k)}"]`);
     if (nuovo) { nuovo.value = scritto.v; if (scritto.fuoco) nuovo.focus(); }
-  }
+  });
 }
 function apriLettore() {
   if (!lettoreEl || !state.playId || state.lettore) return;
@@ -2684,6 +2704,7 @@ function chiudiLettore(daStoria = false) {
   if (!daStoria && history.state && history.state.lettore) { history.back(); return; }
   state.lettore = false;
   state.ltTrascina = false;
+  state.ltTaskOpen = null;
   lettoreEl.classList.remove("entra");
   lettoreEl.style.transform = "";
   lettoreEl.classList.add("via");
@@ -2712,10 +2733,11 @@ function vaiARegistrazione(id) {
 if (lettoreEl) {
   // commenti alla registrazione in ascolto
   lettoreEl.addEventListener("submit", e => {
-    const form = e.target.closest('form[data-form="reg-commento"]');
+    const form = e.target.closest("form[data-form]");
     if (!form) return;
     e.preventDefault();
-    inviaCommentoReg(form);
+    if (form.dataset.form === "reg-commento") inviaCommentoReg(form);
+    else if (form.dataset.form === "add-task") aggiungiTask(form);
   });
   lettoreEl.addEventListener("click", e => {
     window.__lastX = e.clientX;
@@ -3560,6 +3582,11 @@ async function act(btn) {
     case "close-song":
       if (history.state && history.state.canzone) history.back(); else chiudiCanzone();
       break;
+    case "lt-task-open":
+      state.ltTaskOpen = id;
+      renderLettore();
+      lettoreEl.querySelector(`[data-keep="task-lt-${CSS.escape(id)}"]`)?.focus();
+      break;
     case "addtask-open":
       state.addTaskOpen = id;
       render();
@@ -4145,6 +4172,24 @@ mainEl.addEventListener("drop", e => {
   if (nuovi.length) impostaFile([...state.pendingFiles, ...nuovi]);
 });
 
+async function aggiungiTask(form) {
+  if (state.fan) return;
+  const titolo = form.titolo.value.trim();
+  if (!titolo) return;
+  const song = form.dataset.song;
+  const campo = form.titolo, chiave = campo.dataset.keep;
+  const assegnatari = [...(state.drafts[song] || [])];
+  campo.value = "";
+  delete state.drafts[song];
+  form.querySelectorAll("button.ini.on").forEach(b => { b.classList.remove("on", "light"); b.style.background = ""; });
+  const ref = await scrivi(addDoc(collection(db, "tasks"), {
+    canzoneId: song, titolo, assegnatari, fatto: false, fattoDa: "", creato: serverTimestamp()
+  }), () => {
+    const el = document.querySelector(`[data-keep="${CSS.escape(chiave)}"]`);
+    if (el && !el.value) el.value = titolo;
+  });
+  if (ref && assegnatari.some(n => n !== state.user)) notifica("task", { taskId: ref.id });
+}
 mainEl.addEventListener("submit", async e => {
   const form = e.target.closest("form[data-form]");
   if (!form) return;
@@ -4250,19 +4295,7 @@ mainEl.addEventListener("submit", async e => {
     }
   }
 
-  if (kind === "add-task") {
-    const titolo = form.titolo.value.trim();
-    if (!titolo) return;
-    const song = form.dataset.song;
-    const assegnatari = [...(state.drafts[song] || [])];
-    form.titolo.value = "";
-    delete state.drafts[song];
-    form.querySelectorAll("button.ini.on").forEach(b => { b.classList.remove("on", "light"); b.style.background = ""; });
-    const ref = await scrivi(addDoc(collection(db, "tasks"), {
-      canzoneId: song, titolo, assegnatari, fatto: false, fattoDa: "", creato: serverTimestamp()
-    }), () => rimetti(`task-${song}`, titolo));
-    if (ref && assegnatari.some(n => n !== state.user)) notifica("task", { taskId: ref.id });
-  }
+  if (kind === "add-task") { await aggiungiTask(form); return; }
 
   if (kind === "add-member") {
     const nome = form.nome.value.trim().replace(/\s+/g, " ");
