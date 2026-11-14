@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "68",
+      "data": "2026-11-14",
+      "titolo": "I tuoi appunti sui pezzi",
+      "punti": [
+        "Nella pagina di ogni pezzo c'è «I miei appunti»: note tue (entrate, respiri, parole da ricordare) che l'app mostra solo a te.",
+        "Si toccano per scriverle o cambiarle; restano anche cambiando telefono, legate al tuo nome nell'app."
+      ]
+    },
+    {
       "versione": "67",
       "data": "2026-11-14",
       "titolo": "I task del pezzo anche nel lettore",

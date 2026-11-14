@@ -414,6 +414,10 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 .setup-txt .empty { color: var(--inchiostro-3); font-size: inherit; padding: 0; }
 .setup-row .del-mini { margin: -5px -6px 0 0; opacity: .7; }
 .setup-edit { grid-column: 2 / -1; }
+.appunti-txt { padding: 12px 0 14px; border-bottom: 1px solid var(--linea); font-size: 15px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; cursor: pointer; }
+.appunti-txt .empty { color: var(--inchiostro-3); font-size: inherit; padding: 0; }
+.appunti-edit { padding-top: 8px; }
+.setup-edit.appunti-edit textarea { min-height: 120px; }
 .setup-edit textarea { width: 100%; min-height: 66px; font: 15px/1.45 var(--ui); color: var(--inchiostro); background: transparent; border: none; border-bottom: 2px solid var(--accento); padding: 2px 0 6px; resize: vertical; outline: none; }
 .ed { display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 10px; }
 .parte-picker { padding: 12px 0 4px; }

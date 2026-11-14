@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "67";
+const APP_VERSION = "68";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -162,7 +162,10 @@ const state = {
   membri: [], canzoni: [], tasks: [], registrazioni: [], movimenti: [], bacheca: [],
   studio: [],                 // pezzi «Da cantare» (fuori da scaletta e proposte), di ognuno: collezione "studio" (v49)
   ready: { membri: false, canzoni: false, tasks: false, registrazioni: false, movimenti: false, bacheca: false, studio: false },
-  studioNegato: false,        // le regole del database non includono ancora "studio"
+  studioNegato: false,
+  appunti: [],                // appunti personali per pezzo: collezione "appunti", id <persona>_<canzone> (v68)
+  appuntiNegati: false,       // le regole del database non includono ancora "appunti"
+  editAppunti: null,          // id della canzone con gli appunti personali in modifica        // le regole del database non includono ancora "studio"
   studioModifica: false,      // «Da cantare» con i cestini al posto di Spartito e Canta
   accordi: null,              // pagina Accordi aperta: { id, trasp, scorri, vel }
   accFoglio: null,            // id del pezzo nel foglio «Accordi» (band: incolla o cambia il testo)
@@ -1060,6 +1063,7 @@ function subscribe() {
     state.ready[key] = true;
     if (key === "bacheca") state.bachecaNegata = false;
     if (key === "commenti") state.commentiNegati = false;
+    if (key === "appunti") state.appuntiNegati = false;
     if (key === "membri") { computeSigle(); ensureUser(); }
     if (key === "canzoni") ensureGenerale(snap);
     render();
@@ -1085,6 +1089,11 @@ function subscribe() {
   // la cassa i fan non la vedono (e il database non gliela darebbe)
   if (!state.fan) listen("movimenti", query(collection(db, "movimenti"), orderBy("data", "desc")), "movimenti");
   // pezzi «Da cantare» (v49): finché le regole non li includono, avviso solo nella sezione
+  // appunti personali (v68): finché le regole non includono "appunti" la sezione lo dice, niente barra rossa
+  if (!state.fan) listen("appunti", collection(db, "appunti"), "appunti", null, err => {
+    state.appuntiNegati = !!err && err.code === "permission-denied";
+    if (!state.appuntiNegati) onDenied(err); else render();
+  });
   if (!state.fan) listen("studio", query(collection(db, "studio"), orderBy("creato")), "studio", null, err => {
     console.warn("[studio]", err);
     state.ready.studio = true;
@@ -1384,7 +1393,7 @@ function apriCanzone(id) {
   state.listScroll = window.scrollY;
   state.songPage = id;
   state.addTaskOpen = null; state.partePicker = null; state.parteAltro = false;
-  state.editSetup = null; state.linkEdit = null;
+  state.editSetup = null; state.linkEdit = null; state.editAppunti = null;
   history.pushState({ canzone: id }, "");
   enrichSong(c);
   render();
@@ -1393,7 +1402,7 @@ function apriCanzone(id) {
 function lasciaCanzone() {
   state.songPage = null;
   state.addTaskOpen = null; state.partePicker = null; state.parteAltro = false;
-  state.editSetup = null; state.linkEdit = null;
+  state.editSetup = null; state.linkEdit = null; state.editAppunti = null;
 }
 function chiudiCanzone() {
   lasciaCanzone();
@@ -1462,7 +1471,7 @@ function songPage(c) {
       ${ts.length ? ts.map(taskRow).join("") : `<p class="empty">Nessun task per ${gen ? "ora" : "questo pezzo"}.</p>`}
       ${nuovoTask}
     </section>
-    ${gen ? "" : setupCard(c) + recsCard(c) + (state.fan ? "" : `
+    ${gen ? "" : appuntiCard(c) + setupCard(c) + recsCard(c) + (state.fan ? "" : `
     <div class="pg-actions">
       <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta" title="Sposta su">${IC("sopra")}</button>
       <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta" title="Sposta giù">${IC("sotto")}</button>
@@ -1520,6 +1529,27 @@ async function segnaParte(t, nome) {
     fatto: tutta, fattoDa: tutta ? (state.user || "") : "", fattoIl: tutta ? serverTimestamp() : null
   }).catch(erroreScrittura);
   if (tutta) maybeCelebrate(t.canzoneId, t.id);
+}
+// «I miei appunti» (v68): note di chi usa l'app sul pezzo (entrate, respiri, parole da ricordare);
+// l'app le mostra solo a chi le ha scritte. Documento appunti/<id persona>_<id canzone>.
+const idAppunti = (songId) => `${state.userId}_${songId}`;
+const mieiAppunti = (songId) => (state.appunti.find(a => a.id === idAppunti(songId)) || {}).testo || "";
+function appuntiCard(c) {
+  if (state.fan || !state.userId) return "";
+  const testo = mieiAppunti(c.id).trim();
+  let corpo;
+  if (state.appuntiNegati) corpo = `<p class="empty">Gli appunti non sono ancora attivi nel database.</p>`;
+  else if (state.editAppunti === c.id) corpo = `
+    <form class="setup-edit appunti-edit" data-form="appunti" data-song="${c.id}">
+      <textarea name="testo" data-keep="appunti-${c.id}" rows="${Math.max(5, testo.split("\n").length + 2)}" maxlength="2000" placeholder="Entrate, respiri, parole da ricordare, cosa cambiare la prossima volta…">${esc(testo)}</textarea>
+      <div class="ed"><button type="button" class="btn quiet" data-action="appunti-annulla">Annulla</button><button class="btn fill" type="submit">Salva</button></div>
+    </form>`;
+  else corpo = `<div class="appunti-txt" data-action="appunti-modifica" data-id="${c.id}" role="button" tabindex="0">${testo ? esc(testo) : `<span class="empty">Tocca per scrivere: entrate, respiri, parole da ricordare…</span>`}</div>`;
+  return `
+    <section class="sez appunti">
+      <h3 class="fascia">I miei appunti <small>solo tu li vedi</small></h3>
+      ${corpo}
+    </section>`;
 }
 function setupEditor(songId, key, testo) {
   return `
@@ -3985,6 +4015,14 @@ async function act(btn) {
       render();
       document.querySelector(`[data-keep="${CSS.escape(`setup-${id}-${btn.dataset.key}`)}"]`)?.focus();
       break;
+    case "appunti-modifica":
+      state.editAppunti = id;
+      render();
+      { const ta = document.querySelector(`[data-keep="appunti-${CSS.escape(id)}"]`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+      break;
+    case "appunti-annulla":
+      state.editAppunti = null;
+      render(); break;
     case "setup-cancel":
       state.editSetup = null;
       render(); break;
@@ -4341,6 +4379,18 @@ mainEl.addEventListener("submit", async e => {
     state.editSetup = null;
     // anche vuoto: la parte resta nella canzone (si toglie con la ✕)
     await scrivi(updateDoc(doc(db, "canzoni", song), new FieldPath("setup", key), testo));
+    render();
+  }
+
+  if (kind === "appunti") {
+    const song = form.dataset.song;
+    const testo = form.testo.value.trim();
+    if (!state.userId) return;
+    state.editAppunti = null;
+    const ok = await scrivi(setDoc(doc(db, "appunti", idAppunti(song)), {
+      membroId: state.userId, canzoneId: song, testo, aggiornato: serverTimestamp()
+    }).then(() => true));
+    if (!ok) { state.editAppunti = song; render(); rimetti(`appunti-${song}`, testo); return; }
     render();
   }
 
