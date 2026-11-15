@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "71",
+      "data": "2026-11-15",
+      "titolo": "Lo spartito in orizzontale",
+      "punti": [
+        "Con il telefono girato lo Spartito usa quasi tutto lo schermo: titolo su una riga, comandi in una colonna a destra con il Play in basso, parti in una striscia sottile.",
+        "Al primo tocco l'app va a schermo intero; girando di nuovo il telefono torna normale.",
+        "Si vedono almeno due righe di pentagramma: se non ci stanno lo spartito si rimpicciolisce. Sul piano i nomi delle note stanno su una riga sola (dal basso: «La Mi»)."
+      ]
+    },
+    {
       "versione": "70",
       "data": "2026-11-15",
       "titolo": "Le prove dal calendario",

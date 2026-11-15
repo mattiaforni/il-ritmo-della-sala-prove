@@ -261,6 +261,43 @@ textarea:focus { outline: none; border-color: var(--accento); }
 .topbar .ico.piccolo .i { width: 20px; height: 20px; }
 .toast { position: absolute; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); background: var(--inchiostro); color: var(--carta); padding: 10px 14px; border-radius: var(--r); font-size: 14px; z-index: 80; }
 @media (min-width: 700px) { .schermo { max-width: 760px; margin: 0 auto; } }
+.manico .man-or { display: none; }
+/* ---- Spartito con il telefono in orizzontale (v71): testata su una riga, comandi in una colonna a destra,
+   parti in una striscia sottile sotto lo spartito; tutto il resto dello schermo allo spartito ---- */
+html.orizz #spartito, html.orizz #spartito.hidden { display: grid !important; max-width: none; margin: 0;
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "top manico" "chiave barra" "score barra" "parti barra"; }
+html.orizz #spartito .topbar { grid-area: top; align-items: center; gap: 6px; padding: calc(3px + env(safe-area-inset-top)) 8px 3px calc(4px + env(safe-area-inset-left)); }
+html.orizz #spartito .topbar .ico { width: 34px; height: 34px; }
+html.orizz #spartito .topbar .tit { display: flex; align-items: baseline; gap: 10px; }
+html.orizz #spartito .topbar h1 { font-size: 20px; flex: 0 1 auto; }
+html.orizz #spartito .sottot { margin: 0; flex: 1 1 0; min-width: 0; }
+html.orizz #chiave-bt { grid-area: chiave; }
+html.orizz #at-scroll { grid-area: score; }
+html.orizz #spartito .foglio-cmd { display: contents; }
+html.orizz #spartito .manico { grid-area: manico; width: auto; height: auto; display: grid; place-items: center; background: var(--testata); border-bottom: 1px solid var(--linea); border-left: 1px solid var(--linea); color: var(--inchiostro-2); }
+html.orizz #spartito .manico i { display: none; }
+html.orizz #spartito .manico .man-or { display: block; }
+html.orizz #spartito .foglio-cmd.aperto .manico { color: var(--accento); background: var(--accento-tinta); }
+html.orizz #spartito .sp-parti { grid-area: parti; flex-direction: row; align-items: center; gap: 10px; padding: 5px 12px calc(6px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); border-top: 1px solid var(--linea); }
+html.orizz #spartito .sp-parti b { flex: none; min-width: 64px; font-size: 10.5px; }
+html.orizz #spartito .sp-parti .bar { flex: 1; height: 8px; }
+html.orizz #spartito .foglio-cmd .sp-barra { grid-area: barra; flex-direction: column; align-items: center; gap: 6px; width: calc(60px + env(safe-area-inset-right)); padding: 6px env(safe-area-inset-right) calc(8px + env(safe-area-inset-bottom)) 0; border-left: 1px solid var(--linea); min-height: 0; overflow-y: auto; scrollbar-width: none; }
+html.orizz #spartito .foglio-cmd .sp-barra .vista-ic { width: 40px; height: 40px; }
+html.orizz #spartito .foglio-cmd .sp-barra .tempo-btn { width: 44px; height: 36px; padding: 0; font-size: 17px; justify-content: center; }
+html.orizz #spartito .foglio-cmd .sp-barra .trasp-btn .i { width: 15px; height: 15px; }
+html.orizz #spartito .foglio-cmd .sp-barra .btn:not(.play) { width: 40px; height: 40px; }
+html.orizz #spartito .foglio-cmd .sp-barra .play { width: 48px; height: 48px; }
+html.orizz #spartito .griglia-cmd { position: absolute; z-index: 10; top: 44px; right: calc(68px + env(safe-area-inset-right)); width: 330px; grid-template-columns: repeat(3, 1fr); max-height: none; padding: 8px; background: var(--carta); border: 1px solid var(--linea-forte); border-radius: var(--r); box-shadow: 0 10px 28px -14px rgba(35,27,21,.45); display: none; transition: none; }
+html.orizz #spartito .foglio-cmd.aperto .griglia-cmd { display: grid; padding: 8px; }
+html.orizz #spartito .cmd { height: 58px; }
+html.orizz #spartito .cmd-pop { left: auto; right: calc(68px + env(safe-area-inset-right)); top: 44px; bottom: auto !important; width: 330px; }
+html.orizz #spartito .toast, html.orizz .toast { left: auto; right: calc(76px + env(safe-area-inset-right)); bottom: calc(40px + env(safe-area-inset-bottom)); max-width: 420px; }
+@media (max-height: 360px) {
+  html.orizz #spartito .foglio-cmd .sp-barra { gap: 3px; }
+  html.orizz #spartito .foglio-cmd .sp-barra .vista-ic, html.orizz #spartito .foglio-cmd .sp-barra .btn:not(.play) { width: 36px; height: 36px; }
+  html.orizz #spartito .foglio-cmd .sp-barra .tempo-btn { height: 32px; }
+}
 </style>
 </head>
 <body>
@@ -290,6 +327,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <symbol id="i-paletta" viewBox="0 0 24 24"><path d="M10.3 22v-8.5L8.6 3.2Q12 1.4 15.4 3.2l-1.7 10.3V22"/><path d="M8.9 5.5H6M9.3 8.5H6.4M9.8 11.5H6.9M15.1 5.5H18M14.7 8.5h2.9M14.2 11.5h2.9"/><circle cx="5" cy="5.5" r="1"/><circle cx="5.4" cy="8.5" r="1"/><circle cx="5.9" cy="11.5" r="1"/><circle cx="19" cy="5.5" r="1"/><circle cx="18.6" cy="8.5" r="1"/><circle cx="18.1" cy="11.5" r="1"/></symbol>
   <symbol id="i-tonalita" viewBox="0 0 24 24"><circle cx="7" cy="17.5" r="2.5"/><path d="M9.5 17.5V6l4-1.5"/><path d="M18 4v16M15.5 6.5 18 4l2.5 2.5M15.5 17.5 18 20l2.5-2.5"/></symbol>
   <symbol id="i-parti" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12"/><rect x="9.5" y="6" width="5" height="12"/><rect x="16" y="6" width="5" height="12"/></symbol>
+  <symbol id="i-altro" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 </svg>
 
@@ -350,7 +388,7 @@ textarea:focus { outline: none; border-color: var(--accento); }
   <div class="chiave-bt hidden" id="chiave-bt"></div>
   <div class="at-scroll" id="at-scroll"><div class="bt-tocco hidden" id="bt-tocco"></div><div id="at"></div><div class="msg" id="sp-msg" style="position:absolute;top:12px;left:16px;font-size:13px;color:var(--inchiostro-2)"></div><div class="sp-stato hidden" id="sp-stato"><div><div class="big" id="sps-titolo"></div><div id="sps-testo"></div><div id="sps-azioni" style="margin-top:12px"></div></div></div></div>
   <div class="foglio-cmd" id="foglio-cmd">
-  <button class="manico" data-az="comandi" title="Altri comandi"><i></i></button>
+  <button class="manico" data-az="comandi" title="Altri comandi"><i></i><svg class="i man-or"><use href="#i-altro"/></svg></button>
   <div class="sp-parti hidden" id="sp-parti"><b id="sp-parte"></b><div class="bar" id="sp-parti-bar"></div></div>
   <div class="sp-barra">
     <button class="vista-ic tr-btn" data-az="tracce" title="Tracce"><svg class="i"><use href="#i-paletta"/></svg></button>
@@ -432,6 +470,8 @@ textarea:focus { outline: none; border-color: var(--accento); }
 
 <div id="toast" class="toast hidden"></div>
 <script>
+// telefono in orizzontale (v71): la classe c'è già al primo disegno
+(() => { const m = matchMedia('(orientation: landscape) and (max-height: 520px)'); document.documentElement.classList.toggle('orizz', m.matches); })();
 // primo disegno: con ?id si parte già dalla pagina giusta, con il titolo (niente lampi di altre pagine)
 (() => {
   const p = new URLSearchParams(location.search); if (!p.get('id')) return;
@@ -728,7 +768,9 @@ function mettiNomi(tr, on) {
     if (on) {
       if (b._lyrOrig === undefined) b._lyrOrig = b.lyrics;
       const ns = b.isRest ? [] : noteDi(b);
-      b.lyrics = ns.length ? ns.map(n => nomeIt(n.realValue, bemolliIn(b))) : null;
+      // in orizzontale su una riga sola, dal basso in alto («La Mi»): una riga di nomi invece di una per nota
+      const nomi = ns.map(n => nomeIt(n.realValue, bemolliIn(b)));
+      b.lyrics = !nomi.length ? null : orizz() ? [nomi.reverse().join(' ')] : nomi;
     } else if (b._lyrOrig !== undefined) { b.lyrics = b._lyrOrig; delete b._lyrOrig; }
   }
 }
@@ -796,15 +838,68 @@ function testoDi(note) {
   return s.replace(/-$/, '').replace(/\s+/g, ' ').trim();
 }
 
+// ------------------------------------------------------------ telefono in orizzontale (v71)
+// Testata su una riga e comandi in colonna (CSS, html.orizz); spartito più piccolo, nomi delle note del piano su una
+// riga e, se due righe del pentagramma non stanno nello schermo, scala ridotta finché ci stanno (al minimo 0,6).
+const ORIZZ = matchMedia('(orientation: landscape) and (max-height: 520px)');
+const orizz = () => ORIZZ.matches;
+const SCALA = 0.85, SCALA_ORIZZ = 0.75, SCALA_MIN = 0.6;
+const scaleOrizz = new Map();   // brano e traccia → scala adattata in orizzontale (vale finché la pagina è aperta)
+const chiaveScala = () => `${state.brano && state.brano.id}:${state.traccia}:${state.vista}:${state.nomi}`;
+function scalaVoluta() { return orizz() ? (scaleOrizz.get(chiaveScala()) || SCALA_ORIZZ) : SCALA; }
+function paddingVoluto() { return orizz() ? [16, 10] : [35, 35]; }
+let tentativiAdatta = 0;
+function adattaOrizz() {
+  if (!orizz() || !api || $('#spartito').classList.contains('hidden')) return;
+  const sis = api.renderer && api.renderer.boundsLookup && api.renderer.boundsLookup.staffSystems;
+  if (!sis || sis.length < 2) return;
+  const alt = $('#at-scroll').clientHeight - 16;
+  let serve = 0;
+  for (let i = 0; i + 1 < sis.length; i++) serve = Math.max(serve, sis[i].realBounds.h + sis[i + 1].realBounds.h);
+  const ora = api.settings.display.scale;
+  if (serve <= alt || ora <= SCALA_MIN || tentativiAdatta >= 3) { tentativiAdatta = 0; return; }
+  const nuova = Math.max(SCALA_MIN, Math.floor(ora * alt / serve * 20) / 20);
+  if (nuova >= ora) { tentativiAdatta = 0; return; }
+  tentativiAdatta++;
+  scaleOrizz.set(chiaveScala(), nuova);
+  api.settings.display.scale = nuova; api.updateSettings(); api.render();
+}
+// la scala e i margini giusti per come è girato il telefono; true se sono cambiati
+function preparaScala() {
+  if (!api) return false;
+  // in orizzontale la riga che suona sta in cima (in verticale resta un pezzo della riga di prima)
+  const d = api.settings.display, sc = scalaVoluta(), pad = paddingVoluto(), off = orizz() ? -6 : -80;
+  if (d.scale === sc && d.padding[0] === pad[0] && d.padding[1] === pad[1] && api.settings.player.scrollOffsetY === off) return false;
+  d.scale = sc; d.padding = pad; api.settings.player.scrollOffsetY = off; api.updateSettings(); return true;
+}
+// schermo intero: si chiede all'app (la pagina è in un iframe) al primo tocco in orizzontale, si lascia girando il telefono
+function schermoIntero(si) {
+  let p = null; try { p = window.parent !== window ? window.parent.__spartitoPonte : null; } catch (e) {}
+  if (p && p.schermoIntero) { p.schermoIntero(si); return; }
+  try {
+    if (si && !document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    else if (!si && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+}
+document.addEventListener('pointerdown', (e) => {
+  if (orizz() && e.target.closest('#spartito') && !e.target.closest('[data-az=chiudi-spartito]')) schermoIntero(true);
+}, true);
+ORIZZ.addEventListener('change', () => {
+  document.documentElement.classList.toggle('orizz', orizz());
+  $('#tempo-pop').classList.add('hidden'); $('#cmd-pop').classList.add('hidden'); apriComandi(false);
+  if (!orizz()) schermoIntero(false);
+  if (api && state.score && !$('#spartito').classList.contains('hidden')) disegnaSpartito();
+});
+
 // ------------------------------------------------------------ alphaTab (base musicale)
 let api = null, apiPronto = null, scoreCaricato = null;
 function creaApi() {
   if (api) return api;
   const s = {
     core: { fontDirectory: CDN + 'font/', scriptFile: CDN + 'alphaTab.min.js', logLevel: 'warning' },
-    display: { scale: 0.85, layoutMode: 'page', stretchForce: 1 },
+    display: { scale: scalaVoluta(), padding: paddingVoluto(), layoutMode: 'page', stretchForce: 1 },
     notation: { elements: { scoreTitle: false, scoreSubTitle: false, scoreArtist: false, scoreAlbum: false, scoreWords: false, scoreMusic: false, scoreWordsAndMusic: false, scoreCopyright: false, trackNames: false, guitarTuning: false } },
-    player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollElement: '#at-scroll', scrollMode: 'continuous', scrollOffsetY: -80, enableCursor: true, enableUserInteraction: true, enableElementHighlighting: true, enableAnimatedBeatCursor: true },
+    player: { playerMode: 'EnabledSynthesizer', soundFont: null, scrollElement: '#at-scroll', scrollMode: 'continuous', scrollOffsetY: orizz() ? -6 : -80, enableCursor: true, enableUserInteraction: true, enableElementHighlighting: true, enableAnimatedBeatCursor: true },
   };
   api = new alphaTab.AlphaTabApi($('#at'), s);
   api.soundFontLoaded.on(() => { suoniContati++; });   // registrato prima di qualsiasi banco: nessuna risposta anticipata
@@ -828,7 +923,7 @@ function creaApi() {
     }
     aggiornaPlay();
   });
-  api.renderFinished.on(() => { $('#sp-msg').textContent = ''; });
+  api.renderFinished.on(() => { $('#sp-msg').textContent = ''; adattaOrizz(); });
   api.midiLoaded.on(() => { const f = dopoMidi; dopoMidi = null; if (f) f(); });
   api.playbackRangeChanged.on(e => { state.sel = e.playbackRange; });
   api.playerPositionChanged.on(e => {
@@ -1027,7 +1122,7 @@ document.addEventListener('click', (e) => { const pop = $('#cmd-pop'); if (!pop.
 (() => {
   const f = $('#foglio-cmd'); let y0 = null;
   f.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
-  f.addEventListener('touchend', (e) => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null; if (dy < -25) apriComandi(true); else if (dy > 25) apriComandi(false); }, { passive: true });
+  f.addEventListener('touchend', (e) => { if (y0 == null || orizz()) { y0 = null; return; } const dy = e.changedTouches[0].clientY - y0; y0 = null; if (dy < -25) apriComandi(true); else if (dy > 25) apriComandi(false); }, { passive: true });
   $('#at-scroll').addEventListener('pointerdown', () => apriComandi(false));
 })();
 function apriParti() {
@@ -1405,8 +1500,14 @@ $('#sp-parti-bar').addEventListener('click', (e) => {
 function apriTempo() {
   const pop = $('#tempo-pop'), btn = $('#sp-tempo'), sp = $('#spartito'), barra = sp.querySelector('.sp-barra');
   if (!pop.classList.contains('hidden')) { pop.classList.add('hidden'); return; }
-  pop.style.left = Math.max(8, btn.offsetLeft + btn.offsetWidth / 2 - 82) + 'px';
-  pop.style.bottom = (sp.clientHeight - barra.offsetTop + 8) + 'px';
+  if (orizz()) {   // accanto al tasto, a sinistra della colonna dei comandi
+    pop.style.left = 'auto'; pop.style.bottom = 'auto';
+    pop.style.right = (sp.clientWidth - barra.offsetLeft + 8) + 'px'; pop.style.top = Math.max(4, btn.offsetTop - 6) + 'px';
+  } else {
+    pop.style.right = ''; pop.style.top = '';
+    pop.style.left = Math.max(8, btn.offsetLeft + btn.offsetWidth / 2 - 82) + 'px';
+    pop.style.bottom = (sp.clientHeight - barra.offsetTop + 8) + 'px';
+  }
   pop.classList.remove('hidden');
 }
 document.addEventListener('click', (e) => { const pop = $('#tempo-pop'); if (!pop.classList.contains('hidden') && !e.target.closest('#tempo-pop, [data-az=tempo-pop]')) pop.classList.add('hidden'); }, true);
@@ -1432,6 +1533,7 @@ function disegnaSpartito() {
   $('#sp-info').classList.toggle('hidden', !t.isPercussion);
   disegnaChiave();
   if (api.settings.display.staveProfile !== alphaTab.StaveProfile[prof]) { api.settings.display.staveProfile = alphaTab.StaveProfile[prof]; api.updateSettings(); }
+  preparaScala(); tentativiAdatta = 0;
   $('#sp-msg').textContent = 'Disegno lo spartito…';
   api.renderTracks([t]);
 }
@@ -1755,6 +1857,7 @@ function fermaTutto() {
   if (state.esec) fermaEsecuzione(); else fermaBase();
   chiudiMic();
   for (const v of document.querySelectorAll('.velo')) v.classList.add('hidden');
+  schermoIntero(false);
 }
 function chiudiTutto() {
   fermaTutto();

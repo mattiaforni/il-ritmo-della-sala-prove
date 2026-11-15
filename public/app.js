@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "70";
+const APP_VERSION = "71";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -2162,6 +2162,7 @@ function chiudiSpartito(daStoria = false) {
   if (!state.spartito) return;
   if (!daStoria && history.state && history.state.spartito) { history.back(); return; }
   state.spartito = false;
+  schermoIntero(false);
   try { spFrame.contentWindow.__chiudi && spFrame.contentWindow.__chiudi(); } catch (e) { /* niente da fermare */ }
   spOv.classList.remove("entra");
   spOv.classList.add("via");
@@ -2173,8 +2174,16 @@ window.__spartitoPonte = {
   chiudi: () => chiudiSpartito(),
   canzone: (id) => trovaPezzo(id),
   token: () => auth.currentUser.getIdToken(),
-  ruolo: () => (state.fan ? "fan" : "band")
+  ruolo: () => (state.fan ? "fan" : "band"),
+  // v71: con il telefono in orizzontale lo Spartito chiede lo schermo intero al primo tocco (e lo lascia girandolo)
+  schermoIntero: (si) => schermoIntero(si)
 };
+function schermoIntero(si) {
+  try {
+    if (si && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    else if (!si && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) { /* browser senza schermo intero */ }
+}
 function linkBlock(c) {
   if (state.linkEdit !== c.id) return "";
   // si correggono titolo e artista: il brano su Spotify si cerca di nuovo da solo (niente link da incollare)
