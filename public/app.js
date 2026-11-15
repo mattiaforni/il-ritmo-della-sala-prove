@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "69";
+const APP_VERSION = "70";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -82,6 +82,8 @@ const NOTIFICHE_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctio
 // password dei fan (la imposta, cambia o disattiva la band) e messaggi dei fan alla band: vedi functions/accesso.js
 const ACCESSO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/accesso";
 const TAB_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/tab";
+// prove dal calendario Google della band, in sola lettura (v70): vedi functions/calendario.js
+const CALENDARIO_FN = "https://us-central1-il-ritmo-della-sala-prove.cloudfunctions.net/calendario";
 // pagina di una tab (quella da cui la funzione sa scaricare), e il numero del pezzo su Songsterr (…-tab-s27)
 const TAB_PAGINA_RE = /^https:\/\/(?:www\.)?songsterr\.com\/a\/wsa\/[^\s"'<>]+$/i;
 const idSongsterr = (u) => { const m = String(u || "").replace(/[?#].*$/, "").match(/-s(\d+)(?:t\d+)?$/); return m ? Number(m[1]) : null; };
@@ -166,7 +168,14 @@ const state = {
   appunti: [],                // appunti personali per pezzo: collezione "appunti", id <persona>_<canzone> (v68)
   appuntiNegati: false,       // le regole del database non includono ancora "appunti"
   editAppunti: null,          // id della canzone con gli appunti personali in modifica        // le regole del database non includono ancora "studio"
-  studioModifica: false,      // «Da cantare» con i cestini al posto di Spartito e Canta
+  studioModifica: false,
+  cal: leggiCacheCalendario(), // prove dal calendario Google: { collegato, nome, prove, letto } (copia sul telefono)
+  calLetto: 0,                // quando l'app l'ha chiesto alla funzione l'ultima volta (ms)
+  calAperto: false,           // pagina «Prove in calendario» aperta (dal riquadro nella testata)
+  calScroll: 0,
+  calConf: null,              // in Personale: { collegato, nome, da, aggiornata, prove, errore }
+  calConfStato: "",           // "" | "carico" | "errore"
+  calForm: false, calOcc: false,      // «Da cantare» con i cestini al posto di Spartito e Canta
   accordi: null,              // pagina Accordi aperta: { id, trasp, scorri, vel }
   accFoglio: null,            // id del pezzo nel foglio «Accordi» (band: incolla o cambia il testo)
   cerca: null,                // foglio «Aggiungi un pezzo»: { q, stato: "" | "cerco" | "errore", errore, risultati }
@@ -904,6 +913,203 @@ function spotifyCard() {
     </article>`;
 }
 
+// ---------- prove dal calendario Google (v70, sola lettura) ----------
+// La funzione "calendario" legge il calendario dal suo indirizzo segreto iCal (salvato sul server da Personale)
+// e restituisce le prove dei prossimi 6 mesi. Nella testata, tra il titolo e la sigla, il riquadro con il
+// prossimo appuntamento; toccandolo si apre «Prove in calendario». Lo vedono band e fan.
+// Sul telefono resta una copia (prove_calendario), così il riquadro c'è subito anche senza rete.
+function leggiCacheCalendario() {
+  try { const c = JSON.parse(store.get("prove_calendario") || "null"); return c && Array.isArray(c.prove) ? c : null; }
+  catch (e) { return null; }
+}
+function salvaCacheCalendario() {
+  if (state.cal) store.set("prove_calendario", JSON.stringify(state.cal)); else store.del("prove_calendario");
+}
+async function chiamaCalendario(op, extra = {}) {
+  const token = await auth.currentUser.getIdToken();
+  const r = await fetch(CALENDARIO_FN, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ op, da: state.fan ? (state.fanNome || "") : (state.user || ""), ...extra })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `errore ${r.status}`);
+  return j;
+}
+let calInCorso = false;
+async function caricaCalendario(forza = false) {
+  if (!state.account || calInCorso) return;
+  if (!forza && Date.now() - state.calLetto < 10 * 60 * 1000) return;
+  calInCorso = true;
+  try {
+    const j = await chiamaCalendario("leggi");
+    state.cal = { collegato: !!j.collegato, nome: j.nome || "", prove: j.prove || [], letto: j.letto || Date.now() };
+    state.calLetto = Date.now();
+    salvaCacheCalendario();
+    render();
+  } catch (e) {
+    console.warn("[calendario]", e.message);   // resta la copia sul telefono
+  } finally { calInCorso = false; }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") caricaCalendario(); });
+// ogni minuto: le prove finite escono dal riquadro e il giorno stesso si colora
+setInterval(() => { if (state.account && state.cal) { rigaProssimaProva(); if (state.calAperto) renderCalendario(); } }, 60000);
+
+// date e ore come in Italia, qualunque sia il fuso del telefono
+const FUSO = "Europe/Rome";
+const giornoRoma = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+// gli eventi di tutto il giorno arrivano come "AAAA-MM-GG": mezzogiorno UTC di quel giorno, letto in UTC
+const daGiorno = (g) => { const [a, m, d] = g.split("-").map(Number); return Date.UTC(a, m - 1, d, 12); };
+function partiData(p) {
+  const tz = p.tuttoIlGiorno ? "UTC" : FUSO;
+  const ms = p.tuttoIlGiorno ? daGiorno(p.giorno) : p.inizio;
+  const f = (o) => new Intl.DateTimeFormat("it-IT", { timeZone: tz, ...o }).format(new Date(ms));
+  return {
+    gs: f({ weekday: "short" }).replace(".", ""),
+    n: f({ day: "numeric" }),
+    mese: f({ month: "short" }).replace(".", ""),
+    meseLungo: f({ month: "long" }),
+    anno: f({ year: "numeric" }),
+    chiave: p.tuttoIlGiorno ? p.giorno : giornoRoma(p.inizio)
+  };
+}
+const oraRoma = (ms) => new Intl.DateTimeFormat("it-IT", { timeZone: FUSO, hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+// prove non ancora finite (quelle di tutto il giorno valgono fino a fine giornata)
+function proveFuture() {
+  const c = state.cal;
+  if (!c || !c.collegato) return [];
+  const ora = Date.now(), oggi = giornoRoma(ora);
+  return (c.prove || []).filter(p => p.tuttoIlGiorno ? (p.giornoFine || p.giorno) > oggi : (p.fine > ora || (p.fine === p.inizio && p.inizio >= ora - 3600000)));
+}
+const eOggi = (p) => {
+  const ora = Date.now();
+  if (!p.tuttoIlGiorno && p.inizio <= ora && p.fine > ora) return true;   // in corso
+  return partiData(p).chiave === giornoRoma(ora);
+};
+function orarioProva(p) {
+  if (p.tuttoIlGiorno) {
+    // più giorni: fino all'ultimo (giornoFine è il giorno dopo la fine)
+    const ultimo = p.giornoFine ? giornoRoma(daGiorno(p.giornoFine) - 86400000) : p.giorno;
+    if (ultimo && ultimo > p.giorno) {
+      const f = new Intl.DateTimeFormat("it-IT", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(daGiorno(ultimo))).replace(/\./g, "");
+      return `Tutto il giorno, fino a ${f}`;
+    }
+    return "Tutto il giorno";
+  }
+  const stessoGiorno = giornoRoma(p.inizio) === giornoRoma(p.fine - 1);
+  if (p.fine <= p.inizio) return oraRoma(p.inizio);
+  const fine = oraRoma(p.fine);
+  return `${oraRoma(p.inizio)} – ${stessoGiorno || fine === "00:00" ? (fine === "00:00" ? "24:00" : fine) : fine}`;
+}
+// riquadro nella testata: «Prossimo / appuntamento / nome» e accanto giorno, numero e ora
+function rigaProssimaProva() {
+  const b = $("#tb-prova");
+  if (!b) return;
+  const p = state.account ? proveFuture()[0] : null;
+  b.classList.toggle("hidden", !p);
+  if (!p) { b.innerHTML = ""; return; }
+  const d = partiData(p), oggi = eOggi(p);
+  b.classList.toggle("oggi", oggi);
+  const ora = p.tuttoIlGiorno ? "tutto il g." : oraRoma(p.inizio);
+  b.setAttribute("aria-label", `Prossimo appuntamento: ${p.titolo}, ${oggi ? "oggi" : `${d.gs} ${d.n} ${d.meseLungo}`}${p.tuttoIlGiorno ? ", tutto il giorno" : ` alle ${ora}`}. Apri le prove in calendario`);
+  b.innerHTML = `<span class="tp-txt"><small>Prossimo</small><small>appuntamento</small><b>${esc(p.titolo)}</b></span>`
+    + `<span class="tp-data"><small>${esc(d.gs)}</small><b>${esc(d.n)}</b><em>${esc(ora)}</em></span>`;
+}
+$("#tb-prova")?.addEventListener("click", () => { if (state.calAperto) chiudiCalendario(); else apriCalendario(); });
+
+function apriCalendario() {
+  if (state.calAperto) return;
+  state.calAperto = true;
+  state.calScroll = window.scrollY;
+  history.pushState({ calendario: true }, "");
+  document.body.classList.add("cal-aperto");
+  renderCalendario();
+  window.scrollTo({ top: 0 });
+  caricaCalendario();
+}
+// dalla freccia o dal tasto indietro si torna dov'eri, alla stessa altezza
+function chiudiCalendario(daIndietro = false) {
+  if (!state.calAperto) return;
+  state.calAperto = false;
+  document.body.classList.remove("cal-aperto");
+  if (!daIndietro && history.state && history.state.calendario) history.back();
+  window.scrollTo({ top: state.calScroll });
+}
+function rigaCalendario(p) {
+  const d = partiData(p), oggi = eOggi(p);
+  const sotto = [orarioProva(p), p.luogo].filter(Boolean).map(esc).join(" · ");
+  return `<div class="cal-riga">
+      <span class="cal-data${oggi ? " oggi" : ""}"><small>${esc(d.gs)}</small><b>${esc(d.n)}</b><small>${esc(d.mese)}</small></span>
+      <span class="prova-txt">${oggi ? `<span class="quando oggi">${!p.tuttoIlGiorno && p.inizio <= Date.now() ? "In corso" : "Oggi"}</span>` : ""}<b>${esc(p.titolo)}</b><small>${sotto}</small>${p.note ? `<span class="desc">${esc(p.note)}</span>` : ""}</span>
+    </div>`;
+}
+function renderCalendario() {
+  const v = $("#view-calendario");
+  if (!v) return;
+  const prove = proveFuture();
+  const annoOra = new Date().getFullYear();
+  let corpo = "", mese = null;
+  const perMese = {};
+  prove.forEach(p => { const d = partiData(p); const k = d.chiave.slice(0, 7); (perMese[k] = perMese[k] || []).push(p); });
+  for (const k of Object.keys(perMese)) {
+    const d = partiData(perMese[k][0]);
+    const nomeMese = d.meseLungo.charAt(0).toUpperCase() + d.meseLungo.slice(1) + (Number(d.anno) !== annoOra ? ` ${d.anno}` : "");
+    corpo += `<p class="fascia">${esc(nomeMese)}<small>${plurale(perMese[k].length, "appuntamento", "appuntamenti")}</small></p>`;
+    corpo += perMese[k].map(rigaCalendario).join("");
+  }
+  const c = state.cal;
+  if (!prove.length) {
+    corpo = `<p class="empty big">${c && c.collegato ? "Nessuna prova in calendario nei prossimi 6 mesi." : state.fan ? "Il calendario delle prove non è collegato." : "Il calendario delle prove non è collegato: si collega da Personale."}</p>`;
+  }
+  const letto = c && c.letto ? `Aggiornato ${giornoRoma(c.letto) === giornoRoma(Date.now()) ? "alle " + oraRoma(c.letto) : quandoBreve(new Date(c.letto))} · ` : "";
+  v.innerHTML = `
+    <div class="pg-top"><button class="pg-back" data-action="cal-chiudi" aria-label="Indietro">${IC("indietro")}${esc(TITOLI[state.tab] || "Indietro")}</button></div>
+    <h2 class="cal-titolo">Prove in calendario</h2>
+    <p class="cal-nota">${IC("calendario")}Dal calendario Google${c && c.nome ? ` «${esc(c.nome)}»` : " della band"} · sola lettura</p>
+    ${corpo}
+    ${c && c.collegato ? `<p class="cal-piede">${letto}le prove si cambiano da Google Calendar</p>` : ""}`;
+}
+
+// in Personale (band): collegare, cambiare o scollegare il calendario
+async function caricaConfCalendario() {
+  if (state.fan || state.calConfStato === "carico") return;
+  state.calConfStato = "carico";
+  try { state.calConf = await chiamaCalendario("stato"); state.calConfStato = ""; }
+  catch (e) { console.warn("[calendario]", e.message); state.calConfStato = "errore"; }
+  render();
+}
+function calendarioCard() {
+  const c = state.calConf;
+  let corpo;
+  if (!c) {
+    corpo = state.calConfStato === "errore"
+      ? `<p class="nt-txt">Non riesco a leggere il collegamento del calendario.</p><button class="btn quiet" data-action="cal-riprova">Riprova</button>`
+      : `<p class="nt-txt">Controllo il calendario…</p>`;
+  } else if (!c.collegato || state.calForm) {
+    corpo = `
+      <p class="nt-txt">Le prove del calendario Google della band compaiono in alto nell'app, per la band e per i fan. L'app le legge soltanto: si cambiano da Google Calendar.</p>
+      <p class="am-hint">Da computer: Google Calendar → impostazioni del calendario delle prove → «Integra calendario» → copia l'<b>indirizzo segreto in formato iCal</b> e incollalo qui. Resta solo sul server.</p>
+      <form class="am-form" data-form="calendario">
+        <input class="field" name="url" data-keep="cal-url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        <button class="btn fill" type="submit" ${state.calOcc ? "disabled" : ""}>${state.calOcc ? "Controllo…" : "Collega"}</button>
+        ${c.collegato ? `<button type="button" class="btn quiet" data-action="cal-annulla">Annulla</button>` : ""}
+      </form>`;
+  } else {
+    corpo = `
+      <div class="am-row"><span class="am-lbl">Calendario</span><b class="cal-nome">${esc(c.nome || "senza nome")}</b></div>
+      ${c.errore ? `<p class="sp-err">${esc(c.errore)}</p>` : `<p class="am-meta">${c.prove == null ? "" : `${plurale(c.prove, "appuntamento", "appuntamenti")} nei prossimi 6 mesi. `}${c.aggiornata ? `Collegato il ${esc(quandoGiorno(c.aggiornata))}${c.da ? ` da ${esc(c.da)}` : ""}.` : ""}</p>`}
+      <div class="am-actions">
+        <button class="btn quiet" data-action="cal-cambia">Cambia</button>
+        <button class="btn quiet" data-action="cal-scollega">Scollega</button>
+      </div>`;
+  }
+  return `
+    <article class="card ntcard amcard calcard">
+      <h3 class="sec-title">Calendario prove <small>${c && c.collegato ? "collegato" : c ? "non collegato" : ""}</small></h3>
+      <div class="pg-sec">${corpo}</div>
+    </article>`;
+}
+
 // ---------- accesso ----------
 onAuthStateChanged(auth, (account) => {
   // un accesso rimasto da versioni precedenti (es. login Google) non vale:
@@ -921,12 +1127,14 @@ onAuthStateChanged(auth, (account) => {
   else { state.user = store.get("prove_user"); state.userId = store.get("prove_user_id"); }
   state.accesso = null; state.accessoStato = ""; state.fanMenu = false; state.fanCambia = false;
   state.pushRiep = null; state.pushRiepStato = "";
+  state.calConf = null; state.calConfStato = ""; state.calForm = false;
   if (!account) { $("#invito-push")?.classList.add("hidden"); $("#novita-fan")?.classList.add("hidden"); }
   if (account) {
     $("#gate").classList.add("hidden");
     subscribe();
     ensureUser();
     render();
+    caricaCalendario(true);
     setTimeout(riallineaNotifiche, 4000);   // permesso tolto o iscrizione rinnovata dal telefono
   } else {
     $("#gate").classList.remove("hidden");
@@ -1235,12 +1443,14 @@ function testata() {
   if (!t) return;
   t.textContent = state.account ? (TITOLI[state.tab] || "") : "Il ritmo della sala prove";
   s.textContent = contesto(state.tab);
+  rigaProssimaProva();
 }
 
 // ---------- tab ----------
 function showTab(name) {
   if (!document.getElementById("view-" + name)) name = "scaletta";
   if (state.fan && (name === "cassa" || name === "personale")) name = "scaletta";
+  if (state.calAperto) chiudiCalendario();
   if (state.songPage) { lasciaCanzone(); if (history.state && history.state.canzone) history.back(); render(); }
   state.tab = name;
   store.set("prove_tab", name);
@@ -1350,6 +1560,7 @@ function render() {
   renderFan();
   updateNavMe();
   testata();
+  if (state.calAperto) renderCalendario();
   syncPlayer();
   if (state.accordi) renderAccordi();
   controllaNovitaTab();
@@ -1437,6 +1648,7 @@ window.addEventListener("popstate", () => {
   if (state.accFoglio) { chiudiAccordiFoglio(true); return; }
   if (state.accordi) { chiudiAccordi(true); return; }
   if (state.cerca) { chiudiCerca(true); return; }
+  if (state.calAperto) { chiudiCalendario(true); return; }
   if (state.songPage) chiudiCanzone();
 });
 
@@ -3364,6 +3576,7 @@ function renderPersonale() {
   // l'accesso dei fan si legge dalla funzione solo quando si apre Personale
   if (mia && state.tab === "personale" && !state.accesso && !state.accessoStato) setTimeout(caricaAccesso, 0);
   if (mia && state.tab === "personale" && !state.pushRiep && !state.pushRiepStato) setTimeout(caricaRiepilogoPush, 0);
+  if (mia && state.tab === "personale" && !state.calConf && !state.calConfStato) setTimeout(caricaConfCalendario, 0);
   view.innerHTML = `
     ${whoBar}
     ${mia ? "" : `<p class="viewing">Stai guardando la pagina di ${esc(nome)}: spuntando qui segni la sua parte dei task.</p>`}
@@ -3384,6 +3597,7 @@ function renderPersonale() {
     ${mia ? daCantareCard() : ""}
     ${mia ? notificheCard() : ""}
     ${mia ? accessoCard() : ""}
+    ${mia ? calendarioCard() : ""}
     ${mia ? spotifyCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · <button class="app-ver-btn" data-action="copia-diag">Copia diagnostica</button></p>`;
@@ -3616,7 +3830,7 @@ const SCRITTURE = new Set([
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara",
   "studio-modifica", "studio-togli", "studio-aggiungi", "cerca-apri", "tab-foglio", "tab-scegli",
-  "accordi-foglio", "accordi-elimina"
+  "accordi-foglio", "accordi-elimina", "cal-cambia", "cal-scollega"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
@@ -3972,6 +4186,27 @@ async function act(btn) {
       break;
     case "fan-annulla":
       state.fanCambia = false; renderFan(); break;
+    case "cal-chiudi":
+      chiudiCalendario(); break;
+    case "cal-cambia":
+      state.calForm = true; render();
+      document.querySelector('[data-keep="cal-url"]')?.focus();
+      break;
+    case "cal-annulla":
+      state.calForm = false; render(); break;
+    case "cal-riprova":
+      state.calConfStato = ""; caricaConfCalendario(); break;
+    case "cal-scollega": {
+      if (!confirm("Scollegare il calendario? Le prove spariscono dall'app per tutti; il calendario Google resta com'è.")) return;
+      try {
+        await chiamaCalendario("togli");
+        state.cal = { collegato: false, prove: [] }; salvaCacheCalendario();
+        state.calConf = { collegato: false }; state.calForm = false;
+        toast("Calendario scollegato.");
+      } catch (e) { toast("Non scollegato: " + e.message); }
+      render();
+      break;
+    }
     case "accesso-riprova":
       state.accessoStato = ""; caricaAccesso(); break;
     case "accesso-apri":
@@ -4290,6 +4525,25 @@ mainEl.addEventListener("submit", async e => {
     } catch (ex) {
       toast(state.fan ? "Non pubblicato: " + ex.message : "Non pubblicato. Controlla la connessione e riprova.");
     } finally { btn.disabled = false; }
+    return;
+  }
+
+  if (kind === "calendario") {
+    const url = form.url.value.trim();
+    if (!url) return;
+    state.calOcc = true; render();
+    try {
+      const j = await chiamaCalendario("imposta", { url });
+      state.cal = { collegato: true, nome: j.nome || "", prove: j.prove || [], letto: Date.now() };
+      state.calLetto = Date.now(); salvaCacheCalendario();
+      state.calForm = false; state.calConf = null; state.calConfStato = "";
+      document.querySelectorAll('main [data-keep="cal-url"]').forEach(el => { el.value = ""; });
+      toast(`Calendario collegato: ${plurale((j.prove || []).length, "appuntamento", "appuntamenti")} nei prossimi 6 mesi.`);
+    } catch (ex) {
+      toast("Non collegato: " + ex.message);
+    } finally {
+      state.calOcc = false; render();
+    }
     return;
   }
 

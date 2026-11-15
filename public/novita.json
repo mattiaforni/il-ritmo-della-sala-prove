@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "70",
+      "data": "2026-11-15",
+      "titolo": "Le prove dal calendario",
+      "punti": [
+        "In alto, accanto al nome della sezione, c'è il prossimo appuntamento del calendario delle prove: nome, giorno e ora. Il giorno stesso si colora.",
+        "Toccandolo si apre l'elenco di tutte le prove in programma nei prossimi mesi, con orari, luogo e note.",
+        "Le prove si leggono soltanto: si aggiungono e si cambiano da Google Calendar. Il calendario si collega una volta da Personale."
+      ]
+    },
+    {
       "versione": "69",
       "data": "2026-11-14",
       "titolo": "La scaletta suonata da noi",
