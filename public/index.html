@@ -25,6 +25,7 @@
       <h1 class="logo" id="tb-titolo">Il ritmo della sala prove</h1>
       <p class="tb-sub" id="tb-sub"></p>
     </div>
+    <button id="tb-prova" class="tb-prova hidden" type="button"></button>
     <button id="user-chip" class="user-chip hidden" title="Cambia nome">—</button>
   </div>
 </header>
@@ -36,6 +37,8 @@
   <section id="view-bacheca" class="view"></section>
   <section id="view-cassa" class="view"></section>
   <section id="view-personale" class="view"></section>
+  <!-- «Prove in calendario»: si apre dal riquadro nella testata, sopra la sezione in cui si è (v70) -->
+  <section id="view-calendario" class="cal-view"></section>
 </main>
 
 <!-- riproduzione in corso: sopra la barra delle sezioni, visibile in tutte le sezioni -->
@@ -161,6 +164,7 @@
   <symbol id="i-cerca" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></g></symbol>
   <symbol id="i-paletta" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 22v-8.5L8.6 3.2Q12 1.4 15.4 3.2l-1.7 10.3V22"/><path d="M8.9 5.5H6M9.3 8.5H6.4M9.8 11.5H6.9M15.1 5.5H18M14.7 8.5h2.9M14.2 11.5h2.9"/><circle cx="5" cy="5.5" r="1"/><circle cx="5.4" cy="8.5" r="1"/><circle cx="5.9" cy="11.5" r="1"/><circle cx="19" cy="5.5" r="1"/><circle cx="18.6" cy="8.5" r="1"/><circle cx="18.1" cy="11.5" r="1"/></g></symbol>
   <symbol id="i-tonalita" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="17.5" r="2.5"/><path d="M9.5 17.5V6l4-1.5"/><path d="M18 4v16M15.5 6.5 18 4l2.5 2.5M15.5 17.5 18 20l2.5-2.5"/></g></symbol>
+  <symbol id="i-calendario" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h17v15h-17zM3.5 10h17M8 3v4M16 3v4"/></g></symbol>
   <symbol id="i-cuffie" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-4a8 8 0 0 1 16 0v4"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/></g></symbol>
   <!-- griglia d'accordo (accordi del pezzo) -->
   <symbol id="i-accordi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 4v16M12 4v16M18 4v16M4 8h16M4 13h16M4 18h16"/></g><circle cx="12" cy="10.5" r="1.9" fill="currentColor"/><circle cx="18" cy="15.5" r="1.9" fill="currentColor"/></symbol>

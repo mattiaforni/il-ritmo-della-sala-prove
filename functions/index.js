@@ -441,3 +441,5 @@ exports.accesso = require("./accesso").crea({
 }).accesso;
 // tablature da Songsterr in file Guitar Pro per la pagina «Spartito»: vedi tab.js
 exports.tab = require("./tab").crea({ cors, ruolo, REGIONE }).tab;
+// prove dal calendario Google della band, in sola lettura (v70): vedi calendario.js
+exports.calendario = require("./calendario").crea({ cors, ruolo, REGIONE }).calendario;

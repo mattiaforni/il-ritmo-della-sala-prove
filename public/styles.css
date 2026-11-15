@@ -1097,3 +1097,55 @@ html.con-lettore, html.con-lettore body { overflow: hidden; }
 .acc-foglio .cerca-aiuto { margin-bottom: 10px; }
 .acc-foglio textarea.field { width: 100%; min-height: 50vh; font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; white-space: pre; overflow-wrap: normal; overflow-x: auto; resize: none; }
 .acc-foglio .foglio-sub { font-size: 13px; color: var(--inchiostro-2); margin-top: 2px; }
+
+/* ---------- prove dal calendario Google (v70, sola lettura) ---------- */
+/* riquadro nella testata, tra il titolo e la sigla: «Prossimo / appuntamento / nome» e giorno, numero, ora */
+.tb-prova {
+  flex: none; display: flex; align-items: stretch; padding: 0;
+  background: transparent; border: 1px solid var(--linea-forte); border-radius: var(--r);
+  font: inherit; color: var(--inchiostro); cursor: pointer; text-align: left;
+}
+.tb-prova.hidden { display: none; }
+.tb-prova:active { background: var(--linea); }
+.tb-prova .tp-txt { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 5px 9px; max-width: 104px; min-width: 0; }
+.tb-prova .tp-txt small { font: 600 9px/1.1 var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--inchiostro-3); }
+.tb-prova .tp-txt b { font: 500 13px/1.15 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.tb-prova .tp-data { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 8px; border-left: 1px solid var(--linea-forte); min-width: 44px; }
+.tb-prova .tp-data small { font: 600 9px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-3); }
+.tb-prova .tp-data b { font: 400 24px/1 var(--display); font-variant-numeric: tabular-nums; margin: 1px 0 0; }
+.tb-prova .tp-data em { font: 500 11px/1 var(--ui); font-style: normal; font-variant-numeric: tabular-nums; color: var(--inchiostro-2); white-space: nowrap; }
+.tb-prova.oggi { border-color: var(--accento); background: var(--accento-tinta); }
+.tb-prova.oggi .tp-data { border-left-color: var(--accento); }
+.tb-prova.oggi .tp-txt small, .tb-prova.oggi .tp-data small, .tb-prova.oggi .tp-data em, .tb-prova.oggi b { color: var(--accento); }
+/* con il riquadro la sigla resta corta */
+.tb-prova:not(.hidden) ~ .user-chip { max-width: 22%; }
+
+/* pagina «Prove in calendario»: copre la sezione in cui si è, che resta com'era sotto */
+.cal-view { display: none; }
+body.cal-aperto main > .view.active { display: none; }
+body.cal-aperto .cal-view { display: block; }
+.cal-titolo { font: 400 30px/1.1 var(--display); margin: 6px 0 2px; }
+.cal-nota { font-size: 12.5px; color: var(--inchiostro-3); margin: 0; display: flex; align-items: center; gap: 6px; }
+.cal-nota svg { width: 14px; height: 14px; flex: none; }
+.cal-riga { display: flex; gap: 14px; align-items: flex-start; padding: 13px 0; border-bottom: 1px solid var(--linea); }
+.cal-data {
+  flex: none; width: 46px; display: flex; flex-direction: column; align-items: center;
+  border: 1px solid var(--linea-forte); border-radius: var(--r); background: var(--foglio);
+  padding: 4px 0 5px; line-height: 1;
+}
+.cal-data small { font: 600 9.5px/1.2 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-3); }
+.cal-data b { font: 400 25px/1 var(--display); font-variant-numeric: tabular-nums; margin: 1px 0; }
+.cal-data.oggi { border-color: var(--accento); background: var(--accento-tinta); }
+.cal-data.oggi small, .cal-data.oggi b { color: var(--accento); }
+.prova-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.prova-txt .quando { font: 600 10.5px/1.3 var(--ui); letter-spacing: .09em; text-transform: uppercase; color: var(--inchiostro-3); }
+.prova-txt .quando.oggi { color: var(--accento); }
+.prova-txt b { font-weight: 500; font-size: 15.5px; overflow-wrap: anywhere; }
+.prova-txt small { font-size: 12.5px; color: var(--inchiostro-2); }
+.prova-txt .desc { font-size: 13px; color: var(--inchiostro-2); margin-top: 4px; white-space: pre-line; overflow-wrap: anywhere; }
+.cal-piede { font-size: 12px; color: var(--inchiostro-3); text-align: center; margin: 18px 0 0; }
+.calcard .am-form .field { min-width: 0; }
+.calcard .cal-nome { font-weight: 500; font-size: 14.5px; }
+/* con il riquadro della prova il titolo della sezione si stringe un po' («Personale» deve starci) */
+.topbar-row:has(.tb-prova:not(.hidden)) { gap: 10px; }
+.topbar-row:has(.tb-prova:not(.hidden)) .logo { font-size: 26px; }
