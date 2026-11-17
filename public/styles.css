@@ -1151,10 +1151,8 @@ body.cal-aperto .cal-view { display: block; }
 .topbar-row:has(.tb-prova:not(.hidden)) .logo { font-size: 26px; }
 
 /* ---------- Accordatore (v72): microfono, a schermo intero; usa la testata e il piede degli Accordi ---------- */
-.tb-accorda { flex: none; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: none; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-2); cursor: pointer; }
-.tb-accorda.hidden { display: none; }
-.tb-accorda:active { background: var(--linea); }
-.tb-accorda svg { width: 20px; height: 20px; }
+.ac-strip { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--linea); font: inherit; text-align: left; cursor: pointer; }
+.ac-strip > .ico { width: 22px; height: 22px; flex: none; color: var(--inchiostro-2); }
 .accordatore .ac-la .ton { min-width: 58px; }
 .accordatore .ac-la button:disabled { opacity: .35; }
 .ac-corpo { flex: 1; overflow: auto; display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 18px 20px; }

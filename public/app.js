@@ -429,6 +429,17 @@ function descriviBrani(lista) {
   const { con, nostri, senza } = contaBrani(lista);
   return `${con} ${con === 1 ? "brano" : "brani"}${senza ? ` · ${senza} senza link` : ""}${nostri ? ` · ${nostri} ${nostri === 1 ? "nostro" : "nostri"}` : ""}`;
 }
+// riga dell'accordatore in cima alla Scaletta (v72, solo band), con la stessa grammatica della playlist
+function acStrip() {
+  const p = prefAccorda(), acc = p.str === "cromatico" ? null : ACCORDATURE[p.str].find(x => x.k === p.acc);
+  const sotto = acc ? `${STRUMENTI_ACC.find(s => s[0] === p.str)[1]} · ${acc.nome}` : "Cromatico";
+  return `
+    <button type="button" class="pl-strip ac-strip" data-action="ac-apri">
+      ${IC("diapason", "ico")}
+      <span class="pl-txt"><b>Accordatore</b><small>${esc(sotto)}${p.la !== 440 ? ` · La ${p.la}` : ""}</small></span>
+      <span class="pl-go" aria-hidden="true">${IC("freccia")}</span>
+    </button>`;
+}
 function plStrip(kind) {
   const info = playlistInfo();
   if (!info || !info[kind]) return "";
@@ -1445,7 +1456,6 @@ function testata() {
   t.textContent = state.account ? (TITOLI[state.tab] || "") : "Il ritmo della sala prove";
   s.textContent = contesto(state.tab);
   rigaProssimaProva();
-  $("#tb-accorda")?.classList.toggle("hidden", !state.account || !!state.fan);
 }
 
 // ---------- tab ----------
@@ -1578,7 +1588,7 @@ function renderScaletta() {
   if (aperta) { $("#view-scaletta").innerHTML = songPage(aperta); return; }
   const gen = state.canzoni.find(c => c.id === GENERALE_ID);
   const lista = scaletta();
-  let html = plStrip("scaletta") + (gen ? songCard(gen) : "");
+  let html = plStrip("scaletta") + (state.fan ? "" : acStrip()) + (gen ? songCard(gen) : "");
   html += lista.map((c, i) => songCard(c, i + 1)).join("");
   if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una con il +."}</p>`;
   if (!state.fan) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
@@ -2029,7 +2039,7 @@ if (accOv) accOv.addEventListener("click", e => {
   if (btn && !btn.disabled) act(btn);
 });
 // ---------- Accordatore (v72): microfono del telefono, a schermo intero (#accorda-ov) ----------
-// Si apre dal diapason nella testata (solo band). Chitarra, basso (4 e 5 corde) o cromatico; accordature comuni;
+// Si apre dalla riga «Accordatore» in cima alla Scaletta (solo band). Chitarra, basso (4 e 5 corde) o cromatico; accordature comuni;
 // La di riferimento regolabile. Riconosce la corda più vicina; toccando una corda si resta su quella.
 // Niente dati nel database: strumento, accordatura e La restano sul telefono (prove_accorda).
 const NOTE_IT = ["Do", "Do♯", "Re", "Re♯", "Mi", "Fa", "Fa♯", "Sol", "Sol♯", "La", "La♯", "Si"];
@@ -2281,7 +2291,6 @@ if (accordaOv) accordaOv.addEventListener("click", e => {
   const btn = e.target.closest("[data-action]");
   if (btn && !btn.disabled) act(btn);
 });
-$("#tb-accorda")?.addEventListener("click", () => apriAccordatore());
 // foglio «Accordi» (band): il testo si incolla com'è; Salva in basso a destra, Elimina a sinistra se c'è già
 function accordiBox() {
   let b = document.getElementById("accordi-box");
@@ -4566,6 +4575,8 @@ async function act(btn) {
       apriAccordi(id); break;
     case "acc-chiudi":
       chiudiAccordi(); break;
+    case "ac-apri":
+      apriAccordatore(); break;
     case "ac-chiudi":
       chiudiAccordatore(); break;
     case "ac-riprova":
