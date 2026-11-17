@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "72",
+      "data": "2026-11-17",
+      "titolo": "L'accordatore",
+      "punti": [
+        "In cima alla Scaletta c'è la riga «Accordatore»: apre l'accordatore, che ascolta dal microfono del telefono.",
+        "Chitarra, basso (anche a 5 corde) o cromatico, con le accordature più comuni (Drop D, mezzo tono sotto…). Riconosce da sé la corda; toccandone una si resta su quella.",
+        "Le corde accordate si segnano con la spunta. Il La di riferimento si cambia in alto (440 di base)."
+      ]
+    },
+    {
       "versione": "71",
       "data": "2026-11-15",
       "titolo": "Lo spartito in orizzontale",
