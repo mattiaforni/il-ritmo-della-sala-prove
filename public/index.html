@@ -26,6 +26,7 @@
       <p class="tb-sub" id="tb-sub"></p>
     </div>
     <button id="tb-prova" class="tb-prova hidden" type="button"></button>
+    <button id="tb-accorda" class="tb-accorda hidden" type="button" title="Accordatore" aria-label="Accordatore"><svg aria-hidden="true"><use href="#i-diapason"/></svg></button>
     <button id="user-chip" class="user-chip hidden" title="Cambia nome">—</button>
   </div>
 </header>
@@ -46,6 +47,7 @@
 <div id="lettore" class="lettore hidden" role="dialog" aria-label="In riproduzione"></div>
 <div id="spartito-ov" class="spartito-ov hidden" role="dialog" aria-label="Spartito"></div>
 <div id="accordi-ov" class="accordi hidden" role="dialog" aria-label="Accordi"></div>
+<div id="accorda-ov" class="accordi accordatore hidden" role="dialog" aria-label="Accordatore"></div>
 
 <!-- barra delle sezioni, fissa in basso -->
 <nav class="bnav tabs" aria-label="Sezioni">
@@ -168,6 +170,8 @@
   <symbol id="i-cuffie" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-4a8 8 0 0 1 16 0v4"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/></g></symbol>
   <!-- griglia d'accordo (accordi del pezzo) -->
   <symbol id="i-accordi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 4v16M12 4v16M18 4v16M4 8h16M4 13h16M4 18h16"/></g><circle cx="12" cy="10.5" r="1.9" fill="currentColor"/><circle cx="18" cy="15.5" r="1.9" fill="currentColor"/></symbol>
+  <!-- diapason (accordatore, v72) -->
+  <symbol id="i-diapason" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5v8a3 3 0 0 0 6 0v-8"/><path d="M12 13.5v8"/></g></symbol>
   <symbol id="i-mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></g></symbol>
   <symbol id="i-diretta" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6M5.4 5.4a9.3 9.3 0 0 0 0 13.2M18.6 5.4a9.3 9.3 0 0 1 0 13.2"/></g></symbol>
     <symbol id="ico-matita" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.2 8.8a2 2 0 0 0 0-2.8L18 4.8a2 2 0 0 0-2.8 0L4 16v4z"/><path d="M13.5 6.5l4 4"/></g></symbol>

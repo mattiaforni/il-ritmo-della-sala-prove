@@ -1149,3 +1149,54 @@ body.cal-aperto .cal-view { display: block; }
 /* con il riquadro della prova il titolo della sezione si stringe un po' («Personale» deve starci) */
 .topbar-row:has(.tb-prova:not(.hidden)) { gap: 10px; }
 .topbar-row:has(.tb-prova:not(.hidden)) .logo { font-size: 26px; }
+
+/* ---------- Accordatore (v72): microfono, a schermo intero; usa la testata e il piede degli Accordi ---------- */
+.tb-accorda { flex: none; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: none; border: 1px solid var(--linea-forte); border-radius: var(--r); color: var(--inchiostro-2); cursor: pointer; }
+.tb-accorda.hidden { display: none; }
+.tb-accorda:active { background: var(--linea); }
+.tb-accorda svg { width: 20px; height: 20px; }
+.accordatore .ac-la .ton { min-width: 58px; }
+.accordatore .ac-la button:disabled { opacity: .35; }
+.ac-corpo { flex: 1; overflow: auto; display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 18px 20px; }
+.ac-lettura { text-align: center; }
+.ac-nota { font: 400 112px/1 var(--display); letter-spacing: -.02em; color: var(--inchiostro); transition: color .15s; }
+.ac-sotto { margin-top: 4px; font-size: 13px; color: var(--inchiostro-2); font-variant-numeric: tabular-nums; min-height: 20px; }
+.ac-lettura.vuota .ac-nota, .ac-lettura.spenta .ac-nota { color: var(--linea-forte); }
+.ac-lettura.giusta .ac-nota { color: var(--verde); }
+.ac-scala { position: relative; height: 72px; margin: 26px 4px 0; border-bottom: 1px solid var(--linea-forte); }
+.ac-scala i { position: absolute; bottom: 0; width: 1px; height: 14px; background: var(--linea-forte); transform: translateX(-.5px); }
+.ac-scala i.fine { height: 22px; }
+.ac-scala i.zero { height: 40px; width: 2px; background: var(--inchiostro-2); transform: translateX(-1px); }
+.ac-zona { position: absolute; top: 0; bottom: 0; background: var(--verde-tinta); }
+.ac-ago { position: absolute; top: 0; bottom: -6px; width: 3px; margin-left: -1.5px; background: var(--accento); transition: background .15s; }
+.ac-lettura.vuota .ac-ago, .ac-lettura.spenta .ac-ago { background: var(--linea-forte); }
+.ac-lettura.giusta .ac-ago { background: var(--verde); }
+.ac-scala-num { display: flex; justify-content: space-between; margin: 6px 0 0; font-size: 11px; color: var(--inchiostro-3); font-variant-numeric: tabular-nums; }
+.ac-cent { margin-top: 14px; min-height: 24px; font: 500 16px var(--ui); color: var(--inchiostro-2); font-variant-numeric: tabular-nums; }
+.ac-lettura.basso .ac-cent, .ac-lettura.alto .ac-cent { color: var(--accento); }
+.ac-lettura.giusta .ac-cent { color: var(--verde); }
+.ac-corde { display: grid; grid-template-columns: repeat(var(--n), 1fr); border: 1px solid var(--linea-forte); border-radius: var(--r); background: var(--foglio); }
+.ac-corda { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; height: 64px; padding: 0; border: 0; border-left: 1px solid var(--linea); background: none; color: var(--inchiostro); cursor: pointer; font: inherit; }
+.ac-corda:first-child { border-left: 0; }
+.ac-corda b { font: 400 24px/1 var(--display); }
+.ac-corda small { font-size: 11px; color: var(--inchiostro-3); height: 14px; display: grid; place-items: center; }
+.ac-corda small svg { width: 14px; height: 14px; }
+.ac-corda.ok b, .ac-corda.ok small { color: var(--verde); }
+.ac-corda.ora { background: var(--accento-tinta); }
+.ac-corda.ora b { color: var(--accento); }
+.ac-corda.ok.ora { background: var(--verde-tinta); }
+.ac-corda.ok.ora b { color: var(--verde); }
+.ac-corda.scelta { box-shadow: inset 0 0 0 2px var(--accento); }
+.ac-aiuto { margin: 8px 0 0; font-size: 12px; color: var(--inchiostro-3); text-align: center; }
+.ac-errore { text-align: center; color: var(--inchiostro-2); }
+.ac-errore p { margin: 0 0 12px; }
+.ac-piede { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--linea); background: var(--testata); }
+.ac-acc { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; }
+.ac-acc::-webkit-scrollbar { display: none; }
+.ac-acc button { flex: none; height: 32px; padding: 0 11px; border: 1px solid var(--linea-forte); border-radius: var(--r); background: none; font: 500 13px var(--ui); color: var(--inchiostro-2); white-space: nowrap; cursor: pointer; }
+.ac-acc button.on { border-color: var(--accento); color: var(--accento); background: var(--accento-tinta); }
+.ac-str { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--linea-forte); border-radius: var(--r); }
+.ac-str button { height: 40px; border: 0; border-left: 1px solid var(--linea); background: none; font: 500 14px var(--ui); color: var(--inchiostro-2); cursor: pointer; }
+.ac-str button:first-child { border-left: 0; }
+.ac-str button.on { background: var(--inchiostro); color: var(--carta); }
+@media (max-height: 640px) { .ac-nota { font-size: 84px; } .ac-corpo { gap: 16px; } .ac-scala { height: 56px; margin-top: 16px; } }

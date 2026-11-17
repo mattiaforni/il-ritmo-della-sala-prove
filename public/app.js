@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "71";
+const APP_VERSION = "72";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -154,6 +154,7 @@ const MIGRAZIONI = {
 
 const state = {
   account: null,
+  accorda: null,               // accordatore aperto (v72): strumento, accordatura, La, corda scelta
   fan: false,                 // entrato con la password dei fan: sola lettura, niente cassa e pagine personali
   fanNome: store.get("prove_fan_nome"),   // il nome del fan resta sul telefono, come quello della band
   fanMenu: false,             // pannello del fan (tocco sul nome in alto)
@@ -1444,6 +1445,7 @@ function testata() {
   t.textContent = state.account ? (TITOLI[state.tab] || "") : "Il ritmo della sala prove";
   s.textContent = contesto(state.tab);
   rigaProssimaProva();
+  $("#tb-accorda")?.classList.toggle("hidden", !state.account || !!state.fan);
 }
 
 // ---------- tab ----------
@@ -1645,6 +1647,7 @@ window.addEventListener("popstate", () => {
     return;
   }
   if (state.lettore) { chiudiLettore(true); return; }
+  if (state.accorda) { chiudiAccordatore(true); return; }
   if (state.accFoglio) { chiudiAccordiFoglio(true); return; }
   if (state.accordi) { chiudiAccordi(true); return; }
   if (state.cerca) { chiudiCerca(true); return; }
@@ -2025,6 +2028,260 @@ if (accOv) accOv.addEventListener("click", e => {
   const btn = e.target.closest("[data-action]");
   if (btn && !btn.disabled) act(btn);
 });
+// ---------- Accordatore (v72): microfono del telefono, a schermo intero (#accorda-ov) ----------
+// Si apre dal diapason nella testata (solo band). Chitarra, basso (4 e 5 corde) o cromatico; accordature comuni;
+// La di riferimento regolabile. Riconosce la corda più vicina; toccando una corda si resta su quella.
+// Niente dati nel database: strumento, accordatura e La restano sul telefono (prove_accorda).
+const NOTE_IT = ["Do", "Do♯", "Re", "Re♯", "Mi", "Fa", "Fa♯", "Sol", "Sol♯", "La", "La♯", "Si"];
+const NOTE_IT_B = ["Do", "Re♭", "Re", "Mi♭", "Mi", "Fa", "Sol♭", "Sol", "La♭", "La", "Si♭", "Si"];
+const NOTE_EN = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const NOTE_EN_B = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+// corde dalla più grave (MIDI); `b` = nomi con i bemolle (accordature abbassate)
+const ACCORDATURE = {
+  chitarra: [
+    { k: "std", nome: "Standard", corde: [40, 45, 50, 55, 59, 64] },
+    { k: "dropd", nome: "Drop D", corde: [38, 45, 50, 55, 59, 64] },
+    { k: "mezzo", nome: "½ tono sotto", corde: [39, 44, 49, 54, 58, 63], b: true },
+    { k: "tono", nome: "1 tono sotto", corde: [38, 43, 48, 53, 57, 62] },
+    { k: "dropc", nome: "Drop C", corde: [36, 43, 48, 53, 57, 62] },
+  ],
+  basso: [
+    { k: "std", nome: "Standard", corde: [28, 33, 38, 43] },
+    { k: "dropd", nome: "Drop D", corde: [26, 33, 38, 43] },
+    { k: "mezzo", nome: "½ tono sotto", corde: [27, 32, 37, 42], b: true },
+    { k: "cinque", nome: "5 corde", corde: [23, 28, 33, 38, 43] },
+  ],
+  cromatico: [],
+};
+const STRUMENTI_ACC = [["chitarra", "Chitarra"], ["basso", "Basso"], ["cromatico", "Cromatico"]];
+const ACC_IN = 5;          // entro ±5 cent è accordata
+const accordaOv = document.getElementById("accorda-ov");
+const accorda = { mic: null, raf: 0, t: 0, storia: [], ultimo: null, visto: 0, fermaDa: 0, ago: 0, giusta: {} };
+function prefAccorda() {
+  let p = {}; try { p = JSON.parse(store.get("prove_accorda") || "{}") || {}; } catch { p = {}; }
+  if (!ACCORDATURE[p.str]) p.str = "chitarra";
+  if (p.str !== "cromatico" && !ACCORDATURE[p.str].some(a => a.k === p.acc)) p.acc = "std";
+  if (!(p.la >= 430 && p.la <= 450)) p.la = 440;
+  return p;
+}
+const salvaPrefAccorda = (p) => store.set("prove_accorda", JSON.stringify({ str: p.str, acc: p.acc, la: p.la }));
+const accordaturaOra = () => { const a = state.accorda; return a.str === "cromatico" ? null : ACCORDATURE[a.str].find(x => x.k === a.acc); };
+const nomeNota = (m, bem) => (bem ? NOTE_IT_B : NOTE_IT)[((m % 12) + 12) % 12];
+const nomeNotaEn = (m, bem) => (bem ? NOTE_EN_B : NOTE_EN)[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+
+function apriAccordatore() {
+  if (!accordaOv || state.fan) return;
+  state.accorda = { ...prefAccorda(), corda: null, stato: "avvio", errore: "" };
+  Object.assign(accorda, { storia: [], ultimo: null, visto: 0, fermaDa: 0, giusta: {} });
+  accordaOv.classList.remove("hidden", "via");
+  accordaOv.classList.add("entra");
+  document.documentElement.classList.add("con-lettore");
+  history.pushState({ accorda: true }, "");
+  accordaOv.dataset.chiave = "";
+  renderAccordatore();
+  avviaMicAccorda();   // dentro il tocco: su iPhone l'audio parte solo così
+}
+function chiudiAccordatore(daStoria = false) {
+  if (!state.accorda) return;
+  if (!daStoria && history.state && history.state.accorda) { history.back(); return; }
+  fermaMicAccorda();
+  state.accorda = null;
+  accordaOv.classList.remove("entra"); accordaOv.classList.add("via");
+  if (!state.lettore && !state.spartito && !state.accordi) document.documentElement.classList.remove("con-lettore");
+  setTimeout(() => { if (!state.accorda) { accordaOv.classList.add("hidden"); accordaOv.classList.remove("via"); } }, 280);
+}
+async function avviaMicAccorda() {
+  const a = state.accorda; if (!a) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { a.stato = "errore"; a.errore = "Questo browser non dà il microfono all'app."; accordaOv.dataset.chiave = ""; renderAccordatore(); return; }
+  const m = accorda.mic || (accorda.mic = { ctx: null, stream: null, src: null, an: null, buf: null });
+  try {
+    m.ctx = m.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (m.ctx.state !== "running") m.ctx.resume().catch(() => {});
+    m.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+  } catch (e) {
+    if (!state.accorda) return;
+    a.stato = "errore";
+    a.errore = e && e.name === "NotAllowedError" ? "Il permesso del microfono è negato. Si riattiva dalle impostazioni del sito (il lucchetto accanto all'indirizzo)." : "Microfono non disponibile: " + (e && (e.message || e.name) || e);
+    accordaOv.dataset.chiave = ""; renderAccordatore(); return;
+  }
+  if (!state.accorda) { fermaMicAccorda(); return; }   // chiuso mentre chiedeva il permesso
+  if (m.ctx.state !== "running") await m.ctx.resume().catch(() => {});
+  m.src = m.ctx.createMediaStreamSource(m.stream);
+  m.an = m.ctx.createAnalyser(); m.an.fftSize = 4096; m.an.smoothingTimeConstant = 0;
+  m.src.connect(m.an);
+  m.buf = new Float32Array(m.an.fftSize);
+  a.stato = "ascolto"; accordaOv.dataset.chiave = ""; renderAccordatore();
+  cancelAnimationFrame(accorda.raf); accorda.t = 0;
+  accorda.raf = requestAnimationFrame(cicloAccorda);
+}
+function fermaMicAccorda() {
+  cancelAnimationFrame(accorda.raf); accorda.raf = 0;
+  const m = accorda.mic; if (!m) return;
+  try { if (m.stream) m.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { if (m.src) m.src.disconnect(); } catch (e) {}
+  m.stream = null; m.src = null; m.an = null;
+}
+// telefono spento o altra app: il microfono si chiude (altrimenti resta segnato come in uso) e si riapre al ritorno
+document.addEventListener("visibilitychange", () => {
+  if (!state.accorda || state.accorda.stato === "errore") return;
+  if (document.hidden) { fermaMicAccorda(); state.accorda.stato = "pausa"; }
+  else if (state.accorda.stato === "pausa") avviaMicAccorda();
+});
+
+// McLeod Pitch Method (come in Canta), su un segnale dimezzato (24 kHz basta fino a 1000 Hz e costa un quarto).
+// Restituisce [hz, chiarezza].
+function altezzaAccorda(buf, sr) {
+  const n = buf.length >> 1, x = new Float32Array(n);
+  let rms = 0;
+  for (let i = 0; i < n; i++) { const v = (buf[2 * i] + buf[2 * i + 1]) * 0.5; x[i] = v; rms += v * v; }
+  rms = Math.sqrt(rms / n); sr /= 2;
+  if (rms < 0.006) return [0, 0];
+  const minLag = Math.floor(sr / 1100), maxLag = Math.min(Math.floor(sr / 27), n - 2);
+  const nsdf = new Float32Array(maxLag + 2);
+  for (let lag = minLag; lag <= maxLag + 1; lag++) {
+    let acf = 0, e = 0; const len = n - lag;
+    for (let i = 0; i < len; i++) { const a = x[i], b = x[i + lag]; acf += a * b; e += a * a + b * b; }
+    nsdf[lag] = e > 0 ? 2 * acf / e : 0;
+  }
+  const picchi = []; let i = minLag;
+  while (i < maxLag && nsdf[i] > 0) i++;
+  while (i < maxLag) {
+    while (i < maxLag && nsdf[i] <= 0) i++;
+    let best = -1, bv = 0;
+    while (i < maxLag && nsdf[i] > 0) { if (nsdf[i] > bv) { bv = nsdf[i]; best = i; } i++; }
+    if (best > 0) picchi.push(best);
+  }
+  if (!picchi.length) return [0, 0];
+  let max = 0; for (const p of picchi) if (nsdf[p] > max) max = nsdf[p];
+  const p = picchi.find(q => nsdf[q] >= 0.88 * max);
+  const a = nsdf[p - 1], b = nsdf[p], c = nsdf[p + 1], d = a - 2 * b + c;
+  const lag = p + (d !== 0 ? 0.5 * (a - c) / d : 0);
+  return [sr / lag, b];
+}
+function cicloAccorda(ts) {
+  const a = state.accorda, m = accorda.mic;
+  if (!a || !m || !m.an) return;
+  accorda.raf = requestAnimationFrame(cicloAccorda);
+  if (ts - accorda.t < 45) { muoviAgo(ts); return; }   // circa 20 misure al secondo
+  accorda.t = ts;
+  m.an.getFloatTimeDomainData(m.buf);
+  const [hz, chiaro] = altezzaAccorda(m.buf, m.ctx.sampleRate);
+  if (hz > 0 && chiaro > 0.8) {
+    const midi = 69 + 12 * Math.log2(hz / a.la);
+    accorda.storia.push(midi); if (accorda.storia.length > 5) accorda.storia.shift();
+    const s = [...accorda.storia].sort((p, q) => p - q), med = s[s.length >> 1];
+    // salti d'ottava o di nota: si riparte da capo, per non mescolare due note nella mediana
+    if (accorda.ultimo && Math.abs(midi - med) > 0.7) accorda.storia = [midi];
+    leggiNota(accorda.storia.length >= 3 ? med : midi, hz, ts);
+  } else if (accorda.ultimo && ts - accorda.visto > 1400) {
+    accorda.ultimo.spento = true; accorda.storia = [];
+    disegnaLettura();
+  }
+  muoviAgo(ts);
+}
+function leggiNota(midi, hz, ts) {
+  const a = state.accorda, acc = accordaturaOra();
+  let target, corda = null;
+  if (!acc) target = Math.round(midi);
+  else if (a.corda != null && acc.corde[a.corda] != null) { corda = a.corda; target = acc.corde[corda]; }
+  else {
+    // la corda più vicina; più di 4 semitoni lontano da tutte: si mostra la nota com'è
+    let best = 0; acc.corde.forEach((c, i) => { if (Math.abs(midi - c) < Math.abs(midi - acc.corde[best])) best = i; });
+    if (Math.abs(midi - acc.corde[best]) <= 4) { corda = best; target = acc.corde[best]; } else target = Math.round(midi);
+  }
+  const cent = (midi - target) * 100;
+  const prima = accorda.ultimo;
+  const giusta = Math.abs(cent) <= ACC_IN;
+  // accordata se resta dentro per più di mezzo secondo
+  let da = prima && !prima.spento && prima.target === target && prima.giusta && giusta ? prima.da : (giusta ? ts : 0);
+  accorda.ultimo = { midi, hz, target, corda, cent, giusta, da, spento: false, bem: !!(acc && acc.b) };
+  accorda.visto = ts;
+  if (giusta && corda != null && ts - da > 500 && !accorda.giusta[corda]) { accorda.giusta[corda] = true; accordaOv.dataset.chiave = ""; renderAccordatore(); return; }
+  disegnaLettura();
+}
+// la lancetta va verso il valore con un po' di inerzia (le misure arrivano a scatti)
+function muoviAgo(ts) {
+  const u = accorda.ultimo, ago = accordaOv.querySelector(".ac-ago"); if (!ago) return;
+  const meta = u && !u.spento ? Math.max(-50, Math.min(50, u.cent)) : (u ? accorda.ago : 0);
+  accorda.ago += (meta - accorda.ago) * 0.35;
+  if (Math.abs(meta - accorda.ago) < 0.05) accorda.ago = meta;
+  ago.style.left = (50 + accorda.ago) + "%";
+}
+function disegnaLettura() {
+  const u = accorda.ultimo, box = accordaOv.querySelector(".ac-lettura"); if (!box) return;
+  const nota = box.querySelector(".ac-nota"), sotto = box.querySelector(".ac-sotto"), cent = box.querySelector(".ac-cent");
+  const giusta = !!(u && !u.spento && u.giusta);
+  box.classList.toggle("vuota", !u); box.classList.toggle("spenta", !!(u && u.spento)); box.classList.toggle("giusta", giusta);
+  box.classList.toggle("basso", !!(u && !u.spento && !giusta && u.cent < 0)); box.classList.toggle("alto", !!(u && !u.spento && !giusta && u.cent > 0));
+  if (!u) { nota.textContent = "—"; sotto.textContent = "Suona una corda"; cent.textContent = ""; return; }
+  nota.textContent = nomeNota(u.target, u.bem);
+  const acc = accordaturaOra();
+  sotto.textContent = [u.corda != null && acc ? `${acc.corde.length - u.corda}ª corda` : "", nomeNotaEn(u.target, u.bem), `${u.hz.toFixed(1).replace(".", ",")} Hz`].filter(Boolean).join(" · ");
+  const c = Math.round(u.cent);
+  cent.textContent = u.spento ? "" : giusta ? "Accordata" : `${c > 0 ? "+" : "−"}${Math.abs(c)} cent · ${c < 0 ? "tira su" : "allenta"}`;
+  accordaOv.querySelectorAll(".ac-corda").forEach(b => b.classList.toggle("ora", u.corda != null && !u.spento && +b.dataset.i === u.corda));
+}
+function renderAccordatore() {
+  const a = state.accorda; if (!a || !accordaOv) return;
+  const acc = accordaturaOra();
+  const chiave = [a.str, a.acc, a.la, a.corda, a.stato, a.errore, Object.keys(accorda.giusta).join(",")].join("|");
+  if (accordaOv.dataset.chiave === chiave) return;
+  accordaOv.dataset.chiave = chiave;
+  const nomeStr = STRUMENTI_ACC.find(s => s[0] === a.str)[1];
+  const sub = acc ? `${nomeStr} · ${acc.nome}` : "Cromatico · qualsiasi nota";
+  const corde = acc ? acc.corde.map((m, i) => {
+    const ok = accorda.giusta[i], scelta = a.corda === i;
+    return `<button type="button" class="ac-corda${ok ? " ok" : ""}${scelta ? " scelta" : ""}" data-action="ac-corda" data-i="${i}" aria-pressed="${scelta}" aria-label="${acc.corde.length - i}ª corda, ${nomeNota(m, acc.b)}${ok ? ", accordata" : ""}">
+      <b>${nomeNota(m, acc.b)}</b><small>${ok ? IC("check") : nomeNotaEn(m, acc.b)}</small></button>`;
+  }).join("") : "";
+  const scale = [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50].map(v => `<i style="left:${50 + v}%" class="${v === 0 ? "zero" : v % 50 === 0 ? "fine" : ""}"></i>`).join("");
+  const corpo = a.stato === "errore"
+    ? `<div class="ac-errore"><p>${esc(a.errore)}</p><button type="button" class="btn quiet" data-action="ac-riprova">Riprova</button></div>`
+    : `<div class="ac-lettura vuota">
+        <div class="ac-nota">—</div>
+        <div class="ac-sotto">${a.stato === "avvio" ? "Accendo il microfono…" : "Suona una corda"}</div>
+        <div class="ac-scala" aria-hidden="true">
+          <div class="ac-zona" style="left:${50 - ACC_IN}%;width:${2 * ACC_IN}%"></div>${scale}
+          <div class="ac-ago" style="left:${50 + accorda.ago}%"></div>
+        </div>
+        <div class="ac-scala-num" aria-hidden="true"><span>−50</span><span>0</span><span>+50</span></div>
+        <div class="ac-cent" aria-live="polite"></div>
+      </div>`;
+  accordaOv.innerHTML = `
+    <div class="acc-top">
+      <button class="x" data-action="ac-chiudi" aria-label="Chiudi">${IC("chiudi-giu")}</button>
+      <div class="acc-tit"><h2>Accordatore</h2><p>${esc(sub)}</p></div>
+      <div class="acc-ton ac-la" role="group" aria-label="La di riferimento">
+        <button type="button" data-action="ac-la" data-d="-1" aria-label="La più basso" ${a.la <= 430 ? "disabled" : ""}>−</button>
+        <span class="ton${a.la === 440 ? " zero" : ""}">La ${a.la}</span>
+        <button type="button" data-action="ac-la" data-d="1" aria-label="La più alto" ${a.la >= 450 ? "disabled" : ""}>+</button>
+      </div>
+    </div>
+    <div class="ac-corpo">${corpo}
+      ${acc ? `<div class="ac-corde-wrap"><div class="ac-corde" style="--n:${acc.corde.length}">${corde}</div>
+        <p class="ac-aiuto">${a.corda != null ? "Resta sulla corda scelta: toccala di nuovo per tornare al riconoscimento automatico." : "Riconosce da sé la corda. Toccane una per restare su quella."}</p></div>` : ""}
+    </div>
+    <div class="ac-piede">
+      ${acc ? `<div class="ac-acc" role="group" aria-label="Accordatura">${ACCORDATURE[a.str].map(x => `<button type="button" class="${x.k === a.acc ? "on" : ""}" data-action="ac-acc" data-v="${x.k}" aria-pressed="${x.k === a.acc}">${esc(x.nome)}</button>`).join("")}</div>` : ""}
+      <div class="ac-str" role="group" aria-label="Strumento">${STRUMENTI_ACC.map(([k, n]) => `<button type="button" class="${k === a.str ? "on" : ""}" data-action="ac-str" data-v="${k}" aria-pressed="${k === a.str}">${n}</button>`).join("")}</div>
+    </div>`;
+  if (accorda.ultimo) disegnaLettura();
+}
+function cambiaAccorda(cosa, v) {
+  const a = state.accorda; if (!a) return;
+  if (cosa === "str") { if (a.str === v) return; a.str = v; a.acc = "std"; }
+  else if (cosa === "acc") { if (a.acc === v) return; a.acc = v; }
+  else if (cosa === "la") a.la = Math.max(430, Math.min(450, a.la + v));
+  if (cosa !== "la") { a.corda = null; accorda.giusta = {}; }
+  accorda.ultimo = null; accorda.storia = []; accorda.ago = 0;
+  salvaPrefAccorda(a);
+  renderAccordatore();
+}
+if (accordaOv) accordaOv.addEventListener("click", e => {
+  const btn = e.target.closest("[data-action]");
+  if (btn && !btn.disabled) act(btn);
+});
+$("#tb-accorda")?.addEventListener("click", () => apriAccordatore());
 // foglio «Accordi» (band): il testo si incolla com'è; Salva in basso a destra, Elimina a sinistra se c'è già
 function accordiBox() {
   let b = document.getElementById("accordi-box");
@@ -4309,6 +4566,20 @@ async function act(btn) {
       apriAccordi(id); break;
     case "acc-chiudi":
       chiudiAccordi(); break;
+    case "ac-chiudi":
+      chiudiAccordatore(); break;
+    case "ac-riprova":
+      if (state.accorda) { state.accorda.stato = "avvio"; accordaOv.dataset.chiave = ""; renderAccordatore(); avviaMicAccorda(); }
+      break;
+    case "ac-corda": {
+      const a = state.accorda; if (!a) break;
+      const i = Number(btn.dataset.i);
+      a.corda = a.corda === i ? null : i;
+      accorda.storia = []; renderAccordatore(); break;
+    }
+    case "ac-la": cambiaAccorda("la", Number(btn.dataset.d)); break;
+    case "ac-acc": cambiaAccorda("acc", btn.dataset.v); break;
+    case "ac-str": cambiaAccorda("str", btn.dataset.v); break;
     case "acc-trasp": {
       const a = state.accordi; if (!a) break;
       const d = Number(btn.dataset.d);
