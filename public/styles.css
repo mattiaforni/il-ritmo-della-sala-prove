@@ -206,6 +206,15 @@ main { padding: 0 16px; max-width: 680px; margin: 0 auto; }
   box-shadow: 0 8px 22px -8px rgba(35, 27, 21, .55);
   cursor: pointer;
 }
+/* bottoncino sopra il + (accordatore nella Scaletta) */
+.fab-mini {
+  width: 42px; height: 42px; right: max(22px, calc(50vw - 318px));
+  bottom: calc(var(--barra) + var(--mini) + 14px + 54px + 12px);
+  background: var(--foglio); color: var(--inchiostro);
+  border: 1px solid var(--linea-forte); border-radius: 50%;
+  box-shadow: 0 6px 16px -8px rgba(35, 27, 21, .45);
+}
+.fab.fab-mini svg { width: 21px; height: 21px; }
 .fab svg { width: 24px; height: 24px; }
 .fab:active { transform: scale(.96); }
 .fab input { display: none; }
@@ -294,37 +303,36 @@ button.ini.on { border-color: transparent; color: #fff; }
 .links a:active, .links button:active { background: var(--linea); }
 .links .ico { width: 22px; height: 22px; }
 
+/* v73: la riga è un tasto «ascolta»; a destra i tre puntini aprono la pagina del pezzo */
 .brano {
   position: relative;
-  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0 12px; align-items: center;
-  padding: 16px 0 17px;
-  cursor: pointer;
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) 44px; gap: 0 12px; align-items: center;
+  padding: 13px 0; min-height: 64px;
+  border-bottom: 1px solid var(--linea);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.brano + .brano, .brano:first-child { border-top: none; }
 .num { font: 400 22px/1 var(--display); color: var(--inchiostro-3); text-align: left; font-variant-numeric: tabular-nums; }
 .num svg { width: 18px; height: 18px; color: var(--ambra); }
+.num .num-onda { display: none; width: 22px; height: 22px; color: var(--accento); }
 .song-title { font: 500 16.5px/1.25 var(--ui); margin: 0; overflow-wrap: anywhere; }
 .song-artist { font-size: 13px; color: var(--inchiostro-2); margin-top: 1px; }
-.brano-lato { display: flex; align-items: center; gap: 6px; }
+.senza-reg { color: var(--inchiostro-3); }
+.brano.in-ascolto .song-title { color: var(--accento); }
+.brano.in-ascolto .num-n { display: none; }
+.brano.in-ascolto .num-onda { display: block; }
+.brano-altro {
+  display: grid; place-items: center; width: 44px; height: 44px; margin-right: -10px;
+  background: none; border: 0; padding: 0; border-radius: 50%;
+  color: var(--inchiostro-2); cursor: pointer;
+}
+.brano-altro svg { width: 22px; height: 22px; }
+.brano-altro:active { background: var(--linea); }
+.brano:active:not(:has(.brano-altro:active)) { background: var(--foglio-2); }
+.brano:focus-visible, .brano-altro:focus-visible { outline: 2px solid var(--accento); outline-offset: 2px; }
 .cnt { font-size: 12.5px; color: var(--inchiostro-3); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 30px; text-align: right; }
 .cnt.ok { color: var(--verde); font-weight: 500; }
-/* nella scaletta i task fatti stanno sotto le icone, appena sopra il filetto dell'avanzamento */
-.brano > .cnt { position: absolute; right: 0; bottom: 6px; font-size: 11.5px; line-height: 1; min-width: 0; }
-.brano-lato { margin-bottom: 8px; }
-.brano-lato .reg-btn {
-  display: grid; place-items: center; width: 32px; height: 32px; flex: none;
-  color: var(--inchiostro-3); border-radius: var(--r); background: none; border: 0; padding: 0; cursor: pointer;
-}
-.brano-lato .reg-btn:active { background: var(--linea); }
-.brano-lato .reg-btn.on { color: var(--accento); }
-.brano-lato .reg-btn .ico { width: 22px; height: 22px; }
-.reg-vuota { width: 32px; height: 32px; flex: none; }
-/* il filetto sotto ogni pezzo è anche il suo avanzamento */
-.brano-linea { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--linea); }
-.brano-linea i { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accento); transition: width .4s ease; }
-.brano.pronta .brano-linea i { background: var(--verde); }
-.brano.generale .brano-linea i { background: var(--ambra-pieno); }
-.brano:active { background: linear-gradient(var(--linea), var(--linea)) 0 0 / 100% 100% no-repeat; }
+/* la playlist di Spotify chiude la scaletta */
+#view-scaletta > .pl-strip { margin-top: 18px; border-bottom: none; }
 .nostro-tag { font: 600 10px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ambra); white-space: nowrap; padding: 0 2px; }
 .empty { color: var(--inchiostro-2); font-size: 14px; padding: 12px 0 4px; margin: 0; }
 .empty.big { text-align: center; padding: 48px 16px; font-size: 14px; }
@@ -471,6 +479,11 @@ button.ini.parte.on { background: transparent; color: var(--inchiostro-3); borde
 @media (min-width: 760px) {
   .foglio { inset: auto; left: 50%; top: 7vh; transform: translateX(-50%); width: 620px; max-height: 86vh; border: 1px solid var(--linea); border-radius: var(--r-g); box-shadow: var(--ombra); }
   .foglio::before { content: ""; position: fixed; inset: -100vh -100vw; background: var(--velo); z-index: -1; }
+}
+/* con la tastiera aperta il foglio occupa solo la parte visibile: la conferma resta sopra la tastiera */
+@media (max-width: 759px) {
+  .con-tastiera .foglio { inset: auto 0 auto 0; top: var(--vv-su, 0px); height: var(--vv-alto, 100%); }
+  .con-tastiera .foglio-barra { padding-bottom: 10px; }
 }
 .addform .chk-row { margin-top: 4px; }
 
@@ -1151,8 +1164,6 @@ body.cal-aperto .cal-view { display: block; }
 .topbar-row:has(.tb-prova:not(.hidden)) .logo { font-size: 26px; }
 
 /* ---------- Accordatore (v72): microfono, a schermo intero; usa la testata e il piede degli Accordi ---------- */
-.ac-strip { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--linea); font: inherit; text-align: left; cursor: pointer; }
-.ac-strip > .ico { width: 22px; height: 22px; flex: none; color: var(--inchiostro-2); }
 .accordatore .ac-la .ton { min-width: 58px; }
 .accordatore .ac-la button:disabled { opacity: .35; }
 .ac-corpo { flex: 1; overflow: auto; display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 18px 20px; }

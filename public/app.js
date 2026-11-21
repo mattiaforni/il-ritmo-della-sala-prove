@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "72";
+const APP_VERSION = "73";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -338,7 +338,7 @@ const msDi = (t) => (t && t.toMillis ? t.toMillis() : t && t.seconds ? t.seconds
 const perOrdineDiProva = (a, b) => msDi(a.creato) - msDi(b.creato) || String(a.nomeFile || "").localeCompare(String(b.nomeFile || ""), "it", { numeric: true });
 // riproduzione di fila: le registrazioni dello stesso giorno (da Audio) o della stessa canzone (dalla sua pagina)
 const codaGiorno = (data) => state.registrazioni.filter(r => (r.data || "") === (data || "")).sort(perOrdineDiProva).map(r => r.id);
-const codaCanzone = (canzoneId) => recsOf(canzoneId).map(r => r.id);
+const codaCanzone = (canzoneId) => recsOf(canzoneId).slice().sort(perData).map(r => r.id);
 // preferite: le registrazioni venute meglio (campo preferita), nell'ordine della scaletta, poi proposte,
 // poi quelle senza canzone; a parità di canzone dalla più recente
 const perData = (a, b) => String(b.data || "").localeCompare(String(a.data || "")) || perOrdineDiProva(b, a);
@@ -388,23 +388,6 @@ function linkSpotify(c) {
 const IC = (nome, cls = "i") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${nome}"/></svg>`;
 // logo di Spotify a tinta unica (maschera sull'icona ufficiale, colore del testo)
 const SP_ICO = `<span class="ico-sp" aria-hidden="true"></span>`;
-function linksHtml(c, conTesto) {
-  if (isNostro(c)) return `<span class="nostro-tag">pezzo nostro</span>`;
-  const q = encodeURIComponent(songQuery(c));
-  const ls = linkSpotify(c);
-  const sp = ls ? ls.url : `https://open.spotify.com/search/${q}`;
-  const spTitolo = ls && ls.kind ? `Ascolta nella playlist ${ls.kind === "scaletta" ? "della scaletta" : "delle proposte"}` : "Ascolta su Spotify";
-  // la chiave apre lo Spartito dell'app se la tab c'è (o, per la band, si può scaricare da Songsterr);
-  // altrimenti, come prima, la pagina o la ricerca su Songsterr
-  const inApp = !state.tabInCorso.has(c.id) && (tabPronta(c) || (!state.fan && scaricabile(c)));
-  const tab = inApp
-    ? `<button type="button" data-action="apri-spartito" data-id="${c.id}" data-modo="spartito" title="Spartito" aria-label="Spartito"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Spartito</span>" : ""}</button>`
-    : `<a ${appLink(c.songsterrUrl ? normalizzaSongsterr(c.songsterrUrl) : `https://www.songsterr.com/?pattern=${q}`, "com.songsterr")} data-link title="${c.songsterrUrl ? "Apri la tablatura su Songsterr" : "Cerca la tablatura su Songsterr"}" aria-label="Tablatura su Songsterr"><svg class="ico" aria-hidden="true"><use href="#ico-clef"/></svg>${conTesto ? "<span>Tablatura</span>" : ""}</a>`;
-  return `<div class="links">
-    <a ${appLink(sp, "com.spotify.music")} data-link title="${spTitolo}" aria-label="${spTitolo}">${SP_ICO}${conTesto ? "<span>Spotify</span>" : ""}</a>
-    ${tab}
-  </div>`;
-}
 // icona Spotify: icons/spotify.png; se non si carica, un'icona di ripiego
 document.addEventListener("error", e => {
   const img = e.target;
@@ -429,16 +412,9 @@ function descriviBrani(lista) {
   const { con, nostri, senza } = contaBrani(lista);
   return `${con} ${con === 1 ? "brano" : "brani"}${senza ? ` · ${senza} senza link` : ""}${nostri ? ` · ${nostri} ${nostri === 1 ? "nostro" : "nostri"}` : ""}`;
 }
-// riga dell'accordatore in cima alla Scaletta (v72, solo band), con la stessa grammatica della playlist
-function acStrip() {
-  const p = prefAccorda(), acc = p.str === "cromatico" ? null : ACCORDATURE[p.str].find(x => x.k === p.acc);
-  const sotto = acc ? `${STRUMENTI_ACC.find(s => s[0] === p.str)[1]} · ${acc.nome}` : "Cromatico";
-  return `
-    <button type="button" class="pl-strip ac-strip" data-action="ac-apri">
-      ${IC("diapason", "ico")}
-      <span class="pl-txt"><b>Accordatore</b><small>${esc(sotto)}${p.la !== 440 ? ` · La ${p.la}` : ""}</small></span>
-      <span class="pl-go" aria-hidden="true">${IC("freccia")}</span>
-    </button>`;
+// accordatore (v73, solo band): bottoncino sopra il «+» della Scaletta, sempre a portata di pollice
+function acFab() {
+  return `<button type="button" class="fab fab-mini" data-action="ac-apri" aria-label="Accordatore" title="Accordatore">${IC("diapason")}</button>`;
 }
 function plStrip(kind) {
   const info = playlistInfo();
@@ -1426,8 +1402,8 @@ const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
 function contesto(tab) {
   if (!state.account || !state.ready.canzoni) return "";
   if (tab === "scaletta") {
-    const l = scaletta(), pronte = l.filter(c => statoTask(c).pronta).length;
-    return plurale(l.length, "pezzo", "pezzi") + (pronte ? ` · ${plurale(pronte, "pronto", "pronti")}` : "");
+    const l = scaletta(), reg = state.ready.registrazioni ? l.filter(regDelPezzo).length : 0;
+    return plurale(l.length, "pezzo", "pezzi") + (reg ? ` · ${plurale(reg, "registrato", "registrati")}` : "");
   }
   if (tab === "proposte") {
     const l = proposte(), dv = state.user || state.fan ? l.filter(c => !mioVoto(c)).length : 0;
@@ -1586,12 +1562,13 @@ function renderScaletta() {
   const aperta = state.songPage && state.canzoni.find(c => c.id === state.songPage);
   if (state.songPage && !aperta) lasciaCanzone();   // eliminata da qualcun altro
   if (aperta) { $("#view-scaletta").innerHTML = songPage(aperta); return; }
-  const gen = state.canzoni.find(c => c.id === GENERALE_ID);
+  // v73: la Scaletta è il lettore delle nostre registrazioni. Solo i pezzi, in ordine; la playlist
+  // di Spotify in fondo, l'accordatore sopra il «+». La scheda Generale non c'è più.
   const lista = scaletta();
-  let html = plStrip("scaletta") + (state.fan ? "" : acStrip()) + (gen ? songCard(gen) : "");
-  html += lista.map((c, i) => songCard(c, i + 1)).join("");
+  let html = lista.map((c, i) => songCard(c, i + 1)).join("");
   if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una con il +."}</p>`;
-  if (!state.fan) html += addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
+  html += plStrip("scaletta");
+  if (!state.fan) html += (state.addOpen.scaletta ? "" : acFab()) + addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
   $("#view-scaletta").innerHTML = html;
 }
 function statoTask(c) {
@@ -1600,28 +1577,21 @@ function statoTask(c) {
   const pronta = !isGenerale(c) && ts.length > 0 && done === ts.length;
   return { ts, done, pronta, p: pct(done, ts.length) };
 }
-// nella lista solo l'essenziale: numero in scaletta, titolo, link e task fatti;
-// il filetto sotto la riga si riempie con i task fatti. Toccando la canzone si apre la sua pagina.
+// Riga della scaletta (v73): numero, titolo, artista e i tre puntini. Toccando la riga parte la nostra
+// registrazione del pezzo e poi quelle dei pezzi che seguono; i tre puntini aprono la pagina del pezzo
+// (registrazioni, task, tablatura, accordi, setup). Un pezzo senza registrazioni apre la sua pagina.
 function songCard(c, n) {
-  const gen = isGenerale(c);
-  const { ts, done, pronta, p } = statoTask(c);
-  const count = pronta ? `<span class="cnt ok">pronta</span>` : `<span class="cnt" aria-label="${done} task fatti su ${ts.length}">${done}/${ts.length}</span>`;
-  // prima di Spotify: la nostra registrazione del pezzo (preferita o ultima); il tocco fa partire la scaletta da qui
-  const reg = gen ? null : regDelPezzo(c);
-  const inAscolto = reg && state.playId === reg.id;
-  const regBtn = gen ? "" : reg
-    ? `<button type="button" class="reg-btn${inAscolto ? " on" : ""}" data-action="play-pezzo" data-id="${c.id}" data-reg="${reg.id}" title="Ascolta la nostra registrazione${reg.preferita ? " preferita" : ""}" aria-label="Ascolta la nostra registrazione">${IC("audio", "ico")}</button>`
-    : `<span class="reg-vuota" aria-hidden="true"></span>`;
+  const reg = regDelPezzo(c);
+  const inAscolto = !!reg && state.playId === reg.id;
+  const sotto = [esc(c.artista || ""), reg ? "" : `<span class="senza-reg">senza registrazione</span>`].filter(Boolean).join(" · ");
   return `
-  <article class="brano${gen ? " generale" : ""}${pronta ? " pronta" : ""}" data-action="open-song" data-id="${c.id}" role="button" tabindex="0">
-    <span class="num" aria-hidden="true">${gen ? IC("pin") : n}</span>
+  <article class="brano${inAscolto ? " in-ascolto" : ""}${reg ? "" : " muto"}" data-action="${reg ? "play-pezzo" : "open-song"}" data-id="${c.id}"${reg ? ` data-reg="${reg.id}"` : ""} role="button" tabindex="0" aria-label="${reg ? "Ascolta" : "Apri"} ${esc(c.titolo)}">
+    <span class="num" aria-hidden="true"><span class="num-n">${n}</span>${IC("audio", "num-onda")}</span>
     <div class="brano-testo">
-      <h2 class="song-title">${gen ? "Generale" : esc(c.titolo)}</h2>
-      <div class="song-artist">${gen ? "Cose da fare non legate a un pezzo" : esc(c.artista || "")}</div>
+      <h2 class="song-title">${esc(c.titolo)}</h2>
+      <div class="song-artist">${sotto}</div>
     </div>
-    <div class="brano-lato">${regBtn}${gen ? "" : linksHtml(c)}</div>
-    ${count}
-    <span class="brano-linea" aria-hidden="true"><i style="width:${p}%"></i></span>
+    <button type="button" class="brano-altro" data-action="open-song" data-id="${c.id}" aria-label="Pagina di ${esc(c.titolo)}" title="Pagina del pezzo">${IC("altro")}</button>
   </article>`;
 }
 function apriCanzone(id) {
@@ -1704,13 +1674,14 @@ function songPage(c) {
       ${gen ? "" : rigaPezzo(c)}
       ${linkBlock(c)}
     </header>
+    ${gen ? "" : recsCard(c)}
     <section class="sez">
       <h3 class="fascia">Task <small${pronta ? ` class="ok"` : ""}>${pronta ? "pronta" : `${done} di ${ts.length}`}</small></h3>
       <div class="bar pg-bar"><i class="${pronta ? "ok" : ""}" style="width:${p}%"></i></div>
       ${ts.length ? ts.map(taskRow).join("") : `<p class="empty">Nessun task per ${gen ? "ora" : "questo pezzo"}.</p>`}
       ${nuovoTask}
     </section>
-    ${gen ? "" : appuntiCard(c) + setupCard(c) + recsCard(c) + (state.fan ? "" : `
+    ${gen ? "" : appuntiCard(c) + setupCard(c) + (state.fan ? "" : `
     <div class="pg-actions">
       <button class="btn quiet" data-action="up" data-id="${c.id}" ${idx <= 0 ? "disabled" : ""} aria-label="Sposta su nella scaletta" title="Sposta su">${IC("sopra")}</button>
       <button class="btn quiet" data-action="down" data-id="${c.id}" ${idx < 0 || idx === lista.length - 1 ? "disabled" : ""} aria-label="Sposta giù nella scaletta" title="Sposta giù">${IC("sotto")}</button>
@@ -1843,8 +1814,12 @@ function setupCard(c) {
     </section>`;
 }
 function recsCard(c) {
-  const recs = recsOf(c.id);
-  if (!recs.length) return "";
+  const recs = recsOf(c.id).slice().sort(perData);   // dalla più recente
+  if (!recs.length) return `
+    <section class="sez">
+      <h3 class="fascia">Registrazioni</h3>
+      <p class="empty">Nessuna registrazione di questo pezzo${state.fan ? "" : ": si caricano da Audio"}.</p>
+    </section>`;
   return `
     <section class="sez">
       <h3 class="fascia">Registrazioni <small>${recs.length}</small></h3>
@@ -2475,8 +2450,8 @@ function addSongBlock(where, label, cta) {
     <form class="foglio addform" data-form="add-song" data-stato="${where === "proposte" ? "proposta" : "scaletta"}">
       <div class="foglio-testa"><h2>${label}</h2><button type="button" class="x" data-action="add-chiudi" data-where="${where}" aria-label="Chiudi">${IC("x")}</button></div>
       <div class="foglio-corpo">
-        <label class="campo"><span>Titolo</span><input class="field" name="titolo" data-keep="add-${where}-titolo" maxlength="80" autocomplete="off" required></label>
-        <label class="campo"><span>Artista</span><input class="field" name="artista" data-keep="add-${where}-artista" maxlength="60" autocomplete="off"></label>
+        <label class="campo"><span>Titolo</span><input class="field" name="titolo" data-keep="add-${where}-titolo" maxlength="80" autocomplete="off" autocapitalize="sentences" enterkeyhint="next" required></label>
+        <label class="campo"><span>Artista</span><input class="field" name="artista" data-keep="add-${where}-artista" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="done"></label>
         ${state.fan ? "" : `<label class="chk-row"><input type="checkbox" name="nostro" data-keep="add-${where}-nostro"><span class="nt-box"></span>Pezzo nostro (non è su Spotify)</label>`}
       </div>
       <div class="foglio-barra"><span class="sp"></span><button class="btn fill" type="submit">${cta}</button></div>
@@ -3344,7 +3319,7 @@ function syncPlayer() {
     if (b.dataset.stato !== (p ? "pausa" : "play")) { b.dataset.stato = p ? "pausa" : "play"; b.innerHTML = IC(p ? "pausa" : "play"); }
     b.setAttribute("aria-label", p ? "Pausa" : "Riproduci");
   });
-  document.querySelectorAll(".reg-btn").forEach(b => b.classList.toggle("on", !!cur && b.dataset.reg === cur));
+  document.querySelectorAll(".brano[data-reg]").forEach(b => b.classList.toggle("in-ascolto", !!cur && b.dataset.reg === cur));
   document.querySelectorAll("[data-prog]").forEach(i => {
     if (state.ltTrascina && i.closest(".lt-barra")) return;
     i.style.width = (i.dataset.prog === cur && isFinite(dur) && dur > 0) ? `${player.currentTime / dur * 100}%` : "0%";
@@ -4311,11 +4286,11 @@ async function act(btn) {
       const c = state.canzoni.find(x => x.id === id);
       const r = c && regDelPezzo(c);
       if (!r) break;
+      // il pezzo già in ascolto apre il lettore a schermo intero; un altro parte e si resta nella lista
       if (state.playId === r.id) { apriLettore(); break; }
       if (state.playId) fermaRiproduzione();
       state.codaFonte = "Scaletta";
       playToggle(r.id, codaScaletta());
-      apriLettore();
       break;
     }
     case "play-giorno": {
@@ -4728,6 +4703,8 @@ mainEl.addEventListener("keydown", e => {
   if (e.key === "Escape") { const x = e.target.closest?.(".foglio")?.querySelector("[data-action$='-chiudi']"); if (x) act(x); return; }
   if (e.key !== "Enter" && e.key !== " ") return;
   const el = e.target;
+  // nel modulo «Aggiungi / Proponi» il tasto Avanti della tastiera passa dal titolo all'artista
+  if (e.key === "Enter" && el.matches?.('.addform input[name="titolo"]')) { e.preventDefault(); el.form.artista?.focus(); return; }
   if (el.matches?.('[role="button"][data-action]')) { e.preventDefault(); act(el); }
 });
 mainEl.addEventListener("input", e => {
@@ -5124,3 +5101,22 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.add("hidden"), 2800);
 }
+
+// ---------- tastiera del telefono (v73) ----------
+// Con la tastiera aperta la parte visibile dello schermo si accorcia ma la pagina no: i fogli
+// (Proponi un pezzo, Aggiungi canzone, movimento, accordi…) seguono la parte visibile, così il
+// bottone di conferma resta sopra la tastiera.
+(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement;
+  const segui = () => {
+    const tastiera = window.innerHeight - vv.height > 120;
+    root.classList.toggle("con-tastiera", tastiera);
+    if (tastiera) { root.style.setProperty("--vv-alto", vv.height + "px"); root.style.setProperty("--vv-su", vv.offsetTop + "px"); }
+    else { root.style.removeProperty("--vv-alto"); root.style.removeProperty("--vv-su"); }
+  };
+  vv.addEventListener("resize", segui);
+  vv.addEventListener("scroll", segui);
+  segui();
+})();
