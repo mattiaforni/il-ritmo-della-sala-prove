@@ -2,6 +2,17 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "74",
+      "data": "2026-11-21",
+      "titolo": "Scorrere tra le sezioni, conferme nuove, «Sostieni la band»",
+      "punti": [
+        "Sul telefono si passa da una sezione all'altra scorrendo con il dito a destra o a sinistra (non dentro la pagina di un pezzo o con un foglio aperto).",
+        "Le cose da fare generali, non legate a un pezzo, ora stanno in Personale, nel riquadro «Generale»: lì si spuntano e se ne aggiungono.",
+        "Le domande di conferma («Eliminare…?») hanno l'aspetto dell'app, e le scritte più piccole sono state ingrandite.",
+        "Per i fan: in Personale, «Donazioni dei fan», si incolla un link (per esempio PayPal.Me). I fan vedono «Sostieni la band» in fondo alla Scaletta; i pagamenti non passano dall'app."
+      ]
+    },
+    {
       "versione": "73",
       "data": "2026-11-21",
       "titolo": "La Scaletta diventa il lettore dei nostri pezzi",

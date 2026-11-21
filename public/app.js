@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "73";
+const APP_VERSION = "74";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -820,6 +820,7 @@ function renderFan() {
         <h3 class="fan-h">Notifiche${state.push ? " <small>attive</small>" : ""}</h3>
         ${notificheCorpo()}
       </section>
+      ${donaStrip()}
       <div class="fan-fondo"><button class="btn quiet" data-action="fan-cambia">Cambia nome</button><button class="btn quiet" data-action="esci">Esci</button></div>`;
   }
   $("#fan-card").innerHTML = html;
@@ -1435,7 +1436,7 @@ function testata() {
 }
 
 // ---------- tab ----------
-function showTab(name) {
+function showTab(name, verso) {
   if (!document.getElementById("view-" + name)) name = "scaletta";
   if (state.fan && (name === "cassa" || name === "personale")) name = "scaletta";
   if (state.calAperto) chiudiCalendario();
@@ -1443,7 +1444,11 @@ function showTab(name) {
   state.tab = name;
   store.set("prove_tab", name);
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
-  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  document.querySelectorAll(".view").forEach(v => {
+    v.classList.remove("entra-sx", "entra-dx");
+    v.classList.toggle("active", v.id === "view-" + name);
+    if (verso && v.id === "view-" + name) { void v.offsetWidth; v.classList.add(verso === "sx" ? "entra-sx" : "entra-dx"); }
+  });
   updateNavMe();
   testata();
   window.scrollTo({ top: 0 });
@@ -1567,7 +1572,7 @@ function renderScaletta() {
   const lista = scaletta();
   let html = lista.map((c, i) => songCard(c, i + 1)).join("");
   if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una con il +."}</p>`;
-  html += plStrip("scaletta");
+  html += plStrip("scaletta") + donaStrip();
   if (!state.fan) html += (state.addOpen.scaletta ? "" : acFab()) + addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
   $("#view-scaletta").innerHTML = html;
 }
@@ -1619,6 +1624,7 @@ function chiudiCanzone() {
 // tasto indietro del telefono (o freccia nella pagina): si chiude il lettore a schermo intero se è aperto,
 // altrimenti si torna dalla pagina della canzone alla lista
 window.addEventListener("popstate", () => {
+  if (state.chiedi) { chiudiChiedi(); return; }
   if (state.spartito) {
     // dentro lo Spartito l'indietro torna prima alle sue pagine (Impostazioni, Canta); dallo Spartito chiude
     let gestito = false;
@@ -2325,7 +2331,7 @@ async function salvaAccordi(form) {
 }
 async function eliminaAccordi(id, chiedi = true) {
   const c = trovaPezzo(id); if (!c) return;
-  if (chiedi && !confirm(`Togliere gli accordi di «${c.titolo || "questo pezzo"}»?`)) return;
+  if (chiedi && !await chiedi(`Togliere gli accordi di «${c.titolo || "questo pezzo"}»?`)) return;
   const ok = await scrivi(updateDoc(doc(db, raccoltaDi(id), id), { accordi: deleteField() }).then(() => true));
   if (!ok) return;
   delete c.accordi;
@@ -3843,12 +3849,14 @@ function renderPersonale() {
       <h3 class="sec-title">Da fare <small>${aperti.length}</small></h3>
       ${aperti.length ? daFare : `<p class="empty">${mine.length ? "Tutto fatto ★" : "Nessun task assegnato."}</p>`}
     </article>
+    ${generaleCard()}
     ${mia && daVotare.length ? `<article class="card"><h3 class="sec-title">Da votare <small>${daVotare.length}</small></h3>${votiHtml}</article>` : ""}
     ${mia ? daCantareCard() : ""}
     ${mia ? notificheCard() : ""}
     ${mia ? accessoCard() : ""}
     ${mia ? calendarioCard() : ""}
     ${mia ? spotifyCard() : ""}
+    ${mia ? donaCard() : ""}
     ${add}
     <p class="app-ver">Versione ${APP_VERSION} · ${IS_IOS ? "iPhone/iPad" : IS_ANDROID ? "Android" : "computer"} · <button class="app-ver-btn" data-action="copia-diag">Copia diagnostica</button></p>`;
 }
@@ -4054,7 +4062,7 @@ async function caricaTab(id, f) {
 }
 async function togliStudio(id) {
   const s = state.studio.find(x => x.id === id);
-  if (!s || !confirm(`Togliere «${s.titolo || "questo pezzo"}» da Da provare?`)) return;
+  if (!s || !await chiedi(`Togliere «${s.titolo || "questo pezzo"}» da Da provare?`)) return;
   const ok = await scrivi(deleteDoc(doc(db, "studio", id)).then(() => true));
   // il file della tab lo toglie la funzione (non serve aspettarla)
   if (ok) chiamaTabFn("togli", { canzoneId: id, raccolta: "studio" }).catch(e => console.warn("[studio] file non tolto", e));
@@ -4096,6 +4104,9 @@ async function act(btn) {
       renderLettore();
       lettoreEl.querySelector(`[data-keep="task-lt-${CSS.escape(id)}"]`)?.focus();
       break;
+    case "dona-togli":
+      if (await chiedi("Togliere il link per le donazioni?")) await salvaDona("");
+      break;
     case "addtask-open":
       state.addTaskOpen = id;
       render();
@@ -4119,7 +4130,7 @@ async function act(btn) {
       const c = state.canzoni.find(x => x.id === id), k = btn.dataset.key;
       if (!c || !k) return;
       const testo = ((c.setup || {})[k] || "").trim();
-      if (testo && !confirm(`Togliere ${nomeParte(k)} e i suoi appunti?`)) return;
+      if (testo && !await chiedi(`Togliere ${nomeParte(k)} e i suoi appunti?`)) return;
       if (state.editSetup?.song === id && state.editSetup.key === k) state.editSetup = null;
       await scrivi(updateDoc(doc(db, "canzoni", id), new FieldPath("setup", k), deleteField()));
       render();
@@ -4164,13 +4175,13 @@ async function act(btn) {
       break;
     }
     case "del-task":
-      if (confirm("Eliminare questo task?")) await deleteDoc(doc(db, "tasks", id)).catch(erroreScrittura);
+      if (await chiedi("Eliminare questo task?")) await deleteDoc(doc(db, "tasks", id)).catch(erroreScrittura);
       break;
     case "del-song": {
       const c = state.canzoni.find(x => x.id === id);
       if (!c || isGenerale(c)) return;
       const msg = c.stato === "proposta" ? `Eliminare la proposta "${c.titolo}"?` : `Eliminare "${c.titolo}" e i suoi task?`;
-      if (!confirm(msg)) return;
+      if (!await chiedi(msg)) return;
       const batch = writeBatch(db);
       tasksOf(id).forEach(t => batch.delete(doc(db, "tasks", t.id)));
       recsOf(id).forEach(r => batch.update(doc(db, "registrazioni", r.id), { canzoneId: "" }));
@@ -4263,7 +4274,7 @@ async function act(btn) {
       const c = state.canzoni.find(x => x.id === id);
       if (!c || c.stato === "proposta") return;
       const nt = tasksOf(id).length;
-      if (!confirm(`Rimettere "${c.titolo}" fra le proposte?${nt ? (nt === 1 ? " Il suo task resta da parte." : ` I suoi ${nt} task restano da parte.`) : ""}`)) return;
+      if (!await chiedi(`Rimettere "${c.titolo}" fra le proposte?${nt ? (nt === 1 ? " Il suo task resta da parte." : ` I suoi ${nt} task restano da parte.`) : ""}`)) return;
       const maxOrd = state.canzoni.reduce((m, x) => Math.max(m, x.ordine || 0), 0);
       const eraAperta = state.songPage === id;
       const fatto = await updateDoc(doc(db, "canzoni", id), { stato: "proposta", ordine: maxOrd + 1 }).then(() => true, erroreScrittura);
@@ -4388,7 +4399,7 @@ async function act(btn) {
       if (!m) return;
       const cs = m.postId ? [] : state.bacheca.filter(x => x.postId === id);
       const cosa = m.postId ? `il commento di ${m.nome || "un fan"}` : `il post di ${m.nome || "un fan"}${cs.length ? ` e ${cs.length === 1 ? "il suo commento" : `i suoi ${cs.length} commenti`}` : ""}`;
-      if (!confirm(`Togliere ${cosa}?`)) return;
+      if (!await chiedi(`Togliere ${cosa}?`)) return;
       const batch = writeBatch(db);
       cs.forEach(c => batch.delete(doc(db, "bacheca", c.id)));
       batch.delete(doc(db, "bacheca", id));
@@ -4411,7 +4422,7 @@ async function act(btn) {
     }
     case "del-commento": {
       const m = state.commenti.find(x => x.id === id);
-      if (!m || !confirm(`Togliere il commento di ${m.nome || "un fan"}?`)) return;
+      if (!m || !await chiedi(`Togliere il commento di ${m.nome || "un fan"}?`)) return;
       await deleteDoc(doc(db, "commenti", id)).catch(erroreScrittura);
       break;
     }
@@ -4447,7 +4458,7 @@ async function act(btn) {
     case "cal-riprova":
       state.calConfStato = ""; caricaConfCalendario(); break;
     case "cal-scollega": {
-      if (!confirm("Scollegare il calendario? Le prove spariscono dall'app per tutti; il calendario Google resta com'è.")) return;
+      if (!await chiedi("Scollegare il calendario? Le prove spariscono dall'app per tutti; il calendario Google resta com'è.")) return;
       try {
         await chiamaCalendario("togli");
         state.cal = { collegato: false, prove: [] }; salvaCacheCalendario();
@@ -4477,7 +4488,7 @@ async function act(btn) {
       break;
     }
     case "accesso-disattiva": {
-      if (!confirm("Disattivare l'accesso dei fan? Chi è dentro esce entro un'ora e smette di ricevere notifiche.")) return;
+      if (!await chiedi("Disattivare l'accesso dei fan? Chi è dentro esce entro un'ora e smette di ricevere notifiche.")) return;
       btn.disabled = true;
       try { state.accesso = await chiamaAccesso("disattiva"); state.accessoVedi = false; toast("Accesso dei fan disattivato."); }
       catch (e) { toast("Non disattivato: " + e.message); }
@@ -4497,7 +4508,7 @@ async function act(btn) {
     case "up-annulla": state.pendingFiles = []; state.righeUpload = []; render(); break;
     case "del-rec": {
       const r = state.registrazioni.find(x => x.id === id);
-      if (!r || !confirm(`Eliminare questa registrazione?${r.nomeFile ? "\n" + r.nomeFile : ""}`)) return;
+      if (!r || !await chiedi(`Eliminare questa registrazione?${r.nomeFile ? "\n" + r.nomeFile : ""}`)) return;
       if (state.playId === id) fermaRiproduzione();
       try { if (r.path) await deleteObject(storageRef(storage, r.path)); } catch (e) { /* file già assente */ }
       // con la registrazione se ne vanno anche i suoi commenti
@@ -4657,7 +4668,7 @@ async function act(btn) {
       render(); break;
     case "del-mov": {
       const m = state.movimenti.find(x => x.id === id);
-      if (!m || !confirm(`Eliminare "${m.descrizione}" (${euro(m.importoCent)})?`)) return;
+      if (!m || !await chiedi(`Eliminare "${m.descrizione}" (${euro(m.importoCent)})?`)) return;
       state.movOpen = null;
       await deleteDoc(doc(db, "movimenti", id)).catch(erroreScrittura);
       break;
@@ -4815,6 +4826,7 @@ mainEl.addEventListener("submit", async e => {
     return;
   }
 
+  if (kind === "dona") { await salvaDona(form.url.value); return; }
   if (kind === "accesso") {
     const pw = form.password.value.trim();
     if (pw.length < 6) { toast("Almeno 6 caratteri."); return; }
@@ -4914,7 +4926,7 @@ mainEl.addEventListener("submit", async e => {
   if (kind === "unisci") {
     const vecchio = form.dataset.vecchio, nuovo = form.nuovo.value;
     if (!nuovo) { toast("Scegli a chi appartiene questo nome."); return; }
-    if (!confirm(`Tutto ciò che è di ${vecchio} passa a ${nuovo}. Se hanno votato la stessa proposta con entrambi i nomi, resta il voto di ${nuovo}. Procedo?`)) return;
+    if (!await chiedi(`Tutto ciò che è di ${vecchio} passa a ${nuovo}. Se hanno votato la stessa proposta con entrambi i nomi, resta il voto di ${nuovo}. Procedo?`)) return;
     const { batch, n } = sostituisciNome(vecchio, nuovo);
     const ok = await scrivi(batch.commit().then(() => true));
     if (ok) toast(`Uniti: ${n} ${n === 1 ? "elemento" : "elementi"} di ${vecchio} ora sono di ${nuovo}.`);
@@ -5084,6 +5096,100 @@ function enrichSong(c) {
   // e il link alla pagina della canzone si incolla a mano da «Link»
 }
 
+// ---------- conferme (v74): un foglietto dell'app al posto della finestra del telefono ----------
+// chiedi("Eliminare questo task?") → promessa con true o false. Il bottone prende il verbo della domanda.
+// Il tasto indietro del telefono vale «Annulla».
+const VERBI_CONFERMA = { Eliminare: "Elimina", Togliere: "Togli", Rimettere: "Rimetti", Scollegare: "Scollega", Disattivare: "Disattiva" };
+function chiedi(testo, ok) {
+  if (state.chiedi) chiudiChiedi();
+  const [domanda, ...resto] = String(testo).split("\n");
+  const verbo = ok || VERBI_CONFERMA[domanda.split(" ")[0]] || "Procedi";
+  const el = document.createElement("div");
+  el.className = "overlay chiedi";
+  el.innerHTML = `
+    <div class="overlay-card" role="alertdialog" aria-modal="true" aria-label="Conferma">
+      <p class="chiedi-txt">${esc(domanda)}</p>${resto.length ? `<p class="chiedi-sub">${esc(resto.join(" "))}</p>` : ""}
+      <div class="ed"><button type="button" class="btn quiet" data-esito="no">Annulla</button><button type="button" class="btn fill${/^(Elimina|Togli|Scollega|Disattiva)$/.test(verbo) ? " rosso" : ""}" data-esito="si">${esc(verbo)}</button></div>
+    </div>`;
+  document.body.appendChild(el);
+  return new Promise(risolvi => {
+    state.chiedi = { el, risolvi, esito: false };
+    history.pushState({ chiedi: true }, "");
+    const esci = (esito) => { if (!state.chiedi || state.chiedi.el !== el) return; state.chiedi.esito = esito; history.back(); };
+    el.addEventListener("click", e => {
+      const b = e.target.closest("[data-esito]");
+      if (b) esci(b.dataset.esito === "si"); else if (e.target === el) esci(false);
+    });
+    el.addEventListener("keydown", e => { if (e.key === "Escape") esci(false); });
+    el.querySelector('[data-esito="si"]').focus();
+  });
+}
+function chiudiChiedi() {
+  const c = state.chiedi;
+  if (!c) return;
+  state.chiedi = null;
+  c.el.remove();
+  c.risolvi(c.esito);
+}
+
+// ---------- donazioni (v74): un link scelto dalla band, mostrato solo ai fan ----------
+// Il link (PayPal o simile) sta nel documento Generale, campo «dona»; i pagamenti non passano dall'app.
+function donaUrl() {
+  const u = (state.canzoni.find(c => c.id === GENERALE_ID)?.dona || {}).url || "";
+  return /^https:\/\/[^\s"'<>]+$/.test(u) ? u : "";
+}
+const donaSuPaypal = (u) => { try { return /(^|\.)paypal\.(com|me)$/i.test(new URL(u).hostname); } catch { return false; } };
+function donaStrip() {
+  const u = state.fan ? donaUrl() : "";
+  if (!u) return "";
+  return `
+    <a class="pl-strip dona-strip" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-link>
+      ${IC("cuore", "ico")}
+      <span class="pl-txt"><b>Sostieni la band</b><small>${donaSuPaypal(u) ? "Una donazione libera con PayPal" : "Una donazione libera"}</small></span>
+      <span class="pl-go" aria-hidden="true">${IC("freccia")}</span>
+    </a>`;
+}
+function donaCard() {
+  const u = donaUrl();
+  return `
+    <article class="card">
+      <h3 class="sec-title">Donazioni dei fan${u ? " <small>attive</small>" : ""}</h3>
+      <p class="nt-txt">${u ? "I fan vedono «Sostieni la band» in fondo alla Scaletta e nel loro pannello: il tocco apre questo link. I pagamenti non passano dall'app." : "Incolla il link per ricevere donazioni (per esempio il tuo PayPal.Me): i fan vedranno «Sostieni la band». I pagamenti non passano dall'app."}</p>
+      <form class="am-form" data-form="dona">
+        <input class="field" name="url" type="text" inputmode="url" data-keep="dona-url" value="${esc(u)}" placeholder="https://paypal.me/…" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Link per le donazioni">
+        <button class="btn fill" type="submit">Salva</button>
+        ${u ? `<button type="button" class="btn quiet" data-action="dona-togli">Togli</button>` : ""}
+      </form>
+    </article>`;
+}
+async function salvaDona(testo) {
+  let u = String(testo || "").trim();
+  if (u && !/^[a-z]+:\/\//i.test(u)) u = "https://" + u;
+  if (u) {
+    let ok = false;
+    try { const x = new URL(u); ok = x.protocol === "https:" && x.hostname.includes(".") && !/[\s"'<>]/.test(u); } catch { ok = false; }
+    if (!ok) { toast("Il link non è valido: deve cominciare con https://"); return; }
+  }
+  await updateDoc(doc(db, "canzoni", GENERALE_ID), { dona: u ? { url: u, da: state.user || "" } : deleteField() })
+    .then(() => toast(u ? "Link salvato: i fan vedono «Sostieni la band»." : "Donazioni tolte."))
+    .catch(erroreScrittura);
+}
+
+// ---------- Generale in Personale (v74): cose da fare non legate a un pezzo ----------
+function generaleCard() {
+  const gen = state.canzoni.find(c => c.id === GENERALE_ID);
+  if (!gen) return "";
+  const ts = tasksOf(gen.id).slice().sort((a, b) => Number(taskFatta(a)) - Number(taskFatta(b)));
+  const aperti = ts.filter(t => !taskFatta(t)).length;
+  return `
+    <article class="card generale-card">
+      <h3 class="sec-title">Generale <small>${ts.length ? (aperti ? `${aperti} da fare` : "tutto fatto") : ""}</small></h3>
+      <p class="nt-txt">Cose da fare della band non legate a un pezzo.</p>
+      ${ts.map(taskRow).join("")}
+      ${formNuovoTask(gen, "pg")}
+    </article>`;
+}
+
 // ---------- piccoli premi ----------
 function maybeCelebrate(canzoneId, appenaFatta) {
   const song = state.canzoni.find(c => c.id === canzoneId);
@@ -5119,4 +5225,50 @@ function toast(msg) {
   vv.addEventListener("resize", segui);
   vv.addEventListener("scroll", segui);
   segui();
+})();
+
+// ---------- scorrere a destra e a sinistra per cambiare sezione (v74, telefono) ----------
+// Il gesto si riconosce quando il dito si alza (netto, orizzontale, veloce): la pagina non segue il dito,
+// quindi niente pagine a metà e niente scorrimento verticale che parte insieme. Non vale: dentro la pagina
+// di un pezzo, con un foglio o un pannello aperto, con la tastiera aperta, partendo dal bordo dello schermo
+// (lì c'è il gesto «indietro» del telefono), su campi, linee del lettore e zone che scorrono in orizzontale.
+(() => {
+  let t0 = null;
+  const fermo = () => !state.account || state.songPage || state.lettore || state.accorda || state.accFoglio || state.accordi
+    || state.cerca || state.calAperto || state.spartito || state.chiedi
+    || document.documentElement.classList.contains("con-tastiera")
+    || !!document.querySelector(".foglio, .overlay:not(.hidden), .gate:not(.hidden)");
+  const suoGesto = (el) => {
+    for (; el && el !== document.body; el = el.parentElement) {
+      if (el.matches("input, textarea, select, [contenteditable], .line, [role='slider'], canvas")) return true;
+      if (el.scrollWidth > el.clientWidth + 4) {
+        const o = getComputedStyle(el).overflowX;
+        if (o === "auto" || o === "scroll") return true;
+      }
+    }
+    return false;
+  };
+  document.addEventListener("touchstart", e => {
+    t0 = null;
+    if (e.touches.length !== 1 || fermo()) return;
+    const t = e.touches[0];
+    // si ascolta tutto lo schermo (una sezione corta lascia vuota mezza pagina), ma non le barre in basso
+    if (e.target.closest?.(".bnav, #mini, .toast, .conn-banner, .update-banner")) return;
+    if (t.clientX < 28 || t.clientX > window.innerWidth - 28 || suoGesto(e.target)) return;
+    t0 = { x: t.clientX, y: t.clientY, quando: Date.now(), giu: window.scrollY };
+  }, { passive: true });
+  document.addEventListener("touchmove", e => { if (e.touches.length !== 1) t0 = null; }, { passive: true });
+  document.addEventListener("touchcancel", () => { t0 = null; }, { passive: true });
+  document.addEventListener("touchend", e => {
+    const da = t0; t0 = null;
+    if (!da || e.touches.length || fermo()) return;
+    const t = e.changedTouches[0], dx = t.clientX - da.x, dy = t.clientY - da.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < 2.2 * Math.abs(dy) || Date.now() - da.quando > 700) return;
+    if (Math.abs(window.scrollY - da.giu) > 40) return;          // nel frattempo la pagina è scesa: era uno scorrimento
+    if (String(window.getSelection && window.getSelection()) !== "") return;   // si stava selezionando del testo
+    const sezioni = [...document.querySelectorAll(".bnav .tab")].filter(b => b.offsetParent !== null).map(b => b.dataset.tab);
+    const i = sezioni.indexOf(state.tab), j = i + (dx < 0 ? 1 : -1);
+    if (i < 0 || j < 0 || j >= sezioni.length) return;
+    showTab(sezioni[j], dx < 0 ? "dx" : "sx");
+  }, { passive: true });
 })();
