@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "75";
+const APP_VERSION = "76";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -173,6 +173,12 @@ const state = {
   cal: leggiCacheCalendario(), // prove dal calendario Google: { collegato, nome, prove, letto } (copia sul telefono)
   calLetto: 0,                // quando l'app l'ha chiesto alla funzione l'ultima volta (ms)
   calAperto: false,           // pagina «Prove in calendario» aperta (dal riquadro nella testata)
+  odg: [],                    // ordine del giorno delle prove (v76): collezione "odg", id = giorno "AAAA-MM-GG", solo band
+  odgNegato: false,           // le regole del database non includono ancora "odg"
+  calProva: null,             // id della prova aperta nel calendario (pagina della prova con l'ODG)
+  provaDiretta: false,        // la pagina della prova è stata aperta dalla riga «ODG» della Scaletta (non dall'elenco)
+  odgAperto: null,            // pezzo dell'ODG aperto (task e appunti)
+  odgFoglio: null,            // foglio «Aggiungi all'ODG»: { giorno, lista, scelti }
   calScroll: 0,
   calConf: null,              // in Personale: { collegato, nome, da, aggiornata, prove, errore }
   calConfStato: "",           // "" | "carico" | "errore"
@@ -1020,6 +1026,7 @@ function apriCalendario() {
 function chiudiCalendario(daIndietro = false) {
   if (!state.calAperto) return;
   state.calAperto = false;
+  state.calProva = null; state.provaDiretta = false; state.odgAperto = null; state.odgFoglio = null;
   document.body.classList.remove("cal-aperto");
   if (!daIndietro && history.state && history.state.calendario) history.back();
   window.scrollTo({ top: state.calScroll });
@@ -1027,6 +1034,14 @@ function chiudiCalendario(daIndietro = false) {
 function rigaCalendario(p) {
   const d = partiData(p), oggi = eOggi(p);
   const sotto = [orarioProva(p), p.luogo].filter(Boolean).map(esc).join(" · ");
+  if (!state.fan) {
+    const n = vociOdg(d.chiave).length;
+    return `<button type="button" class="cal-riga cal-tocca" data-action="prova-apri" data-id="${esc(p.id)}">
+      <span class="cal-data${oggi ? " oggi" : ""}"><small>${esc(d.gs)}</small><b>${esc(d.n)}</b><small>${esc(d.mese)}</small></span>
+      <span class="prova-txt">${oggi ? `<span class="quando oggi">${!p.tuttoIlGiorno && p.inizio <= Date.now() ? "In corso" : "Oggi"}</span>` : ""}<b>${esc(p.titolo)}</b><small>${sotto}</small>${n ? `<span class="cal-odg">ODG · ${plurale(n, "pezzo", "pezzi")}</span>` : ""}</span>
+      <span class="pl-go" aria-hidden="true">${IC("freccia")}</span>
+    </button>`;
+  }
   return `<div class="cal-riga">
       <span class="cal-data${oggi ? " oggi" : ""}"><small>${esc(d.gs)}</small><b>${esc(d.n)}</b><small>${esc(d.mese)}</small></span>
       <span class="prova-txt">${oggi ? `<span class="quando oggi">${!p.tuttoIlGiorno && p.inizio <= Date.now() ? "In corso" : "Oggi"}</span>` : ""}<b>${esc(p.titolo)}</b><small>${sotto}</small>${p.note ? `<span class="desc">${esc(p.note)}</span>` : ""}</span>
@@ -1035,6 +1050,11 @@ function rigaCalendario(p) {
 function renderCalendario() {
   const v = $("#view-calendario");
   if (!v) return;
+  if (state.calProva && !state.fan) {
+    const p = proveFuture().find(x => x.id === state.calProva);
+    if (p) { renderProva(v, p); return; }
+    state.calProva = null; state.odgFoglio = null;
+  }
   const prove = proveFuture();
   const annoOra = new Date().getFullYear();
   let corpo = "", mese = null;
@@ -1268,6 +1288,7 @@ function subscribe() {
     if (key === "bacheca") state.bachecaNegata = false;
     if (key === "commenti") state.commentiNegati = false;
     if (key === "appunti") state.appuntiNegati = false;
+    if (key === "odg") state.odgNegato = false;
     if (key === "membri") { computeSigle(); ensureUser(); }
     if (key === "canzoni") ensureGenerale(snap);
     render();
@@ -1297,6 +1318,12 @@ function subscribe() {
   if (!state.fan) listen("appunti", collection(db, "appunti"), "appunti", null, err => {
     state.appuntiNegati = !!err && err.code === "permission-denied";
     if (!state.appuntiNegati) onDenied(err); else render();
+  });
+  // ODG delle prove (v76, solo band): finché le regole non includono "odg" la pagina della prova lo dice
+  if (!state.fan) listen("odg", collection(db, "odg"), "odg", null, err => {
+    console.warn("[odg]", err);
+    state.odgNegato = !!err && err.code === "permission-denied";
+    if (!state.odgNegato) onDenied(err); else render();
   });
   if (!state.fan) listen("studio", query(collection(db, "studio"), orderBy("creato")), "studio", null, err => {
     console.warn("[studio]", err);
@@ -1571,7 +1598,7 @@ function renderScaletta() {
   // v73: la Scaletta è il lettore delle nostre registrazioni. Solo i pezzi, in ordine; la playlist
   // di Spotify in fondo, l'accordatore sopra il «+». La scheda Generale non c'è più.
   const lista = scaletta();
-  let html = lista.map((c, i) => songCard(c, i + 1)).join("");
+  let html = odgStriscia() + lista.map((c, i) => songCard(c, i + 1)).join("");
   if (!lista.length) html += `<p class="empty big">Nessuna canzone in scaletta.${state.fan ? "" : " Aggiungine una con il +."}</p>`;
   html += plStrip("scaletta") + donaStrip();
   if (!state.fan) html += (state.addOpen.scaletta ? "" : acFab()) + addSongBlock("scaletta", "Aggiungi canzone", "Aggiungi");
@@ -1638,6 +1665,8 @@ window.addEventListener("popstate", () => {
   if (state.accFoglio) { chiudiAccordiFoglio(true); return; }
   if (state.accordi) { chiudiAccordi(true); return; }
   if (state.cerca) { chiudiCerca(true); return; }
+  if (state.odgFoglio) { state.odgFoglio = null; renderCalendario(); return; }
+  if (state.calAperto && state.calProva && !state.provaDiretta) { state.calProva = null; state.odgAperto = null; renderCalendario(); window.scrollTo({ top: 0 }); return; }
   if (state.calAperto) { chiudiCalendario(true); return; }
   if (state.songPage) chiudiCanzone();
 });
@@ -3754,6 +3783,10 @@ function sostituisciNome(vecchio, nuovo) {
     if (c.propostaDa === vecchio && !c.daFan) upd.propostaDa = nuovo;
     if (Object.keys(upd).length) { batch.update(doc(db, "canzoni", c.id), upd); n++; }
   });
+  state.odg.forEach(o => {
+    if (!(o.voci || []).some(v => v.da === vecchio)) return;
+    batch.update(doc(db, "odg", o.id), { voci: o.voci.map(v => v.da === vecchio ? { ...v, da: nuovo } : v) }); n++;
+  });
   state.registrazioni.forEach(r => { if (r.caricatoDa === vecchio) { batch.update(doc(db, "registrazioni", r.id), { caricatoDa: nuovo }); n++; } });
   state.movimenti.forEach(m => {
     const upd = {};
@@ -4089,7 +4122,8 @@ const SCRITTURE = new Set([
   "tipo", "setup-edit", "link-edit", "rename", "sp-collega", "sp-aggiorna", "del-mov", "dir-avvia", "dir-ferma",
   "accesso-apri", "accesso-disattiva", "accesso-invita", "accesso-vedi", "del-msg", "tab-prepara",
   "studio-modifica", "studio-togli", "studio-aggiungi", "cerca-apri", "tab-foglio", "tab-scegli",
-  "accordi-foglio", "accordi-elimina", "cal-cambia", "cal-scollega"
+  "accordi-foglio", "accordi-elimina", "cal-cambia", "cal-scollega",
+  "prova-apri", "odg-togli", "odg-foglio", "odg-aggiungi"
 ]);
 async function act(btn) {
   const { action, id } = btn.dataset;
@@ -4450,6 +4484,50 @@ async function act(btn) {
       state.fanCambia = false; renderFan(); break;
     case "cal-chiudi":
       chiudiCalendario(); break;
+    case "prova-apri":
+      apriProva(id); break;
+    case "prova-chiudi":
+      if (history.state && history.state.prova) history.back(); else chiudiCalendario();
+      break;
+    case "odg-apri":
+      state.odgAperto = state.odgAperto === id ? null : id;
+      state.addTaskOpen = null; state.editAppunti = null;
+      renderCalendario(); break;
+    case "odg-togli": {
+      const g = btn.dataset.giorno;
+      salvaOdg(g, vociOdg(g).filter(x => x.id !== id));
+      state.odgAperto = null;
+      toast("Tolto dall'ODG.");
+      break;
+    }
+    case "odg-foglio":
+      state.odgFoglio = { giorno: btn.dataset.giorno, lista: "scaletta", scelti: new Set() };
+      history.pushState({ calendario: true, prova: state.calProva, odgFoglio: true }, "");
+      renderCalendario(); break;
+    case "odg-foglio-chiudi":
+      if (history.state && history.state.odgFoglio) history.back(); else { state.odgFoglio = null; renderCalendario(); }
+      break;
+    case "odg-lista":
+      if (state.odgFoglio) { state.odgFoglio.lista = btn.dataset.lista; renderCalendario(); }
+      break;
+    case "odg-scegli": {
+      const f = state.odgFoglio;
+      if (!f) break;
+      if (f.scelti.has(id)) f.scelti.delete(id); else f.scelti.add(id);
+      renderCalendario(); break;
+    }
+    case "odg-aggiungi": {
+      const f = state.odgFoglio;
+      if (!f || !f.scelti.size) break;
+      const ora = Date.now();
+      // nell'ordine della scaletta (o della classifica delle proposte), in fondo all'ODG
+      const ordine = [...scaletta(), ...proposte().sort(perClassifica)].map(c => c.id).filter(x => f.scelti.has(x));
+      const nuove = ordine.map((cid, k) => ({ id: `${ora.toString(36)}${k}`, canzoneId: cid, da: state.user || "", daId: state.userId || "", quando: ora }));
+      salvaOdg(f.giorno, [...vociOdg(f.giorno), ...nuove]);
+      toast(nuove.length === 1 ? "Aggiunto all'ODG." : `${nuove.length} pezzi aggiunti all'ODG.`);
+      if (history.state && history.state.odgFoglio) history.back(); else { state.odgFoglio = null; renderCalendario(); }
+      break;
+    }
     case "cal-cambia":
       state.calForm = true; render();
       document.querySelector('[data-keep="cal-url"]')?.focus();
@@ -5096,6 +5174,204 @@ function enrichSong(c) {
   // il link Songsterr non si cerca in automatico: senza link l'icona apre la ricerca su Songsterr,
   // e il link alla pagina della canzone si incolla a mano da «Link»
 }
+
+// ---------- ordine del giorno delle prove (v76, solo band) ----------
+// Ogni giorno di prova del calendario ha il suo ODG: documento odg/<AAAA-MM-GG> con le voci in ordine
+// [{ id, canzoneId, da, daId, quando }]. È legato al giorno, non all'evento: se la prova cambia orario
+// nello stesso giorno l'ODG resta. Da 5 giorni prima la Scaletta mostra la riga «ODG»; toccandola si apre
+// la pagina della prova (la stessa che si apre dall'elenco delle prove in calendario).
+const ODG_GIORNI = 5;
+const odgDi = (giorno) => state.odg.find(o => o.id === giorno) || null;
+function vociOdg(giorno) {
+  const o = odgDi(giorno);
+  return ((o && o.voci) || []).filter(v => v && state.canzoni.some(c => c.id === v.canzoneId && !isGenerale(c)));
+}
+const msProva = (p) => p.tuttoIlGiorno ? daGiorno(p.giorno) - 12 * 3600000 : p.inizio;
+function provaConOdg() {
+  const p = proveFuture()[0];
+  return p && msProva(p) - Date.now() <= ODG_GIORNI * 86400000 ? p : null;
+}
+function fraQuanto(p) {
+  const n = Math.round((daGiorno(partiData(p).chiave) - daGiorno(giornoRoma(Date.now()))) / 86400000);
+  return n <= 0 ? "oggi" : n === 1 ? "domani" : `tra ${n} giorni`;
+}
+// chi ha aggiunto la voce: il nome attuale della persona (anche se nel frattempo si è rinominata)
+const autoreVoce = (v) => (state.membri.find(m => m.id === v.daId) || {}).nome || v.da || "";
+async function salvaOdg(giorno, voci) {
+  const pulite = voci.map(v => ({ id: v.id, canzoneId: v.canzoneId, da: v.da || "", daId: v.daId || "", quando: v.quando || 0 }));
+  // subito sul telefono, poi il database
+  const o = odgDi(giorno);
+  if (o) o.voci = pulite; else state.odg.push({ id: giorno, giorno, voci: pulite });
+  render();
+  await setDoc(doc(db, "odg", giorno), { giorno, voci: pulite, aggiornato: serverTimestamp() }, { merge: true }).catch(erroreScrittura);
+}
+function odgStriscia() {
+  if (state.fan) return "";
+  const p = provaConOdg();
+  if (!p) return "";
+  const d = partiData(p), voci = vociOdg(d.chiave);
+  const titoli = voci.map(v => state.canzoni.find(c => c.id === v.canzoneId).titolo);
+  const testo = titoli.length
+    ? `<b>${esc(titoli[0])}</b>${titoli.length > 1 ? esc(", " + titoli.slice(1, 3).join(", ")) : ""}${titoli.length > 3 ? ` +${titoli.length - 3}` : ""}`
+    : `<span class="vuoto">Scegli i pezzi da provare</span>`;
+  return `<button type="button" class="odg-striscia" data-action="prova-apri" data-id="${esc(p.id)}" aria-label="Ordine del giorno delle prove di ${esc(d.gs)} ${esc(d.n)}">
+      <span class="lab">ODG ${esc(d.gs)} ${esc(d.n)}</span><span class="t">${testo}</span>${IC("freccia")}
+    </button>`;
+}
+function apriProva(id) {
+  const p = proveFuture().find(x => x.id === id);
+  if (!p) { toast("Questa prova non è più in calendario."); return; }
+  state.odgAperto = null; state.odgFoglio = null; state.addTaskOpen = null; state.editAppunti = null;
+  if (!state.calAperto) {
+    // dalla Scaletta: una sola voce nella cronologia, l'indietro torna alla Scaletta
+    state.calAperto = true;
+    state.calScroll = window.scrollY;
+    state.provaDiretta = true;
+    document.body.classList.add("cal-aperto");
+    caricaCalendario();
+  } else state.provaDiretta = false;
+  state.calProva = id;
+  history.pushState({ calendario: true, prova: id }, "");
+  renderCalendario();
+  window.scrollTo({ top: 0 });
+}
+const ICO_MANIGLIA = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><circle cx="9" cy="6.5" r="1.6"/><circle cx="15" cy="6.5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="17.5" r="1.6"/><circle cx="15" cy="17.5" r="1.6"/></g></svg>`;
+function rigaOdg(v, i, giorno) {
+  const c = state.canzoni.find(x => x.id === v.canzoneId);
+  const prop = c.stato === "proposta";
+  const aperti = prop ? 0 : tasksOf(c.id).filter(t => !taskFatta(t)).length;
+  const app = mieiAppunti(c.id).trim() ? 1 : 0;
+  const info = [esc(c.artista || "")];
+  if (prop) info.push(`${contaVoti(c, "up")} 👍 ${contaVoti(c, "down")} 👎`);
+  else if (aperti) info.push(`<span class="tk">${plurale(aperti, "task", "task")}</span>`);
+  if (app) info.push("appunti");
+  const aperta = state.odgAperto === c.id;
+  const chi = autoreVoce(v);
+  let det = "";
+  if (aperta) {
+    const ts = prop ? [] : tasksOf(c.id).slice().sort((a, b) => Number(taskFatta(a)) - Number(taskFatta(b)));
+    det = `<div class="odg-det">
+        ${prop ? "" : `<h3 class="fascia">Task${ts.length ? ` <small>${aperti ? `${aperti} da fare` : "tutti fatti"}</small>` : ""}</h3>
+        ${ts.map(taskRow).join("") || `<p class="empty">Nessun task per questo pezzo.</p>`}
+        ${formNuovoTask(c, "pg")}`}
+        ${appuntiCard(c)}
+        <div class="ed odg-det-az"><span class="sp"></span><button type="button" class="btn quiet" data-action="odg-togli" data-id="${esc(v.id)}" data-giorno="${esc(giorno)}">${IC("x")}Togli dall'ODG</button></div>
+      </div>`;
+  }
+  return `<div class="odg-riga${aperta ? " aperta" : ""}" data-voce="${esc(v.id)}">
+      <span class="odg-n">${i + 1}</span>
+      <button type="button" class="odg-t" data-action="odg-apri" data-id="${c.id}" aria-expanded="${aperta}">
+        <b>${esc(c.titolo)}${prop ? `<span class="odg-orig">proposta</span>` : ""}</b>
+        <small>${info.filter(Boolean).join(" · ")}</small>
+      </button>
+      ${chi ? `<span class="odg-chi" title="Aggiunto da ${esc(chi)}">${iniTag(chi)}</span>` : `<span></span>`}
+      <span class="odg-man" role="button" tabindex="-1" aria-label="Tieni premuto e trascina per spostare ${esc(c.titolo)}">${ICO_MANIGLIA}</span>
+      ${det}
+    </div>`;
+}
+function foglioOdg(f) {
+  const gia = new Set(vociOdg(f.giorno).map(v => v.canzoneId));
+  const elenco = f.lista === "proposte" ? proposte().sort(perClassifica) : scaletta();
+  const righe = elenco.map(c => {
+    const g = gia.has(c.id), on = f.scelti.has(c.id);
+    return `<button type="button" class="odg-scelta${on ? " on" : ""}${g ? " gia" : ""}" ${g ? "disabled" : `data-action="odg-scegli" data-id="${c.id}"`} aria-pressed="${on || g}">
+        <span class="box">${on || g ? IC("check") : ""}</span>
+        <span class="t"><b>${esc(c.titolo)}</b><small>${esc(c.artista || "")}</small></span>
+        ${g ? `<span class="gia-et">già nell'ODG</span>` : ""}
+      </button>`;
+  }).join("") || `<p class="empty">${f.lista === "proposte" ? "Nessuna proposta." : "Nessun pezzo in scaletta."}</p>`;
+  const p = proveFuture().find(x => x.id === state.calProva);
+  const d = p ? partiData(p) : null;
+  return `<div class="foglio odg-foglio" role="dialog" aria-label="Aggiungi all'ODG">
+      <div class="foglio-testa"><div class="foglio-tit"><h2>Aggiungi all'ODG</h2>${d ? `<div class="foglio-sub">${esc(p.titolo)} di ${esc(d.gs)} ${esc(d.n)} ${esc(d.mese)}</div>` : ""}</div><button type="button" class="x" data-action="odg-foglio-chiudi" aria-label="Chiudi">${IC("x")}</button></div>
+      <div class="foglio-corpo"><div>
+        <div class="odg-seg" role="group" aria-label="Da dove">
+          <button type="button" data-action="odg-lista" data-lista="scaletta" aria-pressed="${f.lista !== "proposte"}">Scaletta</button>
+          <button type="button" data-action="odg-lista" data-lista="proposte" aria-pressed="${f.lista === "proposte"}">Proposte</button>
+        </div>
+        ${righe}
+      </div></div>
+      <div class="foglio-barra"><span class="sp"></span><button type="button" class="btn fill" data-action="odg-aggiungi" ${f.scelti.size ? "" : "disabled"}>${f.scelti.size ? `Aggiungi ${f.scelti.size}` : "Aggiungi"}</button></div>
+    </div>`;
+}
+function renderProva(v, p) {
+  if (document.body.classList.contains("odg-trascino")) return;   // mentre si sposta una voce non si ridisegna
+  const d = partiData(p), oggi = eOggi(p), giorno = d.chiave;
+  const voci = vociOdg(giorno);
+  const corpoScroll = v.querySelector(".odg-foglio .foglio-corpo")?.scrollTop || 0;
+  const scritti = [...v.querySelectorAll("[data-keep]")].map(el => ({ k: el.dataset.keep, v: el.value, fuoco: document.activeElement === el }));
+  const indietro = state.provaDiretta ? (TITOLI[state.tab] || "Indietro") : "Prove";
+  const sotto = [orarioProva(p), p.luogo].filter(Boolean).map(esc).join(" · ");
+  v.innerHTML = `
+    <div class="pg-top"><button class="pg-back" data-action="prova-chiudi" aria-label="Indietro">${IC("indietro")}${esc(indietro)}</button><span class="pg-pos">${esc(fraQuanto(p))}</span></div>
+    <div class="prova-testa">
+      <span class="cal-data${oggi ? " oggi" : ""}"><small>${esc(d.gs)}</small><b>${esc(d.n)}</b><small>${esc(d.mese)}</small></span>
+      <div class="prova-tit"><h2>${esc(p.titolo)}</h2><small>${sotto}</small></div>
+    </div>
+    ${p.note ? `<p class="prova-note">${esc(p.note)}</p>` : ""}
+    <h3 class="fascia odg-fascia">Ordine del giorno${voci.length ? ` <small>${voci.length}</small>` : ""}</h3>
+    ${state.odgNegato ? `<p class="empty">L'ordine del giorno non è ancora attivo nel database.</p>` : `
+    <div class="odg-lista" data-giorno="${esc(giorno)}">${voci.map((x, i) => rigaOdg(x, i, giorno)).join("")}</div>
+    ${voci.length ? (voci.length > 1 ? `<p class="odg-aiuto">Tocca un pezzo per i task e i tuoi appunti; tieni premuti i puntini per spostarlo.</p>` : "") : `<p class="empty">Ancora niente: aggiungi i pezzi da provare, dalla scaletta o dalle proposte.</p>`}
+    <button class="addline" data-action="odg-foglio" data-giorno="${esc(giorno)}"><span class="plus">${IC("piu")}</span>Aggiungi pezzi</button>`}
+    ${state.odgFoglio && state.odgFoglio.giorno === giorno ? foglioOdg(state.odgFoglio) : ""}`;
+  const corpo = v.querySelector(".odg-foglio .foglio-corpo");
+  if (corpo) corpo.scrollTop = corpoScroll;
+  scritti.forEach(s => {
+    const el = v.querySelector(`[data-keep="${CSS.escape(s.k)}"]`);
+    if (el) { el.value = s.v; if (s.fuoco) el.focus(); }
+  });
+}
+// spostare le voci: si tiene premuta la maniglia (i sei puntini) e si trascina in su o in giù
+(() => {
+  let tr = null;
+  const fine = (salva) => {
+    if (!tr) return;
+    const { righe, riga, i0, j, giorno } = tr;
+    tr = null;
+    righe.forEach(r => { r.style.transform = ""; r.style.transition = ""; });
+    riga.classList.remove("trascina");
+    document.body.classList.remove("odg-trascino");
+    if (!salva || j === i0) return;
+    const voci = vociOdg(giorno);
+    const [x] = voci.splice(i0, 1);
+    voci.splice(j, 0, x);
+    salvaOdg(giorno, voci);
+  };
+  document.addEventListener("pointerdown", e => {
+    const man = e.target.closest && e.target.closest(".odg-man");
+    if (!man || tr || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const riga = man.closest(".odg-riga"), lista = riga && riga.closest(".odg-lista");
+    if (!lista) return;
+    e.preventDefault();
+    const righe = [...lista.querySelectorAll(":scope > .odg-riga")];
+    if (righe.length < 2) return;
+    try { man.setPointerCapture(e.pointerId); } catch (err) { /* niente */ }
+    tr = { man, riga, righe, giorno: lista.dataset.giorno, y0: e.clientY, i0: righe.indexOf(riga), j: righe.indexOf(riga), pid: e.pointerId,
+      box: righe.map(r => r.getBoundingClientRect()) };
+    righe.forEach(r => { if (r !== riga) r.style.transition = "transform .15s ease"; });
+    riga.classList.add("trascina");
+    document.body.classList.add("odg-trascino");
+  });
+  document.addEventListener("pointermove", e => {
+    if (!tr || e.pointerId !== tr.pid) return;
+    e.preventDefault();
+    const { righe, riga, i0, box } = tr;
+    const primo = box[0].top - box[i0].top, ultimo = box[box.length - 1].bottom - box[i0].bottom;
+    const dy = Math.max(primo, Math.min(ultimo, e.clientY - tr.y0));
+    riga.style.transform = `translateY(${dy}px)`;
+    const centro = box[i0].top + box[i0].height / 2 + dy;
+    const j = box.filter((b, k) => k !== i0 && b.top + b.height / 2 < centro).length;
+    tr.j = j;
+    const h = box[i0].height;
+    righe.forEach((r, k) => {
+      if (k === i0) return;
+      r.style.transform = (i0 < j && k > i0 && k <= j) ? `translateY(${-h}px)` : (j < i0 && k >= j && k < i0) ? `translateY(${h}px)` : "";
+    });
+  }, { passive: false });
+  document.addEventListener("pointerup", e => { if (tr && e.pointerId === tr.pid) fine(true); });
+  document.addEventListener("pointercancel", e => { if (tr && e.pointerId === tr.pid) fine(false); });
+})();
 
 // ---------- conferme (v74): un foglietto dell'app al posto della finestra del telefono ----------
 // chiedi("Eliminare questo task?") → promessa con true o false. Il bottone prende il verbo della domanda.

@@ -8,6 +8,7 @@
 // Versione 43: aggiunta la collezione "commenti" (commenti alle registrazioni).
 // Versione 49: aggiunta la collezione "studio" (i pezzi «Da cantare» di ognuno, solo per la band).
 // Versione 68: aggiunta la collezione "appunti" (appunti personali sui pezzi, solo per la band).
+// Versione 76: aggiunta la collezione "odg" (ordine del giorno di ogni prova, solo per la band).
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,10 +19,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'fan@il-ritmo-della-sala-prove.web.app';
     }
     match /{collection}/{doc} {
-      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti', 'studio', 'appunti'])
+      allow read: if (band() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti', 'studio', 'appunti', 'odg'])
         || (fan() && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'diretta', 'bacheca', 'commenti']);
       allow write: if band()
-        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti', 'studio', 'appunti'];
+        && collection in ['canzoni', 'tasks', 'membri', 'registrazioni', 'movimenti', 'diretta', 'bacheca', 'commenti', 'studio', 'appunti', 'odg'];
     }
     match /diretta/{id} {
       allow create: if fan() && id != 'stato'

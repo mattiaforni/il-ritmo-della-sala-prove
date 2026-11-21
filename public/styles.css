@@ -1277,3 +1277,66 @@ body.con-mini { --mini: 70px; }
   .tb-prova .tp-txt small + small { display: none; }
   .topbar-row:has(.tb-prova:not(.hidden)) .logo { font-size: 24px; }
 }
+
+/* ---------- v76: ordine del giorno delle prove (solo band) ---------- */
+/* riga «ODG» in cima alla Scaletta, da 5 giorni prima della prova */
+.odg-striscia {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 11px 0; margin: 2px 0 0; background: none; border: 0; border-bottom: 1px solid var(--linea);
+  font: inherit; font-size: 14px; color: var(--inchiostro); text-align: left; cursor: pointer;
+}
+.odg-striscia .lab { flex: none; font: 600 12px/1 var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--su-accento); background: var(--accento); padding: 5px 9px; border-radius: 999px; }
+.odg-striscia .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.odg-striscia .t b { font-weight: 500; }
+.odg-striscia .vuoto { color: var(--inchiostro-2); }
+.odg-striscia > svg { width: 16px; height: 16px; flex: none; color: var(--inchiostro-3); }
+.odg-striscia:active { background: var(--foglio-2); }
+/* elenco delle prove: per la band ogni prova si apre */
+.cal-riga.cal-tocca { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--linea); font: inherit; color: var(--inchiostro); text-align: left; cursor: pointer; align-items: center; }
+.cal-riga.cal-tocca:active { background: var(--foglio-2); }
+.cal-riga.cal-tocca .pl-go { align-self: center; }
+.cal-odg { font: 600 12px/1.4 var(--ui); color: var(--accento); margin-top: 3px; }
+/* pagina della prova */
+.prova-testa { display: flex; gap: 14px; align-items: center; margin: 6px 0 4px; }
+.prova-testa .cal-data { flex: none; }
+.prova-tit { min-width: 0; }
+.prova-tit h2 { font: 400 30px/1.05 var(--display); margin: 0; overflow-wrap: anywhere; }
+.prova-tit small { display: block; font-size: 13.5px; color: var(--inchiostro-2); margin-top: 3px; }
+.prova-note { font-size: 13.5px; color: var(--inchiostro-2); white-space: pre-line; overflow-wrap: anywhere; margin: 8px 0 0; }
+.odg-fascia { margin-top: 22px; }
+.odg-lista { position: relative; }
+.odg-riga {
+  position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 40px; gap: 0 10px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--linea); background: var(--carta);
+}
+.odg-n { font: 400 21px/1 var(--display); color: var(--inchiostro-3); font-variant-numeric: tabular-nums; }
+.odg-t { min-width: 0; background: none; border: 0; padding: 8px 0; text-align: left; font: inherit; color: var(--inchiostro); cursor: pointer; }
+.odg-t b { display: block; font: 500 15.5px/1.25 var(--ui); overflow-wrap: anywhere; }
+.odg-t small { display: block; font-size: 12.5px; color: var(--inchiostro-2); margin-top: 1px; }
+.odg-t .tk { color: var(--accento); }
+.odg-orig { font: 600 12px/1 var(--ui); padding: 2px 7px; border-radius: 999px; border: 1px solid var(--ambra-pieno); color: var(--ambra); margin-left: 7px; vertical-align: 2px; white-space: nowrap; }
+.odg-chi { display: grid; place-items: center; }
+.odg-man { display: grid; place-items: center; width: 40px; height: 44px; color: var(--inchiostro-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.odg-man svg { width: 20px; height: 20px; }
+.odg-riga.trascina { z-index: 5; background: var(--foglio); box-shadow: 0 12px 28px -12px rgba(35, 27, 21, .55); border-radius: 10px; }
+.odg-riga.trascina .odg-man { cursor: grabbing; color: var(--accento); }
+body.odg-trascino { user-select: none; -webkit-user-select: none; }
+.odg-det { grid-column: 1 / -1; margin: 2px 0 10px 32px; padding-left: 12px; border-left: 2px solid var(--accento-tinta); }
+.odg-det .fascia { margin-top: 8px; }
+.odg-det-az { margin-top: 6px; }
+.odg-det-az .btn svg { width: 14px; height: 14px; }
+.odg-aiuto { font-size: 12.5px; color: var(--inchiostro-3); margin: 10px 0 0; }
+/* foglio «Aggiungi all'ODG» */
+.odg-seg { display: flex; border: 1px solid var(--linea-forte); border-radius: 999px; padding: 3px; margin: 0 0 6px; }
+.odg-seg button { flex: 1; padding: 7px 0; border: 0; border-radius: 999px; background: none; font: 500 14px var(--ui); color: var(--inchiostro-2); }
+.odg-seg button[aria-pressed="true"] { background: var(--accento-tinta); color: var(--accento); }
+.odg-scelta { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 0; background: none; border: 0; border-bottom: 1px solid var(--linea); font: inherit; color: var(--inchiostro); text-align: left; cursor: pointer; }
+.odg-scelta .box { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--linea-forte); border-radius: 6px; }
+.odg-scelta .box svg { width: 15px; height: 15px; }
+.odg-scelta.on .box { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+.odg-scelta.gia { opacity: .5; cursor: default; }
+.odg-scelta .t { flex: 1; min-width: 0; }
+.odg-scelta .t b { display: block; font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+.odg-scelta .t small { font-size: 12.5px; color: var(--inchiostro-2); }
+.odg-scelta .gia-et { font-size: 12px; color: var(--inchiostro-3); white-space: nowrap; }
+.odg-foglio .btn.fill:disabled { opacity: .45; }
