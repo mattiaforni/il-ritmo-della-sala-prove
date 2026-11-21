@@ -34,7 +34,7 @@ const SP_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // A ogni pubblicazione aumentare insieme: APP_VERSION qui, "version" in version.json, CACHE in sw.js.
-const APP_VERSION = "74";
+const APP_VERSION = "75";
 // Versione dei dati salvati sul telefono: si aumenta solo quando serve una pulizia (vedi MIGRAZIONI).
 const DATA_VERSION = 2;
 // parti del setup di una canzone: legate alla parte, non alla persona (chi suona cosa cambia da pezzo a pezzo).
@@ -1403,8 +1403,9 @@ const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
 function contesto(tab) {
   if (!state.account || !state.ready.canzoni) return "";
   if (tab === "scaletta") {
-    const l = scaletta(), reg = state.ready.registrazioni ? l.filter(regDelPezzo).length : 0;
-    return plurale(l.length, "pezzo", "pezzi") + (reg ? ` · ${plurale(reg, "registrato", "registrati")}` : "");
+    // si dice solo quanti pezzi mancano di registrazione: la riga resta corta accanto al prossimo appuntamento
+    const l = scaletta(), senza = state.ready.registrazioni ? l.filter(c => !regDelPezzo(c)).length : 0;
+    return plurale(l.length, "pezzo", "pezzi") + (senza ? ` · ${senza} senza audio` : "");
   }
   if (tab === "proposte") {
     const l = proposte(), dv = state.user || state.fan ? l.filter(c => !mioVoto(c)).length : 0;

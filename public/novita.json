@@ -2,6 +2,15 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "75",
+      "data": "2026-11-21",
+      "titolo": "Il prossimo appuntamento si legge di nuovo",
+      "punti": [
+        "In alto la scritta «Prossimo appuntamento» non copre più il giorno.",
+        "Sotto «Scaletta» c'è scritto quanti pezzi sono ancora senza registrazione, se ce ne sono."
+      ]
+    },
+    {
       "versione": "74",
       "data": "2026-11-21",
       "titolo": "Scorrere tra le sezioni, conferme nuove, «Sostieni la band»",
