@@ -100,6 +100,7 @@ Nota iOS: nella PWA installata il popup di login a volte è capriccioso; l'app r
 | `bacheca` | post: `nome`, `testo`, `band` (vero se l'ha scritto la band), `creato`, `piace` (mappa chiave → true), per i fan anche `fanId` (id del telefono, per le notifiche); commenti: gli stessi campi più `postId` |
 | `commenti` | commenti alle registrazioni (dalla v43): `su` ("registrazione"), `rifId` (id della registrazione), `nome`, `band`, `fanId` (fan), `testo`, `creato`, `piace` |
 | `studio` | pezzi «Da cantare» di ognuno, fuori da scaletta e proposte (dalla v49, solo la band): `titolo`, `artista`, `songId`, `songsterrUrl`, `membroId`, `membro`, `creato`, `tab` (come in `canzoni`) |
+| `odg` | ordine del giorno di ogni giorno di prova (dalla v76, solo la band): id = giorno `AAAA-MM-GG` del calendario; `giorno`, `voci` (in ordine: `id`, `canzoneId`, `da`, `daId`, `quando`), `aggiornato`. Legato al giorno, non all'evento: se la prova cambia orario nello stesso giorno l'ODG resta, se cambia giorno resta su quello vecchio |
 | `privato` | solo per le funzioni, i telefoni non la leggono: `spotify` (playlist), `telegram` (gruppo e impostazioni del bot) con la sottocollezione `eventi`, `telegram-foto` (ultima fotografia del database), `push` (chiavi delle notifiche) con la sottocollezione `iscrizioni` (un documento per telefono iscritto), `fan` (password dei fan, generazione, chi l'ha impostata) |
 
 ## Costi

@@ -2,6 +2,16 @@
   "nota": "Novità dell'app scritte per la band, dalla più recente. Le legge il bot Telegram (/aggiornamenti). A ogni versione nuova si aggiunge una voce in cima.",
   "voci": [
     {
+      "versione": "76",
+      "data": "2026-11-21",
+      "titolo": "L'ordine del giorno delle prove",
+      "punti": [
+        "Ogni prova del calendario ha il suo ordine del giorno: toccando l'appuntamento in alto e poi una prova si apre la sua pagina. Nei 5 giorni prima, in cima alla Scaletta compare la riga «ODG» che porta lì.",
+        "«Aggiungi pezzi» apre l'elenco della scaletta e delle proposte: si spuntano i pezzi e si aggiungono. Accanto a ogni pezzo c'è la sigla di chi l'ha aggiunto; tenendo premuti i puntini a destra si sposta l'ordine.",
+        "Toccando un pezzo dell'ODG si aprono i suoi task, che si spuntano lì, e i tuoi appunti. I fan l'ODG non lo vedono."
+      ]
+    },
+    {
       "versione": "75",
       "data": "2026-11-21",
       "titolo": "Il prossimo appuntamento si legge di nuovo",
